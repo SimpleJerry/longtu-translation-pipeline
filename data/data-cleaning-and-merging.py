@@ -3,12 +3,15 @@ import re
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 INPUT_DIR = "input/"
 OUTPUT_DIR = "output/"
 
-HEADER_DICT = {'盾勇': 0, 'WOG-text-20230711': 1, '검과 마법_스크립트': 1, '열강글로벌 최신언어팩 221205': 1, '카이로스': 0}
+# 由于收到的文件，起始行各不相同，且其中有多页文件，难以手动调整，故用字典记录
+HEADER_DICT = {'盾勇': 0, 'WOG-text-20230711': 1, '검과 마법_스크립트': 1, '열강글로벌 최신언어팩 221205': 1}
 
+# 列名对应关系
 # 语言支持：https://cloud.google.com/translate/docs/languages?hl=zh-cn
 RENAME_DICT_ALL = {"zh-CN": "zh-CN", "zh-TW": "zh-TW", "en": "en", "th": "th", "id": "id", "ja": "ja", "ko": "ko",
                    "ru": "ru", "pt": "pt",  # 保持不变的列表名
@@ -21,10 +24,10 @@ RENAME_DICT_ALL = {"zh-CN": "zh-CN", "zh-TW": "zh-TW", "en": "en", "th": "th", "
                    "en-US": "en", "日语": "ja",  # [방패] 용어집(중, 영) 盾勇术语表-有部分日语.xlsx
                    }
 
-KEEP_COLUMNS_ALL = list(set(RENAME_DICT_ALL.values()))
 
-
-def process_text(text: str):
+# 单元格操作
+def cell_process(text: str):
+    # 正则匹配替换
     replace_patterns = {
         # 特殊
         r"#N/A": "",  # 盾勇
@@ -37,10 +40,11 @@ def process_text(text: str):
     return text.strip()
 
 
+# 对于
 def clean_merge_save_excel_files(input_path: str, output_path: str) -> None:
+    print("start cleaning, merging and saving excel files.")
     for dir_path, dir_names, file_names in os.walk(input_path):
-        for file_name in file_names:
-            print("cleaning and merging completed:{0}".format(file_name))
+        for file_name in tqdm(file_names, desc=dir_path):
             if file_name.endswith(".xlsx"):
                 # get file path
                 file_path = os.path.join(dir_path, file_name)
@@ -61,7 +65,7 @@ def clean_merge_save_excel_files(input_path: str, output_path: str) -> None:
                 df_merged = df_merged.replace(np.nan, None)
                 # Clean the text in the dataframe
                 df_merged = df_merged.apply(lambda row: row.apply(
-                    lambda cell: cell if isinstance(cell, int) or cell is None else process_text(str(cell))), axis=1)
+                    lambda cell: cell if isinstance(cell, int) or cell is None else cell_process(str(cell))), axis=1)
 
                 # combine the output file path
                 output_file = re.sub(input_path, output_path, file_path)
@@ -73,11 +77,11 @@ def clean_merge_save_excel_files(input_path: str, output_path: str) -> None:
 
 
 def merge_and_save_all_excel_files(input_path: str) -> None:
+    print("start merging all excel files into one.")
     df_all = pd.DataFrame()
     for dir_path, dir_names, file_names in os.walk(input_path):
-        for file_name in file_names:
+        for file_name in tqdm(file_names, desc=dir_path):
             if file_name.endswith(".xlsx"):
-                print("merging into one:{0}".format(file_name))
                 if file_name.endswith(".xlsx"):
                     file_path = os.path.join(dir_path, file_name)
                     df = pd.read_excel(file_path)
@@ -90,7 +94,7 @@ def merge_and_save_all_excel_files(input_path: str) -> None:
     df_all.to_excel(os.path.join(input_path, "../all_files_merged.xlsx"), index=False)
     # csv文件输出
     df_all.to_csv(os.path.join(input_path, "../all_files_merged.csv"), index=False)
-    # tsv文件输出
+    # csv文件输出
     df_all = df_all.drop("source", axis=1)  # delete the "source" column
     language_list = df_all.columns.tolist()
     language_pairs = [[x, y] for index, x in enumerate(language_list) for y in language_list[index + 1:]]
@@ -104,10 +108,6 @@ def merge_and_save_all_excel_files(input_path: str) -> None:
             data.to_csv(file_name, index=False)
 
 
-def main():
+if __name__ == "__main__":
     clean_merge_save_excel_files(INPUT_DIR, OUTPUT_DIR)
     merge_and_save_all_excel_files(OUTPUT_DIR)
-
-
-if __name__ == "__main__":
-    main()
