@@ -42,7 +42,7 @@ def cell_process(text: str):
 
 # 对于
 def clean_merge_save_excel_files(input_path: str, output_path: str) -> None:
-    print("start cleaning, merging and saving excel files.")
+    print("\nstart cleaning, merging and saving excel files.")
     for dir_path, dir_names, file_names in os.walk(input_path):
         for file_name in tqdm(file_names, desc=dir_path):
             if file_name.endswith(".xlsx"):
@@ -77,7 +77,7 @@ def clean_merge_save_excel_files(input_path: str, output_path: str) -> None:
 
 
 def merge_and_save_all_excel_files(input_path: str) -> None:
-    print("start merging all excel files into one.")
+    print("\nstart merging all excel files into one.")
     df_all = pd.DataFrame()
     for dir_path, dir_names, file_names in os.walk(input_path):
         for file_name in tqdm(file_names, desc=dir_path):
