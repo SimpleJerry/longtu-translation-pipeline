@@ -8,3 +8,6 @@
 data/output
 data/all_files_merged.csv
 data/all_files_merged.xlsx
+
+pretrained-models
+fine-tuned-models
