@@ -14,7 +14,7 @@ HEADER_DICT = {'盾勇': 0, 'WOG-text-20230711': 1, '검과 마법_스크립트'
 # 列名对应关系
 # 语言支持：https://cloud.google.com/translate/docs/languages?hl=zh-cn
 RENAME_DICT_ALL = {"zh-CN": "zh-CN", "zh-TW": "zh-TW", "en": "en", "th": "th", "id": "id", "ja": "ja", "ko": "ko",
-                   "ru": "ru", "pt": "pt",  # 保持不变的列表名
+                   "ru": "ru", "pt": "pt", "vi": "vi",  # 保持不变的列表名
                    "cs": "zh-CN", "ct": "zh-TW", "ind": "id", "kr": "ko", "jp": "ja",  # WOG-text-20230711,검과 마법_스크립트
                    "中文对应信息（语言1）": "zh-CN", "英文对应信息（语言2）": "en", "泰文对应信息（语言3）": "th",
                    "繁体对应信息（语言4）": "zh-TW", "葡语对应信息（语言4）": "pt", "印尼语": "id",  # excelWord.xlsx
