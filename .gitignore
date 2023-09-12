@@ -5,6 +5,8 @@
 .idea/**/dictionaries
 .idea/**/shelf
 
+translation_result.xlsx
+
 data/output
 data/all_files_merged.csv
 data/all_files_merged.xlsx
