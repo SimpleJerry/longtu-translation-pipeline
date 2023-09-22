@@ -6,6 +6,7 @@
 .idea/**/shelf
 
 translation_result.xlsx
+translation_result.csv
 
 data/output
 data/all_files_merged.csv
