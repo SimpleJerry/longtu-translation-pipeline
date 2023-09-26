@@ -97,7 +97,7 @@ def merge_and_save_all_excel_files(input_path: str) -> None:
     # csv文件输出
     df_all = df_all.drop("source", axis=1)  # delete the "source" column
     language_list = df_all.columns.tolist()
-    language_pairs = [[x, y] for index, x in enumerate(language_list) for y in language_list[index + 1:]]
+    language_pairs = [[x, y] for x in language_list for y in language_list if x != y]
     for pair in language_pairs:
         data = df_all[pair]
         data = data.dropna(how='any')  # clear all rows include nan
