@@ -14,3 +14,5 @@ data/all_files_merged.xlsx
 
 pretrained-models
 fine-tuned-models
+
+tests/files
