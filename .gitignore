@@ -1,18 +1,50 @@
-# JetBrains.gitignore
-.idea/**/workspace.xml
-.idea/**/tasks.xml
-.idea/**/usage.statistics.xml
-.idea/**/dictionaries
-.idea/**/shelf
+# IDE/editor state
+.idea/
+.vscode/
+*.iml
 
-translation_result.xlsx
-translation_result.csv
+# Python environments and caches
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
 
-data/output
-data/all_files_merged.csv
-data/all_files_merged.xlsx
+# Tooling/test caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-pretrained-models
-fine-tuned-models
+# Jupyter
+.ipynb_checkpoints/
 
-tests/files
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Generated translation/data outputs
+translation_result*
+data/output/
+data/all_files_merged*
+tests/files/
+
+# Model and experiment artifacts
+pretrained-models/
+fine-tuned-models/
+runs/
+wandb/
+lightning_logs/
+outputs/
+
+# Python packaging/build outputs
+build/
+dist/
+*.egg-info/

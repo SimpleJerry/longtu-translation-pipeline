@@ -4,7 +4,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-001: Git Hygiene
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `.gitignore`, Git index, local-only directories
 - **Background / Why:** The repository currently tracks JetBrains `.idea/` files and has local environment directories such as `venv/` that should not be committed.
 - **Concrete Scope:** Remove `.idea/` from the Git index without deleting local files, add ignores for IDE files, virtual environments, caches, checkpoints, generated outputs, and model artifacts.
@@ -12,7 +12,7 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** Accidentally removing user-local IDE files from disk, staging unrelated existing changes.
 - **Acceptance Criteria:** `git ls-files` no longer lists `.idea/`; local `.idea/` remains on disk if present; `.gitignore` covers common generated/local artifacts.
 - **Recommended Test Commands:** `git -c safe.directory=D:/longtu-translation-pipeline status --short`; `git -c safe.directory=D:/longtu-translation-pipeline ls-files | rg "^\\.idea/|venv/|__pycache__|\\.ipynb_checkpoints"`
-- **Notes:** Do not touch the existing `.idea/LongtuKoreaTranslationModel.iml` working tree change unless explicitly requested.
+- **Notes:** Completed on 2026-05-17. `.idea/` was removed from the Git index with `git rm --cached -r .idea` while local files remain ignored on disk. Validation: `git ls-files | rg "^\\.idea/"` returned no matches; `git check-ignore -v .idea/misc.xml venv/ .venv/ __pycache__/ .pytest_cache/ .ipynb_checkpoints/` matched `.gitignore`; `git diff --check` passed with a line-ending warning only; `git ls-files "*.xlsx"` still listed the 22 tracked Excel files, intentionally deferred to RF-002.
 
 ## RF-002: Data Governance
 
