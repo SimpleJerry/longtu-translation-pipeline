@@ -109,47 +109,10 @@ ko    -> kor_Hang
 6. Use `model-generation.ipynb` or `model-generation-manual.ipynb` to generate translations.
 7. Evaluate output quality with the BLEU, glossary accuracy, and code accuracy notebooks.
 
-## Current Limitations
+## Architecture and Refactor Notes
 
-- Core logic is scattered across notebooks, making reuse and automation difficult.
-- Data paths, model paths, language pairs, and training arguments are hard-coded.
-- Tests are evaluation notebooks rather than automated unit tests.
-- Versioning rules for raw data and experiment outputs are not defined yet.
-- `requirements.txt` captures a full experiment environment; training, inference, and documentation dependencies should eventually be separated.
+Long-term refactor tasks are not maintained in README files. See:
 
-## Refactor Direction
-
-When moving into a new repository, this structure is recommended:
-
-```text
-.
-├── src/
-│   └── longtu_l10n_mt/
-│       ├── data/
-│       ├── tokenization/
-│       ├── training/
-│       ├── inference/
-│       └── evaluation/
-├── configs/
-│   ├── data.yaml
-│   ├── train.zh-ko.yaml
-│   └── inference.zh-ko.yaml
-├── scripts/
-│   ├── prepare_data.py
-│   ├── train.py
-│   ├── translate.py
-│   └── evaluate.py
-├── notebooks/
-│   └── experiments/
-├── tests/
-├── docs/
-└── README.md
-```
-
-Suggested priorities:
-
-1. Move Excel merging, terminology tagging, and code tagging into `src/` modules.
-2. Move language-code mappings and paths into YAML configs.
-3. Keep notebooks as experiment records, and move repeatable workflows into CLI scripts.
-4. Add unit tests for glossary preservation, code preservation, and tag preservation.
-5. Define storage rules for training and inference artifacts.
+- [Refactor backlog](docs/refactor/backlog.md)
+- [Refactor decisions](docs/refactor/decisions.md)
+- [AI/Codex working rules](AGENTS.md)
