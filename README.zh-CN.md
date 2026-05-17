@@ -109,47 +109,10 @@ ko    -> kor_Hang
 6. 使用 `model-generation.ipynb` 或 `model-generation-manual.ipynb` 生成翻译结果。
 7. 通过 BLEU、术语准确率、代码准确率相关 notebook 检查质量。
 
-## 当前限制
+## 架构与重构入口
 
-- 核心逻辑分散在 notebook 中，复用和自动化比较困难。
-- 数据路径、模型路径、语言对和训练参数都直接写在代码里。
-- 测试目前是评估 notebook，不是自动化 unit test。
-- 原始数据和实验产物的版本管理规则还不清晰。
-- `requirements.txt` 固定的是完整实验环境，后续应拆分训练、推理、文档等依赖。
+长期重构待办不放在 README 中维护。请查看：
 
-## 重构方向
-
-复制到新仓库时，建议采用以下结构：
-
-```text
-.
-├── src/
-│   └── longtu_l10n_mt/
-│       ├── data/
-│       ├── tokenization/
-│       ├── training/
-│       ├── inference/
-│       └── evaluation/
-├── configs/
-│   ├── data.yaml
-│   ├── train.zh-ko.yaml
-│   └── inference.zh-ko.yaml
-├── scripts/
-│   ├── prepare_data.py
-│   ├── train.py
-│   ├── translate.py
-│   └── evaluate.py
-├── notebooks/
-│   └── experiments/
-├── tests/
-├── docs/
-└── README.md
-```
-
-建议优先级：
-
-1. 将 Excel 合并、术语标记、代码标记逻辑迁移到 `src/` 模块。
-2. 将语言代码映射和路径配置拆到 YAML config。
-3. notebook 保留为实验记录，可重复执行流程迁移为 CLI script。
-4. 为术语保留、代码保留、标签保留逻辑增加 unit test。
-5. 明确训练和推理产物的保存规则。
+- [重构 backlog](docs/refactor/backlog.md)
+- [重构决策记录](docs/refactor/decisions.md)
+- [AI/Codex 工作规则](AGENTS.md)

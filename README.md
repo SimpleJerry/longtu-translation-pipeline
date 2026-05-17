@@ -109,47 +109,10 @@ ko    -> kor_Hang
 6. `model-generation.ipynb` 또는 `model-generation-manual.ipynb`로 번역 결과를 생성합니다.
 7. BLEU, 용어 보존율, 코드 보존율 notebook으로 품질을 확인합니다.
 
-## 현재 한계
+## 아키텍처와 리팩터링 문서
 
-- 핵심 로직이 notebook에 흩어져 있어 재사용과 자동화가 어렵습니다.
-- 데이터 경로, 모델 경로, 언어 쌍, 학습 인자가 코드 안에 직접 적혀 있습니다.
-- 테스트는 자동화된 unit test가 아니라 평가용 notebook 중심입니다.
-- 원본 데이터와 실험 결과의 버전 관리 기준이 아직 명확하지 않습니다.
-- `requirements.txt`는 실험 환경 전체를 고정한 형태라 학습, 추론, 문서 작업 의존성을 분리할 필요가 있습니다.
+장기 리팩터링 TODO는 README에서 관리하지 않습니다. 다음 문서를 참고하세요.
 
-## 리팩터링 방향
-
-새 저장소로 분리할 때는 다음 구조를 권장합니다.
-
-```text
-.
-├── src/
-│   └── longtu_l10n_mt/
-│       ├── data/
-│       ├── tokenization/
-│       ├── training/
-│       ├── inference/
-│       └── evaluation/
-├── configs/
-│   ├── data.yaml
-│   ├── train.zh-ko.yaml
-│   └── inference.zh-ko.yaml
-├── scripts/
-│   ├── prepare_data.py
-│   ├── train.py
-│   ├── translate.py
-│   └── evaluate.py
-├── notebooks/
-│   └── experiments/
-├── tests/
-├── docs/
-└── README.md
-```
-
-우선순위:
-
-1. Excel 병합, 용어 태깅, 코드 태깅을 `src/` 모듈로 이동합니다.
-2. 언어 코드 매핑과 경로를 YAML config로 분리합니다.
-3. notebook은 실험 기록으로 남기고, 반복 실행은 CLI script로 옮깁니다.
-4. 용어 보존, 코드 보존, 태그 보존 로직에 unit test를 추가합니다.
-5. 학습과 추론 산출물의 저장 규칙을 정리합니다.
+- [리팩터링 backlog](docs/refactor/backlog.md)
+- [리팩터링 결정 기록](docs/refactor/decisions.md)
+- [AI/Codex 작업 규칙](AGENTS.md)
