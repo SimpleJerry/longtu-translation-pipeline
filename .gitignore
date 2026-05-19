@@ -36,6 +36,11 @@ data/output/
 data/all_files_merged*
 tests/files/
 
+# Raw spreadsheet inputs
+*.xlsx
+*.xls
+*.xlsm
+
 # Model and experiment artifacts
 pretrained-models/
 fine-tuned-models/
