@@ -71,3 +71,10 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Background:** The 2023 notebook sequence contains useful experiment history, but the original order and purpose are no longer obvious from filenames alone.
 - **Impact Scope:** Notebook file layout, README navigation, RF-004, future RF-005/RF-006/RF-007 extraction work.
 - **Follow-up Notes:** Do not delete archived notebooks until `docs/notebooks/inventory.md` has been reviewed and the replacement module, config, or evaluation path is clear.
+
+## 2026-05-24: Text Protection Uses Single-Segment Term Markers
+
+- **Decision:** Current terminology protection uses only `<start>...<end>` on both source and target sides. The historical `<start>source<middle>target<end>` T&N+R format and `<code_id=N>` code/tag protection are deprecated from the current engineering mainline.
+- **Background:** The user decided to abandon the T&N+R method and simplify all terminology markers to a single-segment form.
+- **Impact Scope:** `src/longtu_translation_pipeline/text_protection.py`, RF-005 tests, README workflow notes, notebook inventory, future RF-006/RF-007 migration.
+- **Follow-up Notes:** Historical notebooks may still contain `<middle>` and `<code_id=N>` outputs as experiment records, but new reusable code should not generate them unless a future task explicitly reintroduces that behavior.

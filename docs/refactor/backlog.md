@@ -50,17 +50,17 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Recommended Test Commands:** `git -c safe.directory=D:/longtu-translation-pipeline status --short`; `git -c safe.directory=D:/longtu-translation-pipeline ls-files "*.ipynb"`; root `.ipynb` scan; parse moved notebooks as JSON; `rg -n "notebooks|inventory|T&N\\+R|archive" README.md README.en.md README.zh-CN.md docs/notebooks docs/refactor`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
 - **Notes:** Completed on 2026-05-24. Root notebooks were moved into `notebooks/main/`, `notebooks/analysis/`, and `notebooks/archive/2023-legacy/`. `docs/notebooks/inventory.md` now records the 2023 experiment timeline, missing dependency references, and recommended treatment for each notebook. No notebooks were deleted and notebook internals were not changed.
 
-## RF-005: Terminology/Tag/Code Protection
+## RF-005: Terminology Marker Protection
 
-- **Status:** TODO
-- **Scope:** Terminology special tokens, game UI tag protection, `<code_id=*>` handling
-- **Background / Why:** Critical text-protection logic is duplicated across notebooks and cannot be unit-tested directly.
-- **Concrete Scope:** Extract pure functions for glossary tagging, tag/code placeholder replacement, and restoration; add fixture-based tests.
+- **Status:** DONE
+- **Scope:** `src/longtu_translation_pipeline/text_protection.py`, `tests/test_text_protection.py`, single-shape `<start>...<end>` terminology markers
+- **Background / Why:** Critical terminology marker logic was duplicated across notebooks and could not be unit-tested directly. The user later decided to abandon the T&N+R format and use only single-segment terminology markers.
+- **Concrete Scope:** Extract pure functions for glossary loading, longest-first terminology marker insertion, duplicate-marker avoidance, and marker stripping; remove current-mainline support for `<middle>` and `<code_id=N>`.
 - **Out of Scope:** Model training parameter changes and full translation quality tuning.
-- **Risks:** Incorrect placeholder ordering can corrupt game markup or terminology alignment.
-- **Acceptance Criteria:** Glossary terms, bracket tags, angle tags, color tags, and code placeholders round-trip on representative samples.
-- **Recommended Test Commands:** `python -m pytest tests/test_text_protection.py`
-- **Notes:** Keep token names compatible with existing notebooks unless a selected task explicitly changes them.
+- **Risks:** Historical notebooks still contain deprecated `<middle>` and `<code_id=N>` outputs; deleting or rewriting them in the same change would obscure experiment history.
+- **Acceptance Criteria:** Glossary terms are marked as `<start>term<end>` on source and target sides; no current module/test/README/config path relies on `<middle>` or `<code_id=N>`; placeholders such as `{0}` remain plain text.
+- **Recommended Test Commands:** `venv\Scripts\python.exe -m py_compile src\longtu_translation_pipeline\text_protection.py scripts\glossary_semantic_pipeline.py scripts\segments_cleaning_pipeline.py`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`
+- **Notes:** Completed on 2026-05-24. `src/longtu_translation_pipeline/text_protection.py` now provides testable pure functions for loading glossary pairs, protecting a Chinese-Korean training pair with `<start>...<end>` markers on both sides, and stripping glossary markers. The first RF-005 implementation briefly included `<middle>` and `<code_id=N>` compatibility, but this was removed after the user decided to abandon T&N+R and code/tag protection as current-mainline behavior. Notebook JSON was intentionally not rewritten; T&N+R notebooks are documented as deprecated historical experiments.
 
 ## RF-006: Training/Inference Config
 

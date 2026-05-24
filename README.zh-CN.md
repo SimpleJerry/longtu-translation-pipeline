@@ -11,8 +11,8 @@
 - 仓库只保留最终训练语料和术语表，不提交敏感 raw Excel/CSV 输入。
 - 使用本地 semantic pipeline 清洗中文-韩文游戏术语表。
 - 基于 `facebook/nllb-200-*` 系列模型进行游戏本地化语料微调。
-- 使用 `<start>`、`<middle>`、`<end>` 特殊 token 在翻译中保护术语。
-- 使用 `<code_id=*>` token 实验占位符、返回码、游戏 UI 标签保护。
+- 使用统一的 `<start>...<end>` 特殊 token 在翻译中标记术语。
+- T&N+R 和 code-id code/tag 保护只作为历史实验保留，不再作为当前主线。
 - 将翻译结果导出为 Excel/CSV，并评估 BLEU、术语保留率和代码保留率。
 
 ## 仓库结构
@@ -33,6 +33,8 @@
 ├── scripts/
 │   ├── glossary_semantic_pipeline.py
 │   └── segments_cleaning_pipeline.py
+├── src/
+│   └── longtu_translation_pipeline/
 ├── notebooks/
 │   ├── main/
 │   ├── analysis/
@@ -53,6 +55,7 @@
 | `configs/segments/` | segments 清洗的结构化字符串拆分、term/entity seed 和语义阈值配置。 |
 | `scripts/glossary_semantic_pipeline.py` | 本地 glossary semantic 清洗 pipeline，使用 Stanza、jieba、kiwipiepy、wordfreq 与 `BAAI/bge-m3`。 |
 | `scripts/segments_cleaning_pipeline.py` | 本地 segments 语义清洗 pipeline，默认 dry-run 生成 review CSV。 |
+| `src/longtu_translation_pipeline/text_protection.py` | 可测试的术语 marker 保护纯函数模块。 |
 | `notebooks/main/` | 主线训练、预处理、生成和评估实验 notebook。 |
 | `notebooks/analysis/` | 辅助分析 notebook，例如训练 loss 可视化。 |
 | `notebooks/archive/2023-legacy/` | 2023 年旧实验归档，第一轮不直接删除。 |
@@ -122,7 +125,9 @@ ja    -> jpn_Jpan
 ko    -> kor_Hang
 ```
 
-主线 notebook 位于 `notebooks/main/`，例如 `T&N+R preprocess.ipynb`、`T&N+R method.ipynb` 和 `model-generation.ipynb`。旧实验已归档到 `notebooks/archive/2023-legacy/`；各 notebook 的用途、顺序和依赖状态见 `docs/notebooks/inventory.md`。
+Notebook 保留为实验记录；T&N+R 相关 notebook 已视为 deprecated historical experiments。各 notebook 的用途、顺序和依赖状态见 `docs/notebooks/inventory.md`。
+
+当前术语保护逻辑已抽取到 `src/longtu_translation_pipeline/text_protection.py`。该模块只使用单段 `<start>...<end>` marker；旧双段术语 marker 和 code-id 保护已从当前工程主线中废弃。当前 notebook 尚未改写为 import 该模块；它们继续作为实验记录保留。
 
 ## 架构与重构入口
 

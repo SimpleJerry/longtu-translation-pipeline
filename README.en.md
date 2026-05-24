@@ -11,8 +11,8 @@ This README documents the repository as it exists today. The project is still cl
 - Keep only final training corpora and glossary data in the repository; sensitive raw Excel/CSV inputs are not committed.
 - Clean the Chinese-Korean game glossary with a local semantic pipeline.
 - Fine-tune `facebook/nllb-200-*` models on game localization data.
-- Preserve glossary terms during translation with `<start>`, `<middle>`, and `<end>` special tokens.
-- Experiment with `<code_id=*>` tokens to protect placeholders, return codes, and game UI tags.
+- Mark glossary terms during translation with a single `<start>...<end>` special-token shape.
+- Keep T&N+R and code-id code/tag protection only as historical experiments, not as the current mainline.
 - Export translation results to Excel/CSV and evaluate BLEU, glossary preservation, and code preservation.
 
 ## Repository Layout
@@ -33,6 +33,8 @@ This README documents the repository as it exists today. The project is still cl
 ├── scripts/
 │   ├── glossary_semantic_pipeline.py
 │   └── segments_cleaning_pipeline.py
+├── src/
+│   └── longtu_translation_pipeline/
 ├── notebooks/
 │   ├── main/
 │   ├── analysis/
@@ -53,6 +55,7 @@ This README documents the repository as it exists today. The project is still cl
 | `configs/segments/` | Structured-string splitting, term/entity seeds, and semantic thresholds for segment cleanup. |
 | `scripts/glossary_semantic_pipeline.py` | Local glossary semantic cleanup pipeline using Stanza, jieba, kiwipiepy, wordfreq, and `BAAI/bge-m3`. |
 | `scripts/segments_cleaning_pipeline.py` | Local semantic segment cleanup pipeline; dry-run review output by default. |
+| `src/longtu_translation_pipeline/text_protection.py` | Testable pure-function module for terminology marker protection. |
 | `notebooks/main/` | Main training, preprocessing, generation, and evaluation experiment notebooks. |
 | `notebooks/analysis/` | Auxiliary analysis notebooks, such as train/eval loss visualization. |
 | `notebooks/archive/2023-legacy/` | Archived 2023 legacy experiments; not deleted in the first pass. |
@@ -122,7 +125,9 @@ ja    -> jpn_Jpan
 ko    -> kor_Hang
 ```
 
-Main notebooks now live under `notebooks/main/`, including `T&N+R preprocess.ipynb`, `T&N+R method.ipynb`, and `model-generation.ipynb`. Legacy experiments are archived under `notebooks/archive/2023-legacy/`; see `docs/notebooks/inventory.md` for each notebook's purpose, order, and dependency status.
+Notebooks are retained as experiment records. T&N+R notebooks are now deprecated historical experiments; see `docs/notebooks/inventory.md` for each notebook's purpose, order, and dependency status.
+
+Current terminology protection logic now lives in `src/longtu_translation_pipeline/text_protection.py`. The module uses only the single `<start>...<end>` marker shape; the old dual-term marker and code-id protection are deprecated from the current engineering mainline. Notebooks are not rewritten to import it in this pass; they remain experiment records.
 
 ## Architecture and Refactor Notes
 

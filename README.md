@@ -11,8 +11,8 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 - 저장소에는 최종 학습 말뭉치와 용어집만 보관하며, 민감한 raw Excel/CSV 입력은 커밋하지 않습니다.
 - 로컬 semantic pipeline으로 중국어-한국어 게임 용어집을 정제합니다.
 - `facebook/nllb-200-*` 계열 모델을 기반으로 게임 번역 데이터를 파인튜닝합니다.
-- 번역 중 용어집 항목을 보존하기 위해 `<start>`, `<middle>`, `<end>` 특수 토큰을 사용합니다.
-- 코드, 플레이스홀더, 게임 UI 태그를 보호하기 위해 `<code_id=*>` 형태의 토큰을 실험합니다.
+- 번역 중 용어집 항목을 표시하기 위해 단일 `<start>...<end>` 특수 토큰 형태를 사용합니다.
+- T&N+R 및 code-id code/tag 보호는 역사적 실험으로만 보관하며 현재 주 흐름에서는 사용하지 않습니다.
 - 번역 결과를 Excel/CSV로 내보내고 BLEU, 용어 보존율, 코드 보존율을 평가합니다.
 
 ## 저장소 구조
@@ -33,6 +33,8 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 ├── scripts/
 │   ├── glossary_semantic_pipeline.py
 │   └── segments_cleaning_pipeline.py
+├── src/
+│   └── longtu_translation_pipeline/
 ├── notebooks/
 │   ├── main/
 │   ├── analysis/
@@ -53,6 +55,7 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 | `configs/segments/` | segment 정제를 위한 구조화 문자열 분리, term/entity seed, semantic 임계값 설정입니다. |
 | `scripts/glossary_semantic_pipeline.py` | Stanza, jieba, kiwipiepy, wordfreq, `BAAI/bge-m3`를 사용하는 로컬 glossary semantic 정제 pipeline입니다. |
 | `scripts/segments_cleaning_pipeline.py` | 로컬 segments semantic 정제 pipeline이며 기본적으로 dry-run review를 생성합니다. |
+| `src/longtu_translation_pipeline/text_protection.py` | 테스트 가능한 용어 marker 보호 pure-function 모듈입니다. |
 | `notebooks/main/` | 주요 학습, 전처리, 생성, 평가 실험 notebook입니다. |
 | `notebooks/analysis/` | train/eval loss 시각화 같은 보조 분석 notebook입니다. |
 | `notebooks/archive/2023-legacy/` | 2023년 legacy 실험 archive이며 첫 번째 정리 단계에서는 삭제하지 않습니다. |
@@ -122,7 +125,9 @@ ja    -> jpn_Jpan
 ko    -> kor_Hang
 ```
 
-주요 notebook은 `notebooks/main/` 아래에 있으며 `T&N+R preprocess.ipynb`, `T&N+R method.ipynb`, `model-generation.ipynb` 등이 포함됩니다. Legacy 실험은 `notebooks/archive/2023-legacy/`에 보관했습니다. 각 notebook의 목적, 순서, 의존성 상태는 `docs/notebooks/inventory.md`를 참고하세요.
+Notebook은 실험 기록으로 보존합니다. T&N+R 관련 notebook은 deprecated historical experiments로 취급합니다. 각 notebook의 목적, 순서, 의존성 상태는 `docs/notebooks/inventory.md`를 참고하세요.
+
+현재 용어 보호 로직은 `src/longtu_translation_pipeline/text_protection.py`로 분리했습니다. 이 모듈은 단일 `<start>...<end>` marker만 사용하며, 기존 이중 용어 marker와 code-id 보호는 현재 engineering mainline에서 폐기되었습니다. 이번 단계에서는 notebook이 이 모듈을 import하도록 다시 쓰지 않고, 실험 기록으로 유지합니다.
 
 ## 아키텍처와 리팩터링 문서
 
