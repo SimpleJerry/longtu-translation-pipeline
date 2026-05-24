@@ -33,15 +33,13 @@ This README documents the repository as it exists today. The project is still cl
 ├── scripts/
 │   ├── glossary_semantic_pipeline.py
 │   └── segments_cleaning_pipeline.py
-├── nllb-fine-tune_all.ipynb
-├── T&N method.ipynb
-├── T&N method_modified.ipynb
-├── T&N+R preprocess.ipynb
-├── T&N+R method.ipynb
-├── model-generation.ipynb
-├── special_token_test.ipynb
-├── return code tokens.ipynb
-└── train_eval_loss_picture.ipynb
+├── notebooks/
+│   ├── main/
+│   ├── analysis/
+│   └── archive/2023-legacy/
+└── docs/
+    ├── notebooks/inventory.md
+    └── refactor/
 ```
 
 ## Key Files
@@ -55,12 +53,10 @@ This README documents the repository as it exists today. The project is still cl
 | `configs/segments/` | Structured-string splitting, term/entity seeds, and semantic thresholds for segment cleanup. |
 | `scripts/glossary_semantic_pipeline.py` | Local glossary semantic cleanup pipeline using Stanza, jieba, kiwipiepy, wordfreq, and `BAAI/bge-m3`. |
 | `scripts/segments_cleaning_pipeline.py` | Local semantic segment cleanup pipeline; dry-run review output by default. |
-| `nllb-fine-tune_all.ipynb` | Baseline NLLB fine-tuning workflow. |
-| `T&N method.ipynb` | Terminology and Notation experiment using glossary special tokens. |
-| `T&N+R preprocess.ipynb` | Preprocessing experiment for terminology and code protection. |
-| `T&N+R method.ipynb` | Training experiment that combines terminology, notation, and return-code protection. |
-| `model-generation.ipynb` | Generates translations with a fine-tuned model. |
-| `train_eval_loss_picture.ipynb` | Builds train/eval loss charts from training logs. |
+| `notebooks/main/` | Main training, preprocessing, generation, and evaluation experiment notebooks. |
+| `notebooks/analysis/` | Auxiliary analysis notebooks, such as train/eval loss visualization. |
+| `notebooks/archive/2023-legacy/` | Archived 2023 legacy experiments; not deleted in the first pass. |
+| `docs/notebooks/inventory.md` | Notebook timeline, purpose, dependency status, and keep/archive/delete guidance. |
 
 ## Environment
 
@@ -126,7 +122,7 @@ ja    -> jpn_Jpan
 ko    -> kor_Hang
 ```
 
-Run `T&N method.ipynb` or `T&N+R method.ipynb` for terminology/code-aware preprocessing and fine-tuning, then use the generation and evaluation notebooks for BLEU, glossary preservation, and code preservation checks.
+Main notebooks now live under `notebooks/main/`, including `T&N+R preprocess.ipynb`, `T&N+R method.ipynb`, and `model-generation.ipynb`. Legacy experiments are archived under `notebooks/archive/2023-legacy/`; see `docs/notebooks/inventory.md` for each notebook's purpose, order, and dependency status.
 
 ## Architecture and Refactor Notes
 
@@ -134,4 +130,5 @@ Long-term refactor tasks are not maintained in README files. See:
 
 - [Refactor backlog](docs/refactor/backlog.md)
 - [Refactor decisions](docs/refactor/decisions.md)
+- [Notebook inventory](docs/notebooks/inventory.md)
 - [AI/Codex working rules](AGENTS.md)

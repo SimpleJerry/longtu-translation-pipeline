@@ -33,15 +33,13 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 ├── scripts/
 │   ├── glossary_semantic_pipeline.py
 │   └── segments_cleaning_pipeline.py
-├── nllb-fine-tune_all.ipynb
-├── T&N method.ipynb
-├── T&N method_modified.ipynb
-├── T&N+R preprocess.ipynb
-├── T&N+R method.ipynb
-├── model-generation.ipynb
-├── special_token_test.ipynb
-├── return code tokens.ipynb
-└── train_eval_loss_picture.ipynb
+├── notebooks/
+│   ├── main/
+│   ├── analysis/
+│   └── archive/2023-legacy/
+└── docs/
+    ├── notebooks/inventory.md
+    └── refactor/
 ```
 
 ## 주요 파일
@@ -55,12 +53,10 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 | `configs/segments/` | segment 정제를 위한 구조화 문자열 분리, term/entity seed, semantic 임계값 설정입니다. |
 | `scripts/glossary_semantic_pipeline.py` | Stanza, jieba, kiwipiepy, wordfreq, `BAAI/bge-m3`를 사용하는 로컬 glossary semantic 정제 pipeline입니다. |
 | `scripts/segments_cleaning_pipeline.py` | 로컬 segments semantic 정제 pipeline이며 기본적으로 dry-run review를 생성합니다. |
-| `nllb-fine-tune_all.ipynb` | NLLB 모델 파인튜닝 기본 흐름입니다. |
-| `T&N method.ipynb` | Terminology and Notation 방식의 용어 특수 토큰 실험입니다. |
-| `T&N+R preprocess.ipynb` | 용어 및 코드 보호를 포함한 전처리 실험입니다. |
-| `T&N+R method.ipynb` | Terminology, Notation and Return-code 보호를 함께 적용한 학습 실험입니다. |
-| `model-generation.ipynb` | 파인튜닝 모델로 번역 결과를 생성합니다. |
-| `train_eval_loss_picture.ipynb` | 학습 로그에서 train/eval loss 그래프를 생성합니다. |
+| `notebooks/main/` | 주요 학습, 전처리, 생성, 평가 실험 notebook입니다. |
+| `notebooks/analysis/` | train/eval loss 시각화 같은 보조 분석 notebook입니다. |
+| `notebooks/archive/2023-legacy/` | 2023년 legacy 실험 archive이며 첫 번째 정리 단계에서는 삭제하지 않습니다. |
+| `docs/notebooks/inventory.md` | Notebook의 시간순 흐름, 목적, 의존성 상태, 보존/archive/삭제 제안입니다. |
 
 ## 실행 환경
 
@@ -126,7 +122,7 @@ ja    -> jpn_Jpan
 ko    -> kor_Hang
 ```
 
-`T&N method.ipynb` 또는 `T&N+R method.ipynb`에서 용어/코드 보존 전처리와 파인튜닝을 실행하고, 생성 및 평가 notebook으로 BLEU, 용어 보존율, 코드 보존율을 확인합니다.
+주요 notebook은 `notebooks/main/` 아래에 있으며 `T&N+R preprocess.ipynb`, `T&N+R method.ipynb`, `model-generation.ipynb` 등이 포함됩니다. Legacy 실험은 `notebooks/archive/2023-legacy/`에 보관했습니다. 각 notebook의 목적, 순서, 의존성 상태는 `docs/notebooks/inventory.md`를 참고하세요.
 
 ## 아키텍처와 리팩터링 문서
 
@@ -134,4 +130,5 @@ ko    -> kor_Hang
 
 - [리팩터링 backlog](docs/refactor/backlog.md)
 - [리팩터링 결정 기록](docs/refactor/decisions.md)
+- [Notebook inventory](docs/notebooks/inventory.md)
 - [AI/Codex 작업 규칙](AGENTS.md)

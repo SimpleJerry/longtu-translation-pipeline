@@ -33,15 +33,13 @@
 ├── scripts/
 │   ├── glossary_semantic_pipeline.py
 │   └── segments_cleaning_pipeline.py
-├── nllb-fine-tune_all.ipynb
-├── T&N method.ipynb
-├── T&N method_modified.ipynb
-├── T&N+R preprocess.ipynb
-├── T&N+R method.ipynb
-├── model-generation.ipynb
-├── special_token_test.ipynb
-├── return code tokens.ipynb
-└── train_eval_loss_picture.ipynb
+├── notebooks/
+│   ├── main/
+│   ├── analysis/
+│   └── archive/2023-legacy/
+└── docs/
+    ├── notebooks/inventory.md
+    └── refactor/
 ```
 
 ## 关键文件
@@ -55,12 +53,10 @@
 | `configs/segments/` | segments 清洗的结构化字符串拆分、term/entity seed 和语义阈值配置。 |
 | `scripts/glossary_semantic_pipeline.py` | 本地 glossary semantic 清洗 pipeline，使用 Stanza、jieba、kiwipiepy、wordfreq 与 `BAAI/bge-m3`。 |
 | `scripts/segments_cleaning_pipeline.py` | 本地 segments 语义清洗 pipeline，默认 dry-run 生成 review CSV。 |
-| `nllb-fine-tune_all.ipynb` | NLLB 微调基础流程。 |
-| `T&N method.ipynb` | Terminology and Notation 方案，实验术语特殊 token。 |
-| `T&N+R preprocess.ipynb` | 包含术语与代码保护的预处理实验。 |
-| `T&N+R method.ipynb` | 同时应用术语、标记和返回码保护的训练实验。 |
-| `model-generation.ipynb` | 使用微调模型生成翻译结果。 |
-| `train_eval_loss_picture.ipynb` | 从训练日志生成 train/eval loss 曲线。 |
+| `notebooks/main/` | 主线训练、预处理、生成和评估实验 notebook。 |
+| `notebooks/analysis/` | 辅助分析 notebook，例如训练 loss 可视化。 |
+| `notebooks/archive/2023-legacy/` | 2023 年旧实验归档，第一轮不直接删除。 |
+| `docs/notebooks/inventory.md` | Notebook 时间线、用途、依赖状态和保留/归档/删除建议。 |
 
 ## 运行环境
 
@@ -126,7 +122,7 @@ ja    -> jpn_Jpan
 ko    -> kor_Hang
 ```
 
-使用 `T&N method.ipynb` 或 `T&N+R method.ipynb` 执行术语/代码保护预处理与微调，再使用生成和评估 notebook 检查 BLEU、术语保留率和代码保留率。
+主线 notebook 位于 `notebooks/main/`，例如 `T&N+R preprocess.ipynb`、`T&N+R method.ipynb` 和 `model-generation.ipynb`。旧实验已归档到 `notebooks/archive/2023-legacy/`；各 notebook 的用途、顺序和依赖状态见 `docs/notebooks/inventory.md`。
 
 ## 架构与重构入口
 
@@ -134,4 +130,5 @@ ko    -> kor_Hang
 
 - [重构 backlog](docs/refactor/backlog.md)
 - [重构决策记录](docs/refactor/decisions.md)
+- [Notebook inventory](docs/notebooks/inventory.md)
 - [AI/Codex 工作规则](AGENTS.md)

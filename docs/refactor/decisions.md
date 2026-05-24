@@ -64,3 +64,10 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Background:** Seq2seq segment cleaning has higher false-positive risk than glossary cleaning, especially for short UI labels and structured strings that may contain useful sentence fields.
 - **Impact Scope:** `scripts/segments_cleaning_pipeline.py`, `configs/segments/`, `data/segments.csv`, local `data/review/segments/` outputs.
 - **Follow-up Notes:** Term/entity-like deletion is based on local semantic signals rather than fixed text length thresholds. Presentation tags such as `<c=...>` are stripped while preserving wrapped text, symmetric outer wrappers are unwrapped, and valid machine placeholders are audited rather than deleted. Structured tuple-like strings should be split when safely aligned and removed only when parsing/alignment fails.
+
+## 2026-05-24: Notebook Deletion Requires Inventory First
+
+- **Decision:** Historical notebooks are classified and archived before any deletion. Main workflow notebooks live under `notebooks/main/`, auxiliary analysis notebooks under `notebooks/analysis/`, and old experiments under `notebooks/archive/2023-legacy/`.
+- **Background:** The 2023 notebook sequence contains useful experiment history, but the original order and purpose are no longer obvious from filenames alone.
+- **Impact Scope:** Notebook file layout, README navigation, RF-004, future RF-005/RF-006/RF-007 extraction work.
+- **Follow-up Notes:** Do not delete archived notebooks until `docs/notebooks/inventory.md` has been reviewed and the replacement module, config, or evaluation path is clear.

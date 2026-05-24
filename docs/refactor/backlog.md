@@ -40,15 +40,15 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-004: Notebook Governance
 
-- **Status:** TODO
-- **Scope:** Root `.ipynb` files, `tests/BLEU-score-calculating.ipynb`, future `notebooks/experiments/`
-- **Background / Why:** Experiment notebooks are mixed into the repository root, making the project hard to scan.
-- **Concrete Scope:** Move notebooks into `notebooks/experiments/`, clear heavy outputs where appropriate, and keep README links current.
+- **Status:** DONE
+- **Scope:** Root `.ipynb` files, `docs/notebooks/inventory.md`, `notebooks/main/`, `notebooks/analysis/`, `notebooks/archive/2023-legacy/`
+- **Background / Why:** Experiment notebooks were mixed into the repository root, and the long gap since the 2023 experiments made the order, purpose, and current value of each file hard to recover from memory.
+- **Concrete Scope:** Build a notebook inventory from commit timeline and notebook content, classify each notebook as main, analysis, or legacy archive, move root notebooks into the corresponding `notebooks/` subdirectories, keep README links current, and defer deletion to a later explicit review.
 - **Out of Scope:** Extracting all notebook logic into modules; that belongs to RF-003, RF-005, RF-006, and RF-007.
-- **Risks:** Breaking relative paths inside notebooks.
-- **Acceptance Criteria:** Root directory is easier to scan; notebooks remain findable and documented; moved notebooks either retain working path notes or include migration notes.
-- **Recommended Test Commands:** `git -c safe.directory=D:/longtu-translation-pipeline status --short`; open or inspect at least one moved notebook for path references.
-- **Notes:** Do mechanical moves separately from logic changes.
+- **Risks:** Moving notebooks can break relative paths; deleting historical notebooks too early can lose useful experiment context; old outputs and intermediate CSVs are no longer committed.
+- **Acceptance Criteria:** Root directory has no tracked `.ipynb` files; every tracked notebook is listed in `docs/notebooks/inventory.md` with purpose, timeline, dependency status, and keep/archive/delete guidance; README files point to the inventory instead of listing notebooks in the root.
+- **Recommended Test Commands:** `git -c safe.directory=D:/longtu-translation-pipeline status --short`; `git -c safe.directory=D:/longtu-translation-pipeline ls-files "*.ipynb"`; root `.ipynb` scan; parse moved notebooks as JSON; `rg -n "notebooks|inventory|T&N\\+R|archive" README.md README.en.md README.zh-CN.md docs/notebooks docs/refactor`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Completed on 2026-05-24. Root notebooks were moved into `notebooks/main/`, `notebooks/analysis/`, and `notebooks/archive/2023-legacy/`. `docs/notebooks/inventory.md` now records the 2023 experiment timeline, missing dependency references, and recommended treatment for each notebook. No notebooks were deleted and notebook internals were not changed.
 
 ## RF-005: Terminology/Tag/Code Protection
 
