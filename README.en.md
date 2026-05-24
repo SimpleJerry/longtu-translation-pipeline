@@ -79,7 +79,7 @@ This README documents the repository as it exists today. The project is still cl
 
 ## Environment
 
-A Python virtual environment on Windows or Linux is recommended. `requirements.txt` records CUDA 13.2 PyTorch packages plus the local glossary-cleanup dependencies.
+A Python virtual environment on Windows or Linux is recommended. `requirements.txt` currently records dependencies that are already used by local semantic-cleaning workflows plus CUDA 13.2 PyTorch. Base CLIs, dry runs, tests, and RF-007 evaluation are mostly standard-library and do not imply that every workflow needs the full dependency set. A training-specific `requirements-training.txt` will be created after RF-006 Phase 2 confirms real `transformers`, `datasets`, `sentencepiece`, and `accelerate` usage.
 
 ```powershell
 python -m venv .venv
@@ -91,7 +91,7 @@ jupyter lab
 Notes:
 
 - Stanza Chinese/Korean models and Hugging Face embedding caches live under the local virtual environment and are not committed.
-- The BLEU notebook imports `nltk.translate.bleu_score`; install `nltk` separately if it is missing from your environment.
+- Legacy BLEU notebooks used `nltk.translate.bleu_score`; the current RF-007 evaluation CLI uses a pure-Python implementation and does not require `nltk`.
 - Large models, fine-tuned outputs, translation results, raw data, and local model caches are excluded by `.gitignore`.
 
 ## Basic Workflow

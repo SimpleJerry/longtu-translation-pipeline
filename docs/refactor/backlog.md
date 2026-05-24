@@ -74,6 +74,18 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Recommended Test Commands:** `venv\Scripts\python.exe -m py_compile src\longtu_translation_pipeline\config.py src\longtu_translation_pipeline\training.py src\longtu_translation_pipeline\inference.py scripts\train_model.py scripts\run_inference.py`; `venv\Scripts\python.exe -m unittest discover -s tests`; `venv\Scripts\python.exe scripts\train_model.py --config configs/training/default.json --dry-run`; `venv\Scripts\python.exe scripts\run_inference.py --config configs/inference/default.json --dry-run`; `git -c safe.directory=D:/longtu-translation-pipeline diff -- data notebooks`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
 - **Notes:** Phase 1 completed on 2026-05-24. The default training config uses `data/segments.csv`, `data/glossary.csv`, `zh-CN -> ko`, and NLLB language codes `zho_Hans -> kor_Hang`. `scripts/train_model.py` currently validates config/data, applies RF-005 `<start>...<end>` terminology markers only to preview examples during dry-run (`terminology_marker_scope=preview_only`), builds deterministic train/validation split counts, and prints preview examples. `scripts/run_inference.py` validates config/input and prints model/input/output planning details. Review fixes on 2026-05-24 made config-internal relative paths resolve from the repository root, made empty training/inference CSVs fail clearly, and documented the preview-only marker scope. Actual `transformers` Trainer loading, model download, GPU training, and generation remain deferred to a later RF-006 phase. Validation: `venv\Scripts\python.exe -m py_compile src\longtu_translation_pipeline\config.py src\longtu_translation_pipeline\training.py src\longtu_translation_pipeline\inference.py scripts\train_model.py scripts\run_inference.py` passed; `venv\Scripts\python.exe -m unittest discover -s tests` passed with 17 tests; `venv\Scripts\python.exe scripts\train_model.py --config configs/training/default.json --dry-run` reported 75,462 rows, 60,370 train rows, and 15,092 validation rows; `venv\Scripts\python.exe scripts\run_inference.py --config configs/inference/default.json --dry-run` reported 75,462 input rows; running both default CLIs from the `docs/` subdirectory also resolved config and data paths back to `D:\longtu-translation-pipeline`; `git -c safe.directory=D:/longtu-translation-pipeline diff -- data notebooks` had no output; `git -c safe.directory=D:/longtu-translation-pipeline diff --check` passed with line-ending warnings only.
 
+## RF-006-P2: Tokenizer / Dataset / Trainer Smoke Test
+
+- **Status:** TODO
+- **Scope:** Training tokenizer/dataset preparation, minimal `transformers` integration, future `requirements-training.txt`
+- **Background / Why:** RF-006 Phase 1 validates config and data flow without model libraries. The next training step should prove that tokenizer, dataset construction, language codes, max length settings, and terminology markers can enter a real training-shaped pipeline before any long GPU training run.
+- **Concrete Scope:** Add the smallest training-chain smoke test that loads a tokenizer, builds a tiny dataset from fixtures or a very small sample, passes `zh-CN -> ko` and `zho_Hans -> kor_Hang` settings into tokenization, and applies RF-005 `<start>...<end>` terminology markers to full prepared training examples rather than preview-only examples.
+- **Out of Scope:** Full model training, checkpoint saving, long GPU runs, generation, evaluation loop integration, and model quality tuning.
+- **Risks:** Introducing `transformers`, `datasets`, `sentencepiece`, and `accelerate` too early can make the base environment heavy; tests must not require downloading a large NLLB model.
+- **Acceptance Criteria:** Tokenizer/dataset smoke test passes on a tiny fixture without full training; RF-006 config values drive tokenization; terminology marker application is tested beyond preview-only dry-run; actual training dependencies are confirmed before creating `requirements-training.txt`.
+- **Recommended Test Commands:** targeted unit tests for tokenizer/dataset preparation; a CLI dry-run/smoke command that avoids full training; `git -c safe.directory=D:/longtu-translation-pipeline diff -- data notebooks`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Added on 2026-05-24 as the next RF-006 stage. This task should confirm the real training dependency set before dependency files are split. When it introduces actual `transformers`, `datasets`, `sentencepiece`, or `accelerate` usage, create `requirements-training.txt` and document the install path in README.
+
 ## RF-007: Evaluation Automation
 
 - **Status:** DONE
@@ -88,15 +100,15 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-008: Dependency Split
 
-- **Status:** TODO
-- **Scope:** `requirements.txt`, future optional requirements files or project metadata
+- **Status:** NEEDS_TRIAGE
+- **Scope:** `requirements.txt`, future `requirements-training.txt`, dependency notes in README
 - **Background / Why:** The current requirements file pins a full experiment environment, including notebook and CUDA training dependencies.
-- **Concrete Scope:** Split base data-processing dependencies from training/GPU and notebook dependencies.
+- **Concrete Scope:** Lightweight dependency governance only for now. Do not split `requirements.txt` yet and do not create `requirements-training.txt` until RF-006-P2 confirms real training dependency usage.
 - **Out of Scope:** Upgrading every package version or changing the runtime platform.
 - **Risks:** Users may lose a one-command install path if docs are not updated.
-- **Acceptance Criteria:** Dependency files clearly describe base, training, and notebook installs; README setup commands are accurate.
-- **Recommended Test Commands:** Fresh environment install dry run where practical; `python -m pip check` if dependencies are installed.
-- **Notes:** CUDA PyTorch wheels may require a separate PyTorch index URL.
+- **Acceptance Criteria:** Backlog and README explain that current `requirements.txt` records the already-used semantic-cleaning/local environment dependencies, while base CLI/tests/evaluation are mostly standard-library. Training-specific requirements are deferred until RF-006-P2.
+- **Recommended Test Commands:** `rg -n "RF-008|NEEDS_TRIAGE|requirements-training|RF-006|Phase 2|transformers|datasets|sentencepiece|accelerate" docs/refactor/backlog.md README.md README.en.md README.zh-CN.md`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Re-triaged on 2026-05-24. This repository is currently an internal experiment workspace rather than a packaged distribution. Splitting dependency files before RF-006-P2 would be premature because base CLI/tests/evaluation do not need third-party packages, semantic-cleaning dependencies are already recorded in `requirements.txt`, and training dependencies are not yet implemented. Create `requirements-training.txt` after RF-006-P2 introduces confirmed `transformers`, `datasets`, `sentencepiece`, or `accelerate` usage.
 
 ## RF-009: Documentation Governance
 

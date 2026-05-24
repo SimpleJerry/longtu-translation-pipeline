@@ -79,7 +79,7 @@
 
 ## 运行环境
 
-建议使用 Windows 或 Linux 的 Python 虚拟环境。`requirements.txt` 当前记录了 CUDA 13.2 版本 PyTorch 与本地术语清洗所需依赖。
+建议使用 Windows 或 Linux 的 Python 虚拟环境。`requirements.txt` 当前记录已经实际落地使用的本地 semantic cleaning 依赖与 CUDA 13.2 版本 PyTorch；基础 CLI、dry-run、测试和 RF-007 evaluation 主要使用标准库，不代表所有场景都必须安装完整依赖。训练专用 `requirements-training.txt` 会在 RF-006 Phase 2 确认真实 `transformers` / `datasets` / `sentencepiece` / `accelerate` 依赖后再创建。
 
 ```powershell
 python -m venv .venv
@@ -91,7 +91,7 @@ jupyter lab
 注意：
 
 - Stanza 中文/韩文模型、Hugging Face embedding 缓存放在本地虚拟环境目录下，不提交到 Git。
-- BLEU notebook 使用 `nltk.translate.bleu_score`，如果环境里没有 `nltk`，需要另行安装。
+- 旧 BLEU notebook 曾使用 `nltk.translate.bleu_score`；当前 RF-007 evaluation CLI 使用纯 Python 实现，不需要 `nltk`。
 - 大模型、微调输出、翻译结果、raw 数据和本地模型缓存已通过 `.gitignore` 排除。
 
 ## 基本流程

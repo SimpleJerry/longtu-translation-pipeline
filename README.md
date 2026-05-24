@@ -79,7 +79,7 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 
 ## 실행 환경
 
-권장 환경은 Windows 또는 Linux의 Python 가상환경입니다. `requirements.txt`에는 CUDA 13.2 계열 PyTorch와 로컬 용어집 정제 의존성이 기록되어 있습니다.
+권장 환경은 Windows 또는 Linux의 Python 가상환경입니다. `requirements.txt`에는 실제로 사용 중인 로컬 semantic cleaning 의존성과 CUDA 13.2 계열 PyTorch가 기록되어 있습니다. 기본 CLI, dry-run, 테스트, RF-007 evaluation은 대부분 표준 라이브러리만 사용하므로 모든 workflow가 전체 의존성을 필요로 한다는 뜻은 아닙니다. 학습 전용 `requirements-training.txt`는 RF-006 Phase 2에서 실제 `transformers`, `datasets`, `sentencepiece`, `accelerate` 사용이 확인된 뒤 생성합니다.
 
 ```powershell
 python -m venv .venv
@@ -91,7 +91,7 @@ jupyter lab
 참고:
 
 - Stanza 중국어/한국어 모델과 Hugging Face embedding cache는 로컬 가상환경 아래에 두며 Git에 커밋하지 않습니다.
-- BLEU notebook은 `nltk.translate.bleu_score`를 사용합니다. 환경에 `nltk`가 없으면 별도로 설치해야 합니다.
+- Legacy BLEU notebook은 `nltk.translate.bleu_score`를 사용했지만, 현재 RF-007 evaluation CLI는 pure-Python 구현이므로 `nltk`가 필요하지 않습니다.
 - 큰 모델, 학습 결과, 번역 결과, raw 데이터, 로컬 모델 cache는 `.gitignore`에 의해 제외됩니다.
 
 ## 기본 워크플로
