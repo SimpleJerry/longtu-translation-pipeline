@@ -1,0 +1,25 @@
+{
+  "input": {
+    "path": "data/segments.csv",
+    "text_column": "zh-CN",
+    "id_column": "segment_id"
+  },
+  "language": {
+    "source_code": "zho_Hans",
+    "target_code": "kor_Hang"
+  },
+  "model": {
+    "path": "fine-tuned-models/nllb-200-distilled-600M/zh2ko"
+  },
+  "output": {
+    "path": "translation_result.csv",
+    "strip_glossary_markers": true
+  },
+  "generation": {
+    "batch_size": 8,
+    "max_length": 400
+  },
+  "dry_run": {
+    "preview_rows": 3
+  }
+}

@@ -2,7 +2,7 @@
 
 [한국어](README.md) | [English](README.en.md) | [中文](README.zh-CN.md)
 
-这是 LongtuKorea 的游戏本地化机器翻译实验仓库。当前重点是基于 NLLB 的简体中文（`zh-CN`）到韩语（`ko`）微调流程，同时覆盖术语匹配、代码/标签保护、翻译结果生成、BLEU 评估、术语与代码保留率检查。
+这是 LongtuKorea 的游戏本地化机器翻译实验仓库。当前重点是基于 NLLB 的简体中文（`zh-CN`）到韩语（`ko`）微调流程，同时覆盖术语匹配、翻译结果生成、BLEU 评估与术语保留率检查。
 
 这份 README 用来梳理当前仓库的真实状态。它还不是一个已经工程化封装好的生产项目，更接近“数据处理脚本 + 研究 notebook”的实验工作区。
 
@@ -13,7 +13,7 @@
 - 基于 `facebook/nllb-200-*` 系列模型进行游戏本地化语料微调。
 - 使用统一的 `<start>...<end>` 特殊 token 在翻译中标记术语。
 - T&N+R 和 code-id code/tag 保护只作为历史实验保留，不再作为当前主线。
-- 将翻译结果导出为 Excel/CSV，并评估 BLEU、术语保留率和代码保留率。
+- 将翻译结果导出为 Excel/CSV，并评估 BLEU 与术语保留率。
 
 ## 仓库结构
 
@@ -29,10 +29,14 @@
 │   └── review/                # 本地生成，Git 忽略
 ├── configs/
 │   ├── glossary/
-│   └── segments/
+│   ├── inference/
+│   ├── segments/
+│   └── training/
 ├── scripts/
 │   ├── glossary_semantic_pipeline.py
-│   └── segments_cleaning_pipeline.py
+│   ├── segments_cleaning_pipeline.py
+│   ├── run_inference.py
+│   └── train_model.py
 ├── src/
 │   └── longtu_translation_pipeline/
 ├── notebooks/
@@ -53,9 +57,16 @@
 | `data/review/` | 本地数据清洗审计和人工核对 CSV，默认不提交。 |
 | `configs/glossary/` | glossary 清洗的 seed、词表和规则配置。 |
 | `configs/segments/` | segments 清洗的结构化字符串拆分、term/entity seed 和语义阈值配置。 |
+| `configs/training/default.json` | RF-006 第一阶段训练配置，声明数据路径、语言码、模型名、输出目录和基础训练参数。 |
+| `configs/inference/default.json` | RF-006 第一阶段推理配置，声明模型路径、输入/输出路径、语言码和生成参数。 |
 | `scripts/glossary_semantic_pipeline.py` | 本地 glossary semantic 清洗 pipeline，使用 Stanza、jieba、kiwipiepy、wordfreq 与 `BAAI/bge-m3`。 |
 | `scripts/segments_cleaning_pipeline.py` | 本地 segments 语义清洗 pipeline，默认 dry-run 生成 review CSV。 |
+| `scripts/train_model.py` | 训练 dry-run CLI；当前只校验配置、读取数据、拆分 train/valid，不加载模型。 |
+| `scripts/run_inference.py` | 推理 dry-run CLI；当前只校验配置、读取输入、展示输出计划，不加载模型。 |
 | `src/longtu_translation_pipeline/text_protection.py` | 可测试的术语 marker 保护纯函数模块。 |
+| `src/longtu_translation_pipeline/config.py` | 训练/推理 JSON 配置的 dataclass 解析和校验。 |
+| `src/longtu_translation_pipeline/training.py` | 可导入的训练数据准备 dry-run API。 |
+| `src/longtu_translation_pipeline/inference.py` | 可导入的推理输入计划 dry-run API。 |
 | `notebooks/main/` | 主线训练、预处理、生成和评估实验 notebook。 |
 | `notebooks/analysis/` | 辅助分析 notebook，例如训练 loss 可视化。 |
 | `notebooks/archive/2023-legacy/` | 2023 年旧实验归档，第一轮不直接删除。 |
@@ -114,6 +125,13 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 ```
 
 该 pipeline 会先剥离 `<c=...>` 等表现层样式标签并解开对称外层包装，再使用 Stanza、jieba、kiwipiepy 和 `BAAI/bge-m3` 判断 term/entity-like segment；placeholder 行默认保留，只做 mismatch 审计。该命令不会改写 `data/segments.csv`，只会在本地 `data/review/segments/` 下生成审计 CSV。人工确认后再使用 `--apply` 重写最终语料。
+
+训练/推理工程入口目前处于 RF-006 第一阶段：只做配置读取、数据校验和 dry-run，不加载 NLLB 模型、不下载依赖、不启动训练。训练 dry-run 只对预览样例应用 `<start>...<end>` 术语 marker，用来验证 RF-005 接入方式；全量 marker/tokenization 留到后续训练阶段。
+
+```powershell
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
+venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
+```
 
 训练 notebook 中的语言列按 NLLB 语言代码转换：
 

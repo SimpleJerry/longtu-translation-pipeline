@@ -78,3 +78,10 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Background:** The user decided to abandon the T&N+R method and simplify all terminology markers to a single-segment form.
 - **Impact Scope:** `src/longtu_translation_pipeline/text_protection.py`, RF-005 tests, README workflow notes, notebook inventory, future RF-006/RF-007 migration.
 - **Follow-up Notes:** Historical notebooks may still contain `<middle>` and `<code_id=N>` outputs as experiment records, but new reusable code should not generate them unless a future task explicitly reintroduces that behavior.
+
+## 2026-05-24: Training and Inference Configs Use JSON Dry-Run Entrypoints
+
+- **Decision:** Training and inference settings live in JSON config files, and RF-006 phase 1 entrypoints must not load models during import or dry-run execution.
+- **Background:** Notebook cells previously mixed hard-coded paths such as `autodl-tmp/...`, NLLB language codes, split settings, batch sizes, and output directories. The project needs a reviewable configuration skeleton before adding heavyweight training dependencies.
+- **Impact Scope:** `configs/training/default.json`, `configs/inference/default.json`, `src/longtu_translation_pipeline/config.py`, `src/longtu_translation_pipeline/training.py`, `src/longtu_translation_pipeline/inference.py`, `scripts/train_model.py`, `scripts/run_inference.py`, README workflow notes.
+- **Follow-up Notes:** Actual model loading, `transformers` Trainer wiring, dataset tokenization, GPU training, and generation output writing should be added in later phases. Importable modules and dry-run commands should remain safe to execute without downloading NLLB models.

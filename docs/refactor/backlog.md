@@ -64,22 +64,22 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-006: Training/Inference Config
 
-- **Status:** TODO
-- **Scope:** Training notebooks, inference notebooks, future `configs/`
+- **Status:** DONE
+- **Scope:** `configs/training/`, `configs/inference/`, `src/longtu_translation_pipeline/config.py`, `src/longtu_translation_pipeline/training.py`, `src/longtu_translation_pipeline/inference.py`, `scripts/train_model.py`, `scripts/run_inference.py`
 - **Background / Why:** Model paths, language pairs, batch sizes, and output paths are hard-coded in notebook cells.
-- **Concrete Scope:** Introduce config files for model name, tokenizer, language pair, output directories, and training/inference parameters.
+- **Concrete Scope:** Phase 1 introduces JSON config files for model name, language pair, data paths, output paths, split settings, tokenization settings, and basic training/inference parameters. It also adds importable dry-run APIs and CLI entry points that validate config and data without loading models.
 - **Out of Scope:** Downloading large models or running full GPU training as part of refactor verification.
 - **Risks:** Config drift can make old experiment results hard to reproduce.
-- **Acceptance Criteria:** Training/inference code reads paths and parameters from config; a small import/config validation test passes without downloading a model.
-- **Recommended Test Commands:** Config parse check; targeted import test for training/inference modules.
-- **Notes:** Prefer explicit config defaults over hidden local paths such as `autodl-tmp/...`.
+- **Acceptance Criteria:** Training/inference code reads paths and parameters from config; a small import/config validation test passes without downloading a model; dry-run CLI commands run against the committed `data/segments.csv` and `data/glossary.csv`.
+- **Recommended Test Commands:** `venv\Scripts\python.exe -m py_compile src\longtu_translation_pipeline\config.py src\longtu_translation_pipeline\training.py src\longtu_translation_pipeline\inference.py scripts\train_model.py scripts\run_inference.py`; `venv\Scripts\python.exe -m unittest discover -s tests`; `venv\Scripts\python.exe scripts\train_model.py --config configs/training/default.json --dry-run`; `venv\Scripts\python.exe scripts\run_inference.py --config configs/inference/default.json --dry-run`; `git -c safe.directory=D:/longtu-translation-pipeline diff -- data notebooks`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Phase 1 completed on 2026-05-24. The default training config uses `data/segments.csv`, `data/glossary.csv`, `zh-CN -> ko`, and NLLB language codes `zho_Hans -> kor_Hang`. `scripts/train_model.py` currently validates config/data, applies RF-005 `<start>...<end>` terminology markers only to preview examples during dry-run (`terminology_marker_scope=preview_only`), builds deterministic train/validation split counts, and prints preview examples. `scripts/run_inference.py` validates config/input and prints model/input/output planning details. Review fixes on 2026-05-24 made config-internal relative paths resolve from the repository root, made empty training/inference CSVs fail clearly, and documented the preview-only marker scope. Actual `transformers` Trainer loading, model download, GPU training, and generation remain deferred to a later RF-006 phase. Validation: `venv\Scripts\python.exe -m py_compile src\longtu_translation_pipeline\config.py src\longtu_translation_pipeline\training.py src\longtu_translation_pipeline\inference.py scripts\train_model.py scripts\run_inference.py` passed; `venv\Scripts\python.exe -m unittest discover -s tests` passed with 17 tests; `venv\Scripts\python.exe scripts\train_model.py --config configs/training/default.json --dry-run` reported 75,462 rows, 60,370 train rows, and 15,092 validation rows; `venv\Scripts\python.exe scripts\run_inference.py --config configs/inference/default.json --dry-run` reported 75,462 input rows; running both default CLIs from the `docs/` subdirectory also resolved config and data paths back to `D:\longtu-translation-pipeline`; `git -c safe.directory=D:/longtu-translation-pipeline diff -- data notebooks` had no output; `git -c safe.directory=D:/longtu-translation-pipeline diff --check` passed with line-ending warnings only.
 
 ## RF-007: Evaluation Automation
 
 - **Status:** TODO
-- **Scope:** BLEU, terminology preservation, code preservation evaluation
+- **Scope:** BLEU and terminology preservation evaluation for the simplified marker policy
 - **Background / Why:** Evaluation currently lives in notebooks and writes results manually.
-- **Concrete Scope:** Provide importable evaluation functions and a CLI for BLEU, glossary preservation, and code preservation metrics.
+- **Concrete Scope:** Provide importable evaluation functions and a CLI for BLEU and glossary preservation metrics. Historical code-token preservation notebooks should stay archived unless a future task explicitly reintroduces code/tag protection.
 - **Out of Scope:** Defining new model quality targets or changing metric formulas without a separate decision.
 - **Risks:** Metric implementations may diverge from notebook behavior.
 - **Acceptance Criteria:** Small fixture tests reproduce expected BLEU/preservation metrics; evaluation can run without notebook state.

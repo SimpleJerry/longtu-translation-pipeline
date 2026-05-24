@@ -1,0 +1,35 @@
+{
+  "data": {
+    "segments_path": "data/segments.csv",
+    "glossary_path": "data/glossary.csv",
+    "source_column": "zh-CN",
+    "target_column": "ko",
+    "id_column": "segment_id"
+  },
+  "language": {
+    "source_code": "zho_Hans",
+    "target_code": "kor_Hang"
+  },
+  "model": {
+    "base_model": "facebook/nllb-200-distilled-600M",
+    "output_dir": "fine-tuned-models/nllb-200-distilled-600M/zh2ko"
+  },
+  "split": {
+    "validation_ratio": 0.2,
+    "seed": 42
+  },
+  "tokenization": {
+    "max_length": 400,
+    "padding": "max_length",
+    "truncation": true,
+    "terminology_markers": true
+  },
+  "training": {
+    "num_train_epochs": 3,
+    "per_device_train_batch_size": 1,
+    "per_device_eval_batch_size": 1
+  },
+  "dry_run": {
+    "preview_rows": 3
+  }
+}

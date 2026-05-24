@@ -1,0 +1,147 @@
+from __future__ import annotations
+
+import csv
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from longtu_translation_pipeline.config import load_training_config  # noqa: E402
+from longtu_translation_pipeline.training import (  # noqa: E402
+    build_training_dry_run,
+    format_training_dry_run,
+)
+
+
+class TrainingPipelineTest(unittest.TestCase):
+    def test_dry_run_builds_deterministic_split_and_marks_terms(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            segments_path = tmp_path / "segments.csv"
+            glossary_path = tmp_path / "glossary.csv"
+            config_path = tmp_path / "training.json"
+
+            write_csv(
+                segments_path,
+                ["segment_id", "zh-CN", "ko"],
+                [
+                    {"segment_id": "1", "zh-CN": "打开神秘宝箱", "ko": "신비한 보물상자 열기"},
+                    {"segment_id": "2", "zh-CN": "挑战次数:{0}", "ko": "도전 횟수: {0}"},
+                    {"segment_id": "3", "zh-CN": "勇士竞技", "ko": "용맹의 결투장"},
+                    {"segment_id": "4", "zh-CN": "领取奖励", "ko": "보상 수령"},
+                    {"segment_id": "5", "zh-CN": "进入副本", "ko": "던전 입장"},
+                ],
+            )
+            write_csv(
+                glossary_path,
+                ["term_id", "zh-CN", "ko"],
+                [{"term_id": "1", "zh-CN": "神秘宝箱", "ko": "신비한 보물상자"}],
+            )
+            config_path.write_text(
+                json.dumps(build_training_config(segments_path, glossary_path), ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            config = load_training_config(config_path)
+            first_plan = build_training_dry_run(config)
+            second_plan = build_training_dry_run(config)
+
+        self.assertEqual(first_plan.total_rows, 5)
+        self.assertEqual(first_plan.validation_rows, 2)
+        self.assertEqual(first_plan.train_rows, 3)
+        self.assertEqual(first_plan.terminology_marker_scope, "preview_only")
+        self.assertEqual(first_plan.preview_examples, second_plan.preview_examples)
+        self.assertIn("terminology_marker_scope=preview_only", format_training_dry_run(first_plan))
+        self.assertEqual(first_plan.preview_examples[0].source_text, "打开<start>神秘宝箱<end>")
+        self.assertEqual(first_plan.preview_examples[0].target_text, "<start>신비한 보물상자<end> 열기")
+
+    def test_terminology_marker_can_be_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            segments_path = tmp_path / "segments.csv"
+            glossary_path = tmp_path / "glossary.csv"
+            config_path = tmp_path / "training.json"
+
+            write_csv(
+                segments_path,
+                ["segment_id", "zh-CN", "ko"],
+                [{"segment_id": "1", "zh-CN": "打开神秘宝箱", "ko": "신비한 보물상자 열기"}],
+            )
+            write_csv(
+                glossary_path,
+                ["term_id", "zh-CN", "ko"],
+                [{"term_id": "1", "zh-CN": "神秘宝箱", "ko": "신비한 보물상자"}],
+            )
+            config_data = build_training_config(segments_path, glossary_path)
+            config_data["tokenization"]["terminology_markers"] = False
+            config_path.write_text(json.dumps(config_data, ensure_ascii=False), encoding="utf-8")
+
+            plan = build_training_dry_run(load_training_config(config_path))
+
+        self.assertEqual(plan.preview_examples[0].source_text, "打开神秘宝箱")
+        self.assertEqual(plan.preview_examples[0].target_text, "신비한 보물상자 열기")
+        self.assertEqual(plan.terminology_marker_scope, "disabled")
+
+    def test_empty_training_csv_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            segments_path = tmp_path / "segments.csv"
+            glossary_path = tmp_path / "glossary.csv"
+            config_path = tmp_path / "training.json"
+
+            write_csv(segments_path, ["segment_id", "zh-CN", "ko"], [])
+            write_csv(
+                glossary_path,
+                ["term_id", "zh-CN", "ko"],
+                [{"term_id": "1", "zh-CN": "神秘宝箱", "ko": "신비한 보물상자"}],
+            )
+            config_path.write_text(
+                json.dumps(build_training_config(segments_path, glossary_path), ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "No training examples found"):
+                build_training_dry_run(load_training_config(config_path))
+
+
+def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def build_training_config(segments_path: Path, glossary_path: Path) -> dict[str, object]:
+    return {
+        "data": {
+            "segments_path": str(segments_path),
+            "glossary_path": str(glossary_path),
+            "source_column": "zh-CN",
+            "target_column": "ko",
+            "id_column": "segment_id",
+        },
+        "language": {"source_code": "zho_Hans", "target_code": "kor_Hang"},
+        "model": {"base_model": "test-model", "output_dir": "out"},
+        "split": {"validation_ratio": 0.4, "seed": 7},
+        "tokenization": {
+            "max_length": 32,
+            "padding": "max_length",
+            "truncation": True,
+            "terminology_markers": True,
+        },
+        "training": {
+            "num_train_epochs": 1,
+            "per_device_train_batch_size": 1,
+            "per_device_eval_batch_size": 1,
+        },
+        "dry_run": {"preview_rows": 2},
+    }
+
+
+if __name__ == "__main__":
+    unittest.main()

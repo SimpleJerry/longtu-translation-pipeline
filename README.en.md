@@ -2,7 +2,7 @@
 
 [한국어](README.md) | [English](README.en.md) | [中文](README.zh-CN.md)
 
-This repository contains LongtuKorea's experimental game localization machine translation workflow. The current focus is NLLB-based fine-tuning for Simplified Chinese (`zh-CN`) to Korean (`ko`), with glossary matching, code/tag protection, translation generation, BLEU evaluation, and terminology/code preservation checks.
+This repository contains LongtuKorea's experimental game localization machine translation workflow. The current focus is NLLB-based fine-tuning for Simplified Chinese (`zh-CN`) to Korean (`ko`), with glossary matching, translation generation, BLEU evaluation, and terminology preservation checks.
 
 This README documents the repository as it exists today. The project is still closer to a research notebook workspace than a packaged production codebase.
 
@@ -13,7 +13,7 @@ This README documents the repository as it exists today. The project is still cl
 - Fine-tune `facebook/nllb-200-*` models on game localization data.
 - Mark glossary terms during translation with a single `<start>...<end>` special-token shape.
 - Keep T&N+R and code-id code/tag protection only as historical experiments, not as the current mainline.
-- Export translation results to Excel/CSV and evaluate BLEU, glossary preservation, and code preservation.
+- Export translation results to Excel/CSV and evaluate BLEU and glossary preservation.
 
 ## Repository Layout
 
@@ -29,10 +29,14 @@ This README documents the repository as it exists today. The project is still cl
 │   └── review/                # generated locally, ignored by Git
 ├── configs/
 │   ├── glossary/
-│   └── segments/
+│   ├── inference/
+│   ├── segments/
+│   └── training/
 ├── scripts/
 │   ├── glossary_semantic_pipeline.py
-│   └── segments_cleaning_pipeline.py
+│   ├── segments_cleaning_pipeline.py
+│   ├── run_inference.py
+│   └── train_model.py
 ├── src/
 │   └── longtu_translation_pipeline/
 ├── notebooks/
@@ -53,9 +57,16 @@ This README documents the repository as it exists today. The project is still cl
 | `data/review/` | Local data-cleaning audit CSVs and review artifacts; not committed by default. |
 | `configs/glossary/` | Seeds, lexicons, and rules for glossary cleanup. |
 | `configs/segments/` | Structured-string splitting, term/entity seeds, and semantic thresholds for segment cleanup. |
+| `configs/training/default.json` | RF-006 phase 1 training config for data paths, language codes, model name, output directory, and basic training parameters. |
+| `configs/inference/default.json` | RF-006 phase 1 inference config for model path, input/output paths, language codes, and generation parameters. |
 | `scripts/glossary_semantic_pipeline.py` | Local glossary semantic cleanup pipeline using Stanza, jieba, kiwipiepy, wordfreq, and `BAAI/bge-m3`. |
 | `scripts/segments_cleaning_pipeline.py` | Local semantic segment cleanup pipeline; dry-run review output by default. |
+| `scripts/train_model.py` | Training dry-run CLI; currently validates config, reads data, and creates train/validation splits without loading a model. |
+| `scripts/run_inference.py` | Inference dry-run CLI; currently validates config, reads inputs, and shows the output plan without loading a model. |
 | `src/longtu_translation_pipeline/text_protection.py` | Testable pure-function module for terminology marker protection. |
+| `src/longtu_translation_pipeline/config.py` | Dataclass parsing and validation for training/inference JSON configs. |
+| `src/longtu_translation_pipeline/training.py` | Importable training-data preparation dry-run API. |
+| `src/longtu_translation_pipeline/inference.py` | Importable inference-input planning dry-run API. |
 | `notebooks/main/` | Main training, preprocessing, generation, and evaluation experiment notebooks. |
 | `notebooks/analysis/` | Auxiliary analysis notebooks, such as train/eval loss visualization. |
 | `notebooks/archive/2023-legacy/` | Archived 2023 legacy experiments; not deleted in the first pass. |
@@ -114,6 +125,13 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 ```
 
 This pipeline first strips presentation tags such as `<c=...>` and unwraps symmetric outer wrappers, then uses Stanza, jieba, kiwipiepy, and `BAAI/bge-m3` to score term/entity-like segments. Placeholder rows are kept by default and only audited for mismatch. The command does not rewrite `data/segments.csv`; it only writes local audit CSVs under `data/review/segments/`. Use `--apply` only after manual review.
+
+The training/inference engineering entry points are currently in RF-006 phase 1: they only read config, validate data, and run dry-run planning. They do not load NLLB models, download dependencies, or start training. The training dry-run applies `<start>...<end>` terminology markers only to preview examples to verify RF-005 integration; full-corpus marker/tokenization work is deferred to a later training phase.
+
+```powershell
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
+venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
+```
 
 Training notebooks convert language columns to NLLB language codes:
 
