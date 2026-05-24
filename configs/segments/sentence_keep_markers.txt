@@ -1,0 +1,23 @@
+# Markers that make short rows more likely to be real UI/body segments.
+是否
+请
+点击
+使用
+购买
+领取
+成功
+失败
+不足
+无法
+不能
+需要
+获得
+消耗
+开启
+关闭
+进入
+退出
+已
+未
+可以
+不可

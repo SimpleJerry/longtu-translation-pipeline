@@ -29,14 +29,29 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
-import json
 import locale
 import os
 import re
 from collections import OrderedDict, defaultdict
 from pathlib import Path
 from typing import Any
+
+try:
+    from cleanup_common import (
+        compile_regexes,
+        ensure_csv_columns,
+        read_json_config,
+        read_term_file,
+        sha256,
+    )
+except ModuleNotFoundError:  # pragma: no cover - module import fallback
+    from scripts.cleanup_common import (
+        compile_regexes,
+        ensure_csv_columns,
+        read_json_config,
+        read_term_file,
+        sha256,
+    )
 
 try:
     from wordfreq import zipf_frequency
@@ -117,43 +132,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest().upper()
-
-
-def read_term_file(path: Path, label: str) -> list[str]:
-    if not path.exists():
-        raise RuntimeError(f"{label} file does not exist: {path}")
-
-    terms: list[str] = []
-    seen: set[str] = set()
-    with path.open(encoding="utf-8-sig") as f:
-        for line_no, line in enumerate(f, 1):
-            term = line.strip()
-            if not term or term.startswith("#"):
-                continue
-            if term in seen:
-                raise RuntimeError(
-                    f"Duplicate {label} term at {path}:{line_no}: {term}"
-                )
-            terms.append(term)
-            seen.add(term)
-
-    if not terms:
-        raise RuntimeError(f"{label} file is empty after comments: {path}")
-    return terms
-
-
-def read_json_config(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        raise RuntimeError(f"Rules config does not exist: {path}")
-    with path.open(encoding="utf-8-sig") as f:
-        data = json.load(f)
-    if not isinstance(data, dict):
-        raise RuntimeError(f"Rules config must be a JSON object: {path}")
-    return data
-
-
 def load_pipeline_config(config_dir: Path) -> None:
     global LEXICONS, RULES, PATTERNS
 
@@ -183,10 +161,7 @@ def load_pipeline_config(config_dir: Path) -> None:
         loaded["compound_suffixes"], key=len, reverse=True
     )
     RULES = read_json_config(config_dir / "rules.json")
-    regexes = RULES.get("regex")
-    if not isinstance(regexes, dict) or not regexes:
-        raise RuntimeError("rules.json must contain a non-empty 'regex' object.")
-    PATTERNS = {name: re.compile(pattern) for name, pattern in regexes.items()}
+    PATTERNS = compile_regexes(RULES)
     LEXICONS = loaded
 
 
@@ -225,11 +200,7 @@ def lexicon_list(name: str) -> list[str]:
 def read_glossary_baseline(glossary_path: Path) -> list[dict[str, str]]:
     with glossary_path.open(encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
-        missing = [column for column in SCHEMA if column not in (reader.fieldnames or [])]
-        if missing:
-            raise RuntimeError(
-                f"Glossary baseline is missing required columns {missing}: {glossary_path}"
-            )
+        ensure_csv_columns(reader, SCHEMA, glossary_path)
         rows = list(reader)
 
     baseline: list[dict[str, str]] = []

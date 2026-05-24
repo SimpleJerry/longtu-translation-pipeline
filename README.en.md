@@ -28,9 +28,11 @@ This README documents the repository as it exists today. The project is still cl
 │   ├── segments.csv
 │   └── review/                # generated locally, ignored by Git
 ├── configs/
-│   └── glossary/
+│   ├── glossary/
+│   └── segments/
 ├── scripts/
-│   └── glossary_semantic_pipeline.py
+│   ├── glossary_semantic_pipeline.py
+│   └── segments_cleaning_pipeline.py
 ├── nllb-fine-tune_all.ipynb
 ├── T&N method.ipynb
 ├── T&N method_modified.ipynb
@@ -50,7 +52,9 @@ This README documents the repository as it exists today. The project is still cl
 | `data/glossary.csv` | Final Chinese-Korean game glossary with `term_id`, `zh-CN`, and `ko` columns. |
 | `data/review/` | Local data-cleaning audit CSVs and review artifacts; not committed by default. |
 | `configs/glossary/` | Seeds, lexicons, and rules for glossary cleanup. |
+| `configs/segments/` | Structured-string splitting, term/entity seeds, and semantic thresholds for segment cleanup. |
 | `scripts/glossary_semantic_pipeline.py` | Local glossary semantic cleanup pipeline using Stanza, jieba, kiwipiepy, wordfreq, and `BAAI/bge-m3`. |
+| `scripts/segments_cleaning_pipeline.py` | Local semantic segment cleanup pipeline; dry-run review output by default. |
 | `nllb-fine-tune_all.ipynb` | Baseline NLLB fine-tuning workflow. |
 | `T&N method.ipynb` | Terminology and Notation experiment using glossary special tokens. |
 | `T&N+R preprocess.ipynb` | Preprocessing experiment for terminology and code protection. |
@@ -103,6 +107,14 @@ venv\Scripts\python.exe scripts\glossary_semantic_pipeline.py
 ```
 
 The default rule directory is `configs/glossary/`, which contains seed files, lexicons, and `rules.json`; pass `--config-dir`, `--game-seeds`, and `--common-noun-seeds` to use alternatives.
+
+To inspect or iterate segment cleanup, run a dry run first:
+
+```powershell
+venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
+```
+
+This pipeline first strips presentation tags such as `<c=...>` and unwraps symmetric outer wrappers, then uses Stanza, jieba, kiwipiepy, and `BAAI/bge-m3` to score term/entity-like segments. Placeholder rows are kept by default and only audited for mismatch. The command does not rewrite `data/segments.csv`; it only writes local audit CSVs under `data/review/segments/`. Use `--apply` only after manual review.
 
 Training notebooks convert language columns to NLLB language codes:
 

@@ -28,9 +28,11 @@
 │   ├── segments.csv
 │   └── review/                # 本地生成，Git 忽略
 ├── configs/
-│   └── glossary/
+│   ├── glossary/
+│   └── segments/
 ├── scripts/
-│   └── glossary_semantic_pipeline.py
+│   ├── glossary_semantic_pipeline.py
+│   └── segments_cleaning_pipeline.py
 ├── nllb-fine-tune_all.ipynb
 ├── T&N method.ipynb
 ├── T&N method_modified.ipynb
@@ -50,7 +52,9 @@
 | `data/glossary.csv` | 最终中文-韩文游戏术语表，只包含 `term_id`、`zh-CN` 与 `ko`。 |
 | `data/review/` | 本地数据清洗审计和人工核对 CSV，默认不提交。 |
 | `configs/glossary/` | glossary 清洗的 seed、词表和规则配置。 |
+| `configs/segments/` | segments 清洗的结构化字符串拆分、term/entity seed 和语义阈值配置。 |
 | `scripts/glossary_semantic_pipeline.py` | 本地 glossary semantic 清洗 pipeline，使用 Stanza、jieba、kiwipiepy、wordfreq 与 `BAAI/bge-m3`。 |
+| `scripts/segments_cleaning_pipeline.py` | 本地 segments 语义清洗 pipeline，默认 dry-run 生成 review CSV。 |
 | `nllb-fine-tune_all.ipynb` | NLLB 微调基础流程。 |
 | `T&N method.ipynb` | Terminology and Notation 方案，实验术语特殊 token。 |
 | `T&N+R preprocess.ipynb` | 包含术语与代码保护的预处理实验。 |
@@ -103,6 +107,14 @@ venv\Scripts\python.exe scripts\glossary_semantic_pipeline.py
 ```
 
 默认规则目录是 `configs/glossary/`，其中包含 seed、词表和 `rules.json`；可用 `--config-dir`、`--game-seeds` 与 `--common-noun-seeds` 指定替代文件。
+
+如需检查或迭代正文语料清洗，先运行 dry-run：
+
+```powershell
+venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
+```
+
+该 pipeline 会先剥离 `<c=...>` 等表现层样式标签并解开对称外层包装，再使用 Stanza、jieba、kiwipiepy 和 `BAAI/bge-m3` 判断 term/entity-like segment；placeholder 行默认保留，只做 mismatch 审计。该命令不会改写 `data/segments.csv`，只会在本地 `data/review/segments/` 下生成审计 CSV。人工确认后再使用 `--apply` 重写最终语料。
 
 训练 notebook 中的语言列按 NLLB 语言代码转换：
 

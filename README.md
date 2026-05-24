@@ -28,9 +28,11 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 │   ├── segments.csv
 │   └── review/                # 로컬 생성, Git 제외
 ├── configs/
-│   └── glossary/
+│   ├── glossary/
+│   └── segments/
 ├── scripts/
-│   └── glossary_semantic_pipeline.py
+│   ├── glossary_semantic_pipeline.py
+│   └── segments_cleaning_pipeline.py
 ├── nllb-fine-tune_all.ipynb
 ├── T&N method.ipynb
 ├── T&N method_modified.ipynb
@@ -50,7 +52,9 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 | `data/glossary.csv` | `term_id`, `zh-CN`, `ko` 컬럼만 가진 최종 중국어-한국어 게임 용어집입니다. |
 | `data/review/` | 로컬 데이터 정제 감사 CSV와 검토용 산출물이며 기본적으로 커밋하지 않습니다. |
 | `configs/glossary/` | glossary 정제에 쓰는 seed, 어휘 목록, 규칙 설정입니다. |
+| `configs/segments/` | segment 정제를 위한 구조화 문자열 분리, term/entity seed, semantic 임계값 설정입니다. |
 | `scripts/glossary_semantic_pipeline.py` | Stanza, jieba, kiwipiepy, wordfreq, `BAAI/bge-m3`를 사용하는 로컬 glossary semantic 정제 pipeline입니다. |
+| `scripts/segments_cleaning_pipeline.py` | 로컬 segments semantic 정제 pipeline이며 기본적으로 dry-run review를 생성합니다. |
 | `nllb-fine-tune_all.ipynb` | NLLB 모델 파인튜닝 기본 흐름입니다. |
 | `T&N method.ipynb` | Terminology and Notation 방식의 용어 특수 토큰 실험입니다. |
 | `T&N+R preprocess.ipynb` | 용어 및 코드 보호를 포함한 전처리 실험입니다. |
@@ -103,6 +107,14 @@ venv\Scripts\python.exe scripts\glossary_semantic_pipeline.py
 ```
 
 기본 규칙 디렉터리는 `configs/glossary/`이며 seed 파일, 어휘 목록, `rules.json`을 포함합니다. `--config-dir`, `--game-seeds`, `--common-noun-seeds`로 다른 파일을 지정할 수 있습니다.
+
+본문 말뭉치 정제를 확인하거나 반복하려면 먼저 dry-run을 실행합니다.
+
+```powershell
+venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
+```
+
+이 pipeline은 먼저 `<c=...>` 같은 표현용 스타일 태그를 제거하고 대칭 외부 wrapper를 푼 뒤, Stanza, jieba, kiwipiepy, `BAAI/bge-m3`로 term/entity-like segment를 점수화합니다. Placeholder 행은 기본적으로 보존하고 mismatch만 감사합니다. 이 명령은 `data/segments.csv`를 다시 쓰지 않고 로컬 `data/review/segments/` 아래에 감사 CSV만 생성합니다. 수동 확인 후에만 `--apply`를 사용합니다.
 
 학습 notebook에서는 언어 컬럼을 NLLB 코드로 변환합니다.
 

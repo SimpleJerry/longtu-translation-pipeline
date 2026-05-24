@@ -1,0 +1,30 @@
+{
+  "regex": {
+    "machine_placeholder": "%[sd]|\\{\\d+\\}|<[^>]+>|\\$\\{[^}]+\\}",
+    "presentation_tag": "</?c(?:\\s*=\\s*[^>]+)?>|<hlgreen>",
+    "angle_tag": "<[^>]+>",
+    "machine_angle_placeholder": "<(?:key\\d+|server|name|start|middle|end|code_id=[^>]+)>",
+    "brace_quote_wrapper": "^\\s*\\{\\s*\"(.*)\"\\s*\\}\\s*$",
+    "quote_wrapper": "^\\s*\"(.*)\"\\s*$",
+    "paren_wrapper": "^\\s*[（(](.*)[）)]\\s*$",
+    "sentence_punctuation": "[。！？!?；;]",
+    "tuple_wrapper": "^\\s*[\\{\\[].*[\\}\\]]\\s*$",
+    "tuple_like": "^\\s*[\\{\\[].*\"\\s*,.*[\\}\\]]\\s*$",
+    "zh_sentence_end": "[吗呢吧了着过啊呀哦嘛啦]$",
+    "ko_sentence_end": "(?:다|요|니다|세요|습니까|까요|합니다|됩니다)[.!?。！？]?$"
+  },
+  "thresholds": {
+    "semantic_term_remove_threshold": 0.68,
+    "semantic_term_review_threshold": 0.56,
+    "noun_score_min": 0.55,
+    "sentence_like_keep_threshold": 0.55,
+    "glossary_similarity_threshold": 0.70,
+    "term_seed_similarity_threshold": 0.72
+  },
+  "weights": {
+    "noun_score": 0.38,
+    "glossary_similarity": 0.30,
+    "term_seed_similarity": 0.27,
+    "sentence_like_penalty": 0.25
+  }
+}

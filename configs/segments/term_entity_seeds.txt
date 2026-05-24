@@ -1,0 +1,34 @@
+# Positive examples for segment rows that behave like glossary terms/entities.
+# These are not final glossary entries; they are semantic anchors for review.
+头衔
+称号
+技能
+装备
+副本
+宝石
+坐骑
+宠物
+BOSS
+NPC
+职业
+等级
+属性
+战力
+伤害
+防御
+暴击
+强化
+背包
+商城
+礼包
+货币
+金币
+钻石
+任务
+地图
+怪物
+首领
+翅膀
+神器
+符文
+离线收益

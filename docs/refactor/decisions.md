@@ -57,3 +57,10 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Background:** Historical audit baselines and raw source files are not committed because they are intermediate or sensitive data. The committed final glossary must be the reproducible starting point for later cleanup passes.
 - **Impact Scope:** `scripts/glossary_semantic_pipeline.py`, `configs/glossary/`, `.gitignore`, README data workflow notes.
 - **Follow-up Notes:** Long business rule lists and thresholds should live in `configs/glossary/`; `segments.csv` hashes may be recorded or optionally checked, but must not be hard-coded as a required source-code gate.
+
+## 2026-05-24: Segment Cleanup Is Review-First
+
+- **Decision:** The segment cleanup pipeline defaults to dry-run review outputs and rewrites `data/segments.csv` only when explicitly run with `--apply`.
+- **Background:** Seq2seq segment cleaning has higher false-positive risk than glossary cleaning, especially for short UI labels and structured strings that may contain useful sentence fields.
+- **Impact Scope:** `scripts/segments_cleaning_pipeline.py`, `configs/segments/`, `data/segments.csv`, local `data/review/segments/` outputs.
+- **Follow-up Notes:** Term/entity-like deletion is based on local semantic signals rather than fixed text length thresholds. Presentation tags such as `<c=...>` are stripped while preserving wrapped text, symmetric outer wrappers are unwrapped, and valid machine placeholders are audited rather than deleted. Structured tuple-like strings should be split when safely aligned and removed only when parsing/alignment fails.
