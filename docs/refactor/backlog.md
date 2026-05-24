@@ -76,15 +76,15 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-006-P2: Tokenizer / Dataset / Trainer Smoke Test
 
-- **Status:** TODO
-- **Scope:** Training tokenizer/dataset preparation, minimal `transformers` integration, future `requirements-training.txt`
+- **Status:** DONE
+- **Scope:** Training tokenizer/dataset preparation, minimal `transformers` integration, `requirements-training.txt`
 - **Background / Why:** RF-006 Phase 1 validates config and data flow without model libraries. The next training step should prove that tokenizer, dataset construction, language codes, max length settings, and terminology markers can enter a real training-shaped pipeline before any long GPU training run.
-- **Concrete Scope:** Add the smallest training-chain smoke test that loads a tokenizer, builds a tiny dataset from fixtures or a very small sample, passes `zh-CN -> ko` and `zho_Hans -> kor_Hang` settings into tokenization, and applies RF-005 `<start>...<end>` terminology markers to full prepared training examples rather than preview-only examples.
+- **Concrete Scope:** Add the smallest training-chain smoke test that loads a local tokenizer, builds a tiny dataset-shaped sample, passes `zh-CN -> ko` and `zho_Hans -> kor_Hang` settings into tokenization, and applies RF-005 `<start>...<end>` terminology markers to full prepared training examples rather than preview-only examples.
 - **Out of Scope:** Full model training, checkpoint saving, long GPU runs, generation, evaluation loop integration, and model quality tuning.
 - **Risks:** Introducing `transformers`, `datasets`, `sentencepiece`, and `accelerate` too early can make the base environment heavy; tests must not require downloading a large NLLB model.
-- **Acceptance Criteria:** Tokenizer/dataset smoke test passes on a tiny fixture without full training; RF-006 config values drive tokenization; terminology marker application is tested beyond preview-only dry-run; actual training dependencies are confirmed before creating `requirements-training.txt`.
-- **Recommended Test Commands:** targeted unit tests for tokenizer/dataset preparation; a CLI dry-run/smoke command that avoids full training; `git -c safe.directory=D:/longtu-translation-pipeline diff -- data notebooks`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
-- **Notes:** Added on 2026-05-24 as the next RF-006 stage. This task should confirm the real training dependency set before dependency files are split. When it introduces actual `transformers`, `datasets`, `sentencepiece`, or `accelerate` usage, create `requirements-training.txt` and document the install path in README.
+- **Acceptance Criteria:** Tokenizer/dataset smoke test passes on a tiny local tokenizer without full training; RF-006 config values drive tokenization; terminology marker application is tested beyond preview-only dry-run; actual training dependencies are recorded in `requirements-training.txt`.
+- **Recommended Test Commands:** `venv\Scripts\python.exe -m py_compile src\longtu_translation_pipeline\config.py src\longtu_translation_pipeline\training.py src\longtu_translation_pipeline\inference.py scripts\train_model.py scripts\run_inference.py`; `venv\Scripts\python.exe -m unittest discover -s tests`; `venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run`; `venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --smoke-test`; `git -c safe.directory=D:/longtu-translation-pipeline diff -- data notebooks`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Completed on 2026-05-24. `src/longtu_translation_pipeline/training.py` now exposes prepared-example and tokenized-example helpers, applies RF-005 `<start>...<end>` terminology markers to all prepared examples, and builds `input_ids`, `attention_mask`, and `labels` through a tokenizer-shaped interface. `scripts/train_model.py --smoke-test` uses a tiny local `transformers.PreTrainedTokenizerFast` backed by `tokenizers.WordLevel`, so the smoke test confirms the training-chain dependency path without downloading NLLB. `requirements-training.txt` was created with the confirmed direct dependencies: `torch`, `torchvision`, `transformers`, `tokenizers`, `huggingface-hub`, and `safetensors`; `datasets`, `sentencepiece`, and `accelerate` remain excluded because RF-006-P2 does not use them. Validation: py_compile passed; `venv\Scripts\python.exe -m unittest discover -s tests` passed with 27 tests; training dry-run reported 75,462 rows, 60,370 train rows, and 15,092 validation rows; training smoke-test tokenized 3 prepared rows with `max_length=400`, `padding=max_length`, `zho_Hans -> kor_Hang`, and `terminology_marker_scope=prepared_examples`; `git -c safe.directory=D:/longtu-translation-pipeline diff -- data notebooks` had no output.
 
 ## RF-007: Evaluation Automation
 
@@ -100,15 +100,15 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-008: Dependency Split
 
-- **Status:** NEEDS_TRIAGE
-- **Scope:** `requirements.txt`, future `requirements-training.txt`, dependency notes in README
+- **Status:** DONE
+- **Scope:** `requirements.txt`, `requirements-training.txt`, dependency notes in README
 - **Background / Why:** The current requirements file pins a full experiment environment, including notebook and CUDA training dependencies.
-- **Concrete Scope:** Lightweight dependency governance only for now. Do not split `requirements.txt` yet and do not create `requirements-training.txt` until RF-006-P2 confirms real training dependency usage.
+- **Concrete Scope:** Keep `requirements.txt` as the already-landed base/semantic-cleaning dependency file and add a lightweight `requirements-training.txt` for RF-006-P2 training smoke / future training-chain dependencies.
 - **Out of Scope:** Upgrading every package version or changing the runtime platform.
 - **Risks:** Users may lose a one-command install path if docs are not updated.
-- **Acceptance Criteria:** Backlog and README explain that current `requirements.txt` records the already-used semantic-cleaning/local environment dependencies, while base CLI/tests/evaluation are mostly standard-library. Training-specific requirements are deferred until RF-006-P2.
-- **Recommended Test Commands:** `rg -n "RF-008|NEEDS_TRIAGE|requirements-training|RF-006|Phase 2|transformers|datasets|sentencepiece|accelerate" docs/refactor/backlog.md README.md README.en.md README.zh-CN.md`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
-- **Notes:** Re-triaged on 2026-05-24. This repository is currently an internal experiment workspace rather than a packaged distribution. Splitting dependency files before RF-006-P2 would be premature because base CLI/tests/evaluation do not need third-party packages, semantic-cleaning dependencies are already recorded in `requirements.txt`, and training dependencies are not yet implemented. Create `requirements-training.txt` after RF-006-P2 introduces confirmed `transformers`, `datasets`, `sentencepiece`, or `accelerate` usage.
+- **Acceptance Criteria:** Backlog and README explain that current `requirements.txt` records the already-used semantic-cleaning/local environment dependencies, while `requirements-training.txt` records the confirmed RF-006-P2 training-chain dependencies.
+- **Recommended Test Commands:** `rg -n "RF-008|requirements-training|RF-006-P2|transformers|datasets|sentencepiece|accelerate" docs/refactor/backlog.md README.md README.en.md README.zh-CN.md requirements-training.txt`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Closed on 2026-05-24 after RF-006-P2. The dependency policy is intentionally lightweight rather than a full matrix split: `requirements.txt` keeps the semantic-cleaning/local environment dependencies already in use, and `requirements-training.txt` records the confirmed training smoke / future training-chain direct dependencies. `datasets`, `sentencepiece`, and `accelerate` were not installed or recorded because the RF-006-P2 smoke test uses a local tiny `transformers` tokenizer and does not build a full Trainer stack yet.
 
 ## RF-009: Documentation Governance
 

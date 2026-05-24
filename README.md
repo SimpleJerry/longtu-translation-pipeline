@@ -23,6 +23,7 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 ├── README.en.md
 ├── README.zh-CN.md
 ├── requirements.txt
+├── requirements-training.txt
 ├── data/
 │   ├── glossary.csv
 │   ├── segments.csv
@@ -76,16 +77,23 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 | `notebooks/analysis/` | train/eval loss 시각화 같은 보조 분석 notebook입니다. |
 | `notebooks/archive/2023-legacy/` | 2023년 legacy 실험 archive이며 첫 번째 정리 단계에서는 삭제하지 않습니다. |
 | `docs/notebooks/inventory.md` | Notebook의 시간순 흐름, 목적, 의존성 상태, 보존/archive/삭제 제안입니다. |
+| `requirements-training.txt` | RF-006-P2에서 확인된 학습 smoke test 및 이후 학습 chain 의존성입니다. |
 
 ## 실행 환경
 
-권장 환경은 Windows 또는 Linux의 Python 가상환경입니다. `requirements.txt`에는 실제로 사용 중인 로컬 semantic cleaning 의존성과 CUDA 13.2 계열 PyTorch가 기록되어 있습니다. 기본 CLI, dry-run, 테스트, RF-007 evaluation은 대부분 표준 라이브러리만 사용하므로 모든 workflow가 전체 의존성을 필요로 한다는 뜻은 아닙니다. 학습 전용 `requirements-training.txt`는 RF-006 Phase 2에서 실제 `transformers`, `datasets`, `sentencepiece`, `accelerate` 사용이 확인된 뒤 생성합니다.
+권장 환경은 Windows 또는 Linux의 Python 가상환경입니다. `requirements.txt`에는 실제로 사용 중인 로컬 semantic cleaning 의존성과 CUDA 13.2 계열 PyTorch가 기록되어 있습니다. 기본 CLI, dry-run, 테스트, RF-007 evaluation은 대부분 표준 라이브러리만 사용하므로 모든 workflow가 전체 의존성을 필요로 한다는 뜻은 아닙니다. `requirements-training.txt`에는 RF-006-P2에서 확인된 학습 smoke test 및 이후 학습 chain 의존성을 기록하며, 현재는 `transformers` / `tokenizers`와 직접 실행 의존성을 포함합니다. `datasets`, `sentencepiece`, `accelerate`는 아직 현재 최소 chain에 포함하지 않습니다.
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 jupyter lab
+```
+
+RF-006-P2 학습 smoke test를 실행하려면 학습 chain 의존성도 설치합니다.
+
+```powershell
+python -m pip install -r requirements-training.txt
 ```
 
 참고:
@@ -131,10 +139,11 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 이 pipeline은 먼저 `<c=...>` 같은 표현용 스타일 태그를 제거하고 대칭 외부 wrapper를 푼 뒤, Stanza, jieba, kiwipiepy, `BAAI/bge-m3`로 term/entity-like segment를 점수화합니다. Placeholder 행은 기본적으로 보존하고 mismatch만 감사합니다. 이 명령은 `data/segments.csv`를 다시 쓰지 않고 로컬 `data/review/segments/` 아래에 감사 CSV만 생성합니다. 수동 확인 후에만 `--apply`를 사용합니다.
 
-학습/추론 engineering entry point는 현재 RF-006 1단계입니다. 설정 읽기, 데이터 검증, dry-run 계획만 수행하며 NLLB 모델을 로드하거나 의존성을 다운로드하거나 실제 학습을 시작하지 않습니다. 학습 dry-run은 RF-005 연동을 확인하기 위해 preview 예시에만 `<start>...<end>` 용어 marker를 적용하며, 전체 corpus marker/tokenization은 이후 학습 단계로 미룹니다.
+학습/추론 engineering entry point는 현재 RF-006의 가벼운 engineering 단계입니다. dry-run은 설정 읽기, 데이터 검증, train/validation 계획만 수행하며 NLLB 모델을 로드하거나 실제 학습을 시작하지 않습니다. RF-006-P2는 tiny tokenizer로 `transformers` / `tokenizers` 인터페이스를 통과하는 로컬 tokenizer/dataset smoke test를 추가해, 전체 prepared examples에 `<start>...<end>` 용어 marker를 적용하고 tokenization에 넘길 수 있음을 확인합니다. 실제 NLLB tokenizer, Trainer 연결, 긴 GPU 학습은 이후 단계로 미룹니다.
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --smoke-test
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
 ```
 

@@ -31,10 +31,16 @@ from .text_protection import (
     strip_glossary_markers,
 )
 from .training import (
+    TokenizedTrainingExample,
     TrainingDryRunPlan,
     TrainingExample,
+    TrainingSmokeTestPlan,
     build_training_dry_run,
+    build_training_smoke_test,
     format_training_dry_run,
+    format_training_smoke_test,
+    prepare_training_examples,
+    tokenize_training_examples,
 )
 
 __all__ = [
@@ -50,18 +56,24 @@ __all__ = [
     "TrainingConfig",
     "TrainingDryRunPlan",
     "TrainingExample",
+    "TrainingSmokeTestPlan",
+    "TokenizedTrainingExample",
     "compute_corpus_bleu",
     "compute_glossary_preservation",
     "build_inference_dry_run",
     "build_training_dry_run",
+    "build_training_smoke_test",
     "evaluate_translation",
     "format_evaluation_summary",
     "format_inference_dry_run",
     "format_training_dry_run",
+    "format_training_smoke_test",
     "load_evaluation_config",
     "load_inference_config",
     "load_glossary_terms",
     "load_training_config",
+    "prepare_training_examples",
     "protect_training_pair",
     "strip_glossary_markers",
+    "tokenize_training_examples",
 ]

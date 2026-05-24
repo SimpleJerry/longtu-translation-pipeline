@@ -1,0 +1,7 @@
+--extra-index-url https://download.pytorch.org/whl/cu132
+torch==2.12.0+cu132
+torchvision==0.27.0+cu132
+transformers==5.9.0
+tokenizers==0.22.2
+huggingface-hub==1.15.0
+safetensors==0.7.0

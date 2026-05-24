@@ -23,6 +23,7 @@
 ├── README.en.md
 ├── README.zh-CN.md
 ├── requirements.txt
+├── requirements-training.txt
 ├── data/
 │   ├── glossary.csv
 │   ├── segments.csv
@@ -76,16 +77,23 @@
 | `notebooks/analysis/` | 辅助分析 notebook，例如训练 loss 可视化。 |
 | `notebooks/archive/2023-legacy/` | 2023 年旧实验归档，第一轮不直接删除。 |
 | `docs/notebooks/inventory.md` | Notebook 时间线、用途、依赖状态和保留/归档/删除建议。 |
+| `requirements-training.txt` | RF-006-P2 确认的训练 smoke / 后续训练链路依赖。 |
 
 ## 运行环境
 
-建议使用 Windows 或 Linux 的 Python 虚拟环境。`requirements.txt` 当前记录已经实际落地使用的本地 semantic cleaning 依赖与 CUDA 13.2 版本 PyTorch；基础 CLI、dry-run、测试和 RF-007 evaluation 主要使用标准库，不代表所有场景都必须安装完整依赖。训练专用 `requirements-training.txt` 会在 RF-006 Phase 2 确认真实 `transformers` / `datasets` / `sentencepiece` / `accelerate` 依赖后再创建。
+建议使用 Windows 或 Linux 的 Python 虚拟环境。`requirements.txt` 当前记录已经实际落地使用的本地 semantic cleaning 依赖与 CUDA 13.2 版本 PyTorch；基础 CLI、dry-run、测试和 RF-007 evaluation 主要使用标准库，不代表所有场景都必须安装完整依赖。`requirements-training.txt` 记录 RF-006-P2 已确认的训练 smoke / 后续训练链路依赖，目前包含 `transformers` / `tokenizers` 及其直接运行依赖；`datasets`、`sentencepiece`、`accelerate` 尚未进入当前最小链路。
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 jupyter lab
+```
+
+如需运行 RF-006-P2 训练 smoke test，再安装训练链路依赖：
+
+```powershell
+python -m pip install -r requirements-training.txt
 ```
 
 注意：
@@ -131,10 +139,11 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 该 pipeline 会先剥离 `<c=...>` 等表现层样式标签并解开对称外层包装，再使用 Stanza、jieba、kiwipiepy 和 `BAAI/bge-m3` 判断 term/entity-like segment；placeholder 行默认保留，只做 mismatch 审计。该命令不会改写 `data/segments.csv`，只会在本地 `data/review/segments/` 下生成审计 CSV。人工确认后再使用 `--apply` 重写最终语料。
 
-训练/推理工程入口目前处于 RF-006 第一阶段：只做配置读取、数据校验和 dry-run，不加载 NLLB 模型、不下载依赖、不启动训练。训练 dry-run 只对预览样例应用 `<start>...<end>` 术语 marker，用来验证 RF-005 接入方式；全量 marker/tokenization 留到后续训练阶段。
+训练/推理工程入口目前处于 RF-006 的轻量工程化阶段：dry-run 只做配置读取、数据校验和 train/valid 计划，不加载 NLLB 模型、不启动训练。RF-006-P2 额外提供本地 tokenizer/dataset smoke test，用 tiny tokenizer 走 `transformers` / `tokenizers` 接口，验证全量 prepared examples 可以应用 `<start>...<end>` 术语 marker 并进入 tokenization；真实 NLLB tokenizer、Trainer 和长时间 GPU 训练仍留到后续阶段。
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --smoke-test
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
 ```
 

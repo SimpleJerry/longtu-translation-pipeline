@@ -23,6 +23,7 @@ This README documents the repository as it exists today. The project is still cl
 ├── README.en.md
 ├── README.zh-CN.md
 ├── requirements.txt
+├── requirements-training.txt
 ├── data/
 │   ├── glossary.csv
 │   ├── segments.csv
@@ -76,16 +77,23 @@ This README documents the repository as it exists today. The project is still cl
 | `notebooks/analysis/` | Auxiliary analysis notebooks, such as train/eval loss visualization. |
 | `notebooks/archive/2023-legacy/` | Archived 2023 legacy experiments; not deleted in the first pass. |
 | `docs/notebooks/inventory.md` | Notebook timeline, purpose, dependency status, and keep/archive/delete guidance. |
+| `requirements-training.txt` | Training smoke-test and future training-chain dependencies confirmed by RF-006-P2. |
 
 ## Environment
 
-A Python virtual environment on Windows or Linux is recommended. `requirements.txt` currently records dependencies that are already used by local semantic-cleaning workflows plus CUDA 13.2 PyTorch. Base CLIs, dry runs, tests, and RF-007 evaluation are mostly standard-library and do not imply that every workflow needs the full dependency set. A training-specific `requirements-training.txt` will be created after RF-006 Phase 2 confirms real `transformers`, `datasets`, `sentencepiece`, and `accelerate` usage.
+A Python virtual environment on Windows or Linux is recommended. `requirements.txt` currently records dependencies that are already used by local semantic-cleaning workflows plus CUDA 13.2 PyTorch. Base CLIs, dry runs, tests, and RF-007 evaluation are mostly standard-library and do not imply that every workflow needs the full dependency set. `requirements-training.txt` records the RF-006-P2 training smoke-test and future training-chain dependencies that are now confirmed, including `transformers` / `tokenizers` and their direct runtime dependencies; `datasets`, `sentencepiece`, and `accelerate` are not part of the current minimal chain yet.
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 jupyter lab
+```
+
+To run the RF-006-P2 training smoke test, also install the training-chain dependencies:
+
+```powershell
+python -m pip install -r requirements-training.txt
 ```
 
 Notes:
@@ -131,10 +139,11 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 This pipeline first strips presentation tags such as `<c=...>` and unwraps symmetric outer wrappers, then uses Stanza, jieba, kiwipiepy, and `BAAI/bge-m3` to score term/entity-like segments. Placeholder rows are kept by default and only audited for mismatch. The command does not rewrite `data/segments.csv`; it only writes local audit CSVs under `data/review/segments/`. Use `--apply` only after manual review.
 
-The training/inference engineering entry points are currently in RF-006 phase 1: they only read config, validate data, and run dry-run planning. They do not load NLLB models, download dependencies, or start training. The training dry-run applies `<start>...<end>` terminology markers only to preview examples to verify RF-005 integration; full-corpus marker/tokenization work is deferred to a later training phase.
+The training/inference engineering entry points are currently in the lightweight RF-006 engineering phase: dry-run reads config, validates data, and plans train/validation counts without loading NLLB models or starting training. RF-006-P2 adds a local tokenizer/dataset smoke test that uses a tiny tokenizer through the `transformers` / `tokenizers` interface, verifies that full prepared examples can receive `<start>...<end>` terminology markers, and sends them through tokenization. Real NLLB tokenizers, Trainer wiring, and long GPU training remain deferred.
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --smoke-test
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
 ```
 

@@ -14,7 +14,11 @@ sys.path.insert(0, str(ROOT / "src"))
 from longtu_translation_pipeline.config import load_training_config  # noqa: E402
 from longtu_translation_pipeline.training import (  # noqa: E402
     build_training_dry_run,
+    build_training_smoke_test,
     format_training_dry_run,
+    format_training_smoke_test,
+    prepare_training_examples,
+    tokenize_training_examples,
 )
 
 
@@ -108,6 +112,116 @@ class TrainingPipelineTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "No training examples found"):
                 build_training_dry_run(load_training_config(config_path))
 
+    def test_prepare_training_examples_marks_all_returned_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            segments_path = tmp_path / "segments.csv"
+            glossary_path = tmp_path / "glossary.csv"
+            config_path = tmp_path / "training.json"
+
+            write_csv(
+                segments_path,
+                ["segment_id", "zh-CN", "ko"],
+                [
+                    {"segment_id": "1", "zh-CN": "普通文本", "ko": "일반 텍스트"},
+                    {"segment_id": "2", "zh-CN": "打开神秘宝箱", "ko": "신비한 보물상자 열기"},
+                ],
+            )
+            write_csv(
+                glossary_path,
+                ["term_id", "zh-CN", "ko"],
+                [{"term_id": "1", "zh-CN": "神秘宝箱", "ko": "신비한 보물상자"}],
+            )
+            config_data = build_training_config(segments_path, glossary_path)
+            config_data["dry_run"]["preview_rows"] = 1
+            config_path.write_text(json.dumps(config_data, ensure_ascii=False), encoding="utf-8")
+
+            examples = prepare_training_examples(load_training_config(config_path))
+
+        self.assertEqual(examples[1].source_text, "打开<start>神秘宝箱<end>")
+        self.assertEqual(examples[1].target_text, "<start>신비한 보물상자<end> 열기")
+
+    def test_tokenization_uses_config_and_creates_labels(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            segments_path = tmp_path / "segments.csv"
+            glossary_path = tmp_path / "glossary.csv"
+            config_path = tmp_path / "training.json"
+
+            write_csv(
+                segments_path,
+                ["segment_id", "zh-CN", "ko"],
+                [{"segment_id": "1", "zh-CN": "打开神秘宝箱", "ko": "신비한 보물상자 열기"}],
+            )
+            write_csv(
+                glossary_path,
+                ["term_id", "zh-CN", "ko"],
+                [{"term_id": "1", "zh-CN": "神秘宝箱", "ko": "신비한 보물상자"}],
+            )
+            config_path.write_text(
+                json.dumps(build_training_config(segments_path, glossary_path), ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            config = load_training_config(config_path)
+            tokenizer = RecordingTokenizer()
+            examples = prepare_training_examples(config)
+            tokenized = tokenize_training_examples(config, tokenizer, examples)
+
+        self.assertEqual(len(tokenized), 1)
+        self.assertEqual(tokenized[0].segment_id, "1")
+        self.assertEqual(tokenized[0].input_ids, [18, 0, 0])
+        self.assertEqual(tokenized[0].attention_mask, [1, 0, 0])
+        self.assertEqual(tokenized[0].labels, [23, 0, 0])
+        self.assertEqual(tokenizer.calls[0]["max_length"], 32)
+        self.assertEqual(tokenizer.calls[0]["padding"], "max_length")
+        self.assertTrue(tokenizer.calls[0]["truncation"])
+        self.assertIn("<start>神秘宝箱<end>", tokenizer.calls[0]["texts"][0])
+        self.assertIn("<start>신비한 보물상자<end>", tokenizer.calls[1]["texts"][0])
+
+    def test_smoke_test_plan_records_language_codes_and_token_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            segments_path = tmp_path / "segments.csv"
+            glossary_path = tmp_path / "glossary.csv"
+            config_path = tmp_path / "training.json"
+
+            write_csv(
+                segments_path,
+                ["segment_id", "zh-CN", "ko"],
+                [
+                    {"segment_id": "1", "zh-CN": "打开神秘宝箱", "ko": "신비한 보물상자 열기"},
+                    {"segment_id": "2", "zh-CN": "领取奖励", "ko": "보상 수령"},
+                ],
+            )
+            write_csv(
+                glossary_path,
+                ["term_id", "zh-CN", "ko"],
+                [{"term_id": "1", "zh-CN": "神秘宝箱", "ko": "신비한 보물상자"}],
+            )
+            config_path.write_text(
+                json.dumps(build_training_config(segments_path, glossary_path), ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            tokenizer = RecordingTokenizer()
+            plan = build_training_smoke_test(
+                load_training_config(config_path),
+                tokenizer,
+                tokenizer_name="recording-tokenizer",
+                sample_rows=2,
+            )
+            formatted = format_training_smoke_test(plan)
+
+        self.assertEqual(plan.prepared_rows, 2)
+        self.assertEqual(plan.tokenized_rows, 2)
+        self.assertEqual(plan.terminology_marker_scope, "prepared_examples")
+        self.assertEqual(tokenizer.src_lang, "zho_Hans")
+        self.assertEqual(tokenizer.tgt_lang, "kor_Hang")
+        self.assertIn("tokenizer=recording-tokenizer", formatted)
+        self.assertIn("language_pair=zho_Hans->kor_Hang", formatted)
+        self.assertIn("language_code_assignments=src_lang=zho_Hans;tgt_lang=kor_Hang", formatted)
+
 
 def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:
     with path.open("w", encoding="utf-8-sig", newline="") as f:
@@ -141,6 +255,31 @@ def build_training_config(segments_path: Path, glossary_path: Path) -> dict[str,
         },
         "dry_run": {"preview_rows": 2},
     }
+
+
+class RecordingTokenizer:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def __call__(
+        self,
+        texts: list[str],
+        max_length: int,
+        padding: str,
+        truncation: bool,
+    ) -> dict[str, list[list[int]]]:
+        self.calls.append(
+            {
+                "texts": texts,
+                "max_length": max_length,
+                "padding": padding,
+                "truncation": truncation,
+            }
+        )
+        return {
+            "input_ids": [[len(text), 0, 0] for text in texts],
+            "attention_mask": [[1, 0, 0] for _ in texts],
+        }
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""Dry-run training data preparation for RF-006 phase 1."""
+"""Training data preparation and smoke-test tokenization helpers."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import csv
 import random
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from .config import TrainingConfig
 from .text_protection import load_glossary_terms, protect_training_pair
@@ -36,6 +36,34 @@ class TrainingDryRunPlan:
     preview_examples: list[TrainingExample]
 
 
+@dataclass(frozen=True)
+class TokenizedTrainingExample:
+    segment_id: str
+    input_ids: list[int]
+    attention_mask: list[int]
+    labels: list[int]
+
+
+@dataclass(frozen=True)
+class TrainingSmokeTestPlan:
+    config_path: Path
+    segments_path: Path
+    glossary_path: Path
+    tokenizer_name: str
+    source_code: str
+    target_code: str
+    max_length: int
+    padding: str
+    truncation: bool
+    terminology_markers: bool
+    terminology_marker_scope: str
+    prepared_rows: int
+    tokenized_rows: int
+    language_code_assignments: list[str]
+    preview_examples: list[TrainingExample]
+    tokenized_examples: list[TokenizedTrainingExample]
+
+
 def build_training_dry_run(config: TrainingConfig) -> TrainingDryRunPlan:
     examples = read_training_examples(config)
     train_examples, validation_examples = split_examples(
@@ -62,6 +90,39 @@ def build_training_dry_run(config: TrainingConfig) -> TrainingDryRunPlan:
         train_rows=len(train_examples),
         validation_rows=len(validation_examples),
         preview_examples=preview_examples,
+    )
+
+
+def build_training_smoke_test(
+    config: TrainingConfig,
+    tokenizer: Any,
+    tokenizer_name: str,
+    sample_rows: int | None = None,
+) -> TrainingSmokeTestPlan:
+    row_limit = sample_rows if sample_rows is not None else config.dry_run.preview_rows
+    prepared_examples = prepare_training_examples(config, limit=row_limit)
+    language_assignments = configure_tokenizer_language_codes(tokenizer, config)
+    tokenized_examples = tokenize_training_examples(config, tokenizer, prepared_examples)
+
+    return TrainingSmokeTestPlan(
+        config_path=config.path,
+        segments_path=config.data.segments_path,
+        glossary_path=config.data.glossary_path,
+        tokenizer_name=tokenizer_name,
+        source_code=config.language.source_code,
+        target_code=config.language.target_code,
+        max_length=config.tokenization.max_length,
+        padding=config.tokenization.padding,
+        truncation=config.tokenization.truncation,
+        terminology_markers=config.tokenization.terminology_markers,
+        terminology_marker_scope="prepared_examples"
+        if config.tokenization.terminology_markers
+        else "disabled",
+        prepared_rows=len(prepared_examples),
+        tokenized_rows=len(tokenized_examples),
+        language_code_assignments=language_assignments,
+        preview_examples=prepared_examples[: config.dry_run.preview_rows],
+        tokenized_examples=tokenized_examples[: config.dry_run.preview_rows],
     )
 
 
@@ -100,6 +161,18 @@ def read_segment_examples(
     return examples
 
 
+def prepare_training_examples(
+    config: TrainingConfig,
+    limit: int | None = None,
+) -> list[TrainingExample]:
+    examples = read_training_examples(config)
+    if limit is not None:
+        if limit <= 0:
+            raise ValueError("limit must be a positive integer")
+        examples = examples[:limit]
+    return apply_optional_terminology_markers(examples, config)
+
+
 def apply_optional_terminology_markers(
     examples: Sequence[TrainingExample],
     config: TrainingConfig,
@@ -119,6 +192,78 @@ def apply_optional_terminology_markers(
             )
         )
     return marked_examples
+
+
+def configure_tokenizer_language_codes(tokenizer: Any, config: TrainingConfig) -> list[str]:
+    assignments: list[str] = []
+    for attribute, value in (
+        ("src_lang", config.language.source_code),
+        ("tgt_lang", config.language.target_code),
+    ):
+        try:
+            setattr(tokenizer, attribute, value)
+        except Exception:
+            continue
+        assignments.append(f"{attribute}={value}")
+    return assignments
+
+
+def tokenize_training_examples(
+    config: TrainingConfig,
+    tokenizer: Any,
+    examples: Sequence[TrainingExample],
+) -> list[TokenizedTrainingExample]:
+    if not examples:
+        raise ValueError("No training examples to tokenize")
+
+    source_batch = tokenize_texts(
+        tokenizer,
+        [example.source_text for example in examples],
+        config,
+    )
+    target_batch = tokenize_texts(
+        tokenizer,
+        [example.target_text for example in examples],
+        config,
+    )
+
+    input_ids = batch_list(source_batch, "input_ids")
+    attention_mask = batch_list(source_batch, "attention_mask")
+    labels = batch_list(target_batch, "input_ids")
+    if not (len(input_ids) == len(attention_mask) == len(labels) == len(examples)):
+        raise ValueError("Tokenizer returned inconsistent batch sizes")
+
+    tokenized: list[TokenizedTrainingExample] = []
+    for example, ids, mask, label_ids in zip(examples, input_ids, attention_mask, labels):
+        tokenized.append(
+            TokenizedTrainingExample(
+                segment_id=example.segment_id,
+                input_ids=ids,
+                attention_mask=mask,
+                labels=label_ids,
+            )
+        )
+    return tokenized
+
+
+def tokenize_texts(tokenizer: Any, texts: Sequence[str], config: TrainingConfig) -> Any:
+    return tokenizer(
+        list(texts),
+        max_length=config.tokenization.max_length,
+        padding=config.tokenization.padding,
+        truncation=config.tokenization.truncation,
+    )
+
+
+def batch_list(batch: Any, field: str) -> list[list[int]]:
+    if field not in batch:
+        raise ValueError(f"Tokenizer output is missing '{field}'")
+    value = batch[field]
+    if hasattr(value, "tolist"):
+        value = value.tolist()
+    if not isinstance(value, list):
+        raise ValueError(f"Tokenizer output field '{field}' must be a list")
+    return [list(item) for item in value]
 
 
 def split_examples(
@@ -164,5 +309,35 @@ def format_training_dry_run(plan: TrainingDryRunPlan) -> str:
         lines.append(
             f"preview_{index}={example.segment_id}: "
             f"{example.source_text} => {example.target_text}"
+        )
+    return "\n".join(lines)
+
+
+def format_training_smoke_test(plan: TrainingSmokeTestPlan) -> str:
+    lines = [
+        "Training tokenizer smoke-test plan",
+        f"config={plan.config_path}",
+        f"segments={plan.segments_path}",
+        f"glossary={plan.glossary_path}",
+        f"tokenizer={plan.tokenizer_name}",
+        f"language_pair={plan.source_code}->{plan.target_code}",
+        f"max_length={plan.max_length}",
+        f"padding={plan.padding}",
+        f"truncation={plan.truncation}",
+        f"terminology_markers={plan.terminology_markers}",
+        f"terminology_marker_scope={plan.terminology_marker_scope}",
+        f"prepared_rows={plan.prepared_rows}",
+        f"tokenized_rows={plan.tokenized_rows}",
+        f"language_code_assignments={';'.join(plan.language_code_assignments)}",
+    ]
+    for index, example in enumerate(plan.preview_examples, start=1):
+        lines.append(
+            f"prepared_preview_{index}={example.segment_id}: "
+            f"{example.source_text} => {example.target_text}"
+        )
+    for index, example in enumerate(plan.tokenized_examples, start=1):
+        lines.append(
+            f"tokenized_preview_{index}={example.segment_id}: "
+            f"input_ids={len(example.input_ids)} labels={len(example.labels)}"
         )
     return "\n".join(lines)
