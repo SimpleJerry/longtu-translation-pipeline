@@ -109,6 +109,43 @@ class InferenceConfig:
     dry_run: DryRunConfig
 
 
+@dataclass(frozen=True)
+class EvaluationInputConfig:
+    path: Path
+    source_column: str
+    reference_column: str
+    candidate_column: str
+
+
+@dataclass(frozen=True)
+class EvaluationGlossaryConfig:
+    path: Path
+    source_column: str
+    target_column: str
+
+
+@dataclass(frozen=True)
+class BleuConfig:
+    tokenization: str
+    max_order: int
+    smooth_value: float
+
+
+@dataclass(frozen=True)
+class EvaluationOutputConfig:
+    report_dir: Path
+    write_reports: bool
+
+
+@dataclass(frozen=True)
+class EvaluationConfig:
+    path: Path
+    input: EvaluationInputConfig
+    glossary: EvaluationGlossaryConfig
+    bleu: BleuConfig
+    output: EvaluationOutputConfig
+
+
 def load_training_config(path: str | Path, base_dir: str | Path | None = None) -> TrainingConfig:
     config_path = Path(path)
     path_base = Path(base_dir) if base_dir is not None else config_path.parent
@@ -211,6 +248,45 @@ def load_inference_config(path: str | Path, base_dir: str | Path | None = None) 
         ),
         dry_run=DryRunConfig(
             preview_rows=require_non_negative_int(dry_run_section, "preview_rows", config_path),
+        ),
+    )
+
+
+def load_evaluation_config(path: str | Path, base_dir: str | Path | None = None) -> EvaluationConfig:
+    config_path = Path(path)
+    path_base = Path(base_dir) if base_dir is not None else config_path.parent
+    data = read_json_object(config_path)
+
+    input_section = require_mapping(data, "input", config_path)
+    glossary_section = require_mapping(data, "glossary", config_path)
+    bleu_section = require_mapping(data, "bleu", config_path)
+    output_section = require_mapping(data, "output", config_path)
+
+    tokenization = require_str(bleu_section, "tokenization", config_path)
+    if tokenization not in {"whitespace", "char"}:
+        raise ValueError(f"bleu.tokenization must be 'whitespace' or 'char': {config_path}")
+
+    return EvaluationConfig(
+        path=config_path,
+        input=EvaluationInputConfig(
+            path=resolve_config_path(require_str(input_section, "path", config_path), path_base),
+            source_column=require_str(input_section, "source_column", config_path),
+            reference_column=require_str(input_section, "reference_column", config_path),
+            candidate_column=require_str(input_section, "candidate_column", config_path),
+        ),
+        glossary=EvaluationGlossaryConfig(
+            path=resolve_config_path(require_str(glossary_section, "path", config_path), path_base),
+            source_column=require_str(glossary_section, "source_column", config_path),
+            target_column=require_str(glossary_section, "target_column", config_path),
+        ),
+        bleu=BleuConfig(
+            tokenization=tokenization,
+            max_order=require_positive_int(bleu_section, "max_order", config_path),
+            smooth_value=require_positive_float(bleu_section, "smooth_value", config_path),
+        ),
+        output=EvaluationOutputConfig(
+            report_dir=resolve_config_path(require_str(output_section, "report_dir", config_path), path_base),
+            write_reports=require_bool(output_section, "write_reports", config_path),
         ),
     )
 

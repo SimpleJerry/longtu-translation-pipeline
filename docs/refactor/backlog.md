@@ -76,15 +76,15 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-007: Evaluation Automation
 
-- **Status:** TODO
-- **Scope:** BLEU and terminology preservation evaluation for the simplified marker policy
+- **Status:** DONE
+- **Scope:** `src/longtu_translation_pipeline/evaluation.py`, `configs/evaluation/default.json`, `scripts/evaluate_translation.py`, `tests/test_evaluation.py`
 - **Background / Why:** Evaluation currently lives in notebooks and writes results manually.
-- **Concrete Scope:** Provide importable evaluation functions and a CLI for BLEU and glossary preservation metrics. Historical code-token preservation notebooks should stay archived unless a future task explicitly reintroduces code/tag protection.
+- **Concrete Scope:** Provide importable evaluation functions and a CLI for BLEU and glossary preservation metrics. Historical code-token preservation notebooks stay archived because code/tag protection is no longer part of the current mainline.
 - **Out of Scope:** Defining new model quality targets or changing metric formulas without a separate decision.
-- **Risks:** Metric implementations may diverge from notebook behavior.
-- **Acceptance Criteria:** Small fixture tests reproduce expected BLEU/preservation metrics; evaluation can run without notebook state.
-- **Recommended Test Commands:** `python -m pytest tests/test_evaluation.py`
-- **Notes:** Keep notebook-derived formulas documented if ported.
+- **Risks:** Metric implementations may diverge from old notebook behavior because old glossary checks depended on deprecated `<middle>` markers.
+- **Acceptance Criteria:** Small fixture tests reproduce expected BLEU/preservation metrics; evaluation can run without notebook state; code-token preservation is not implemented unless reintroduced by a future task.
+- **Recommended Test Commands:** `venv\Scripts\python.exe -m py_compile src\longtu_translation_pipeline\evaluation.py scripts\evaluate_translation.py`; `venv\Scripts\python.exe -m unittest discover -s tests`; `venv\Scripts\python.exe scripts\evaluate_translation.py --config configs/evaluation/default.json --input tests/fixtures/evaluation_translation_result.csv`; `git -c safe.directory=D:/longtu-translation-pipeline diff -- data notebooks`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Completed on 2026-05-24. RF-007 now provides pure-Python corpus BLEU with default Korean whitespace tokenization and optional character tokenization, plus glossary preservation checks against `data/glossary.csv`. The evaluator reads translation result CSVs with notebook-compatible columns `source`, `references`, and `candidates`; strips `<start>...<end>` markers from candidate text before term matching; prints a summary; and writes local ignored reports under `data/review/evaluation/` when enabled. Historical `<middle>` and `<code_id>` evaluation paths remain archived only. Validation: `venv\Scripts\python.exe -m py_compile src\longtu_translation_pipeline\evaluation.py scripts\evaluate_translation.py` passed; `venv\Scripts\python.exe -m unittest discover -s tests` passed with 24 tests; `venv\Scripts\python.exe scripts\evaluate_translation.py --config configs/evaluation/default.json --input tests/fixtures/evaluation_translation_result.csv` printed BLEU/glossary summary and wrote ignored local reports; `git -c safe.directory=D:/longtu-translation-pipeline diff -- data notebooks` had no output; `git -c safe.directory=D:/longtu-translation-pipeline diff --check` passed with line-ending warnings only.
 
 ## RF-008: Dependency Split
 

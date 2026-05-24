@@ -29,11 +29,13 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 │   └── review/                # 로컬 생성, Git 제외
 ├── configs/
 │   ├── glossary/
+│   ├── evaluation/
 │   ├── inference/
 │   ├── segments/
 │   └── training/
 ├── scripts/
 │   ├── glossary_semantic_pipeline.py
+│   ├── evaluate_translation.py
 │   ├── segments_cleaning_pipeline.py
 │   ├── run_inference.py
 │   └── train_model.py
@@ -59,7 +61,9 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 | `configs/segments/` | segment 정제를 위한 구조화 문자열 분리, term/entity seed, semantic 임계값 설정입니다. |
 | `configs/training/default.json` | RF-006 1단계 학습 설정이며 데이터 경로, 언어 코드, 모델명, 출력 디렉터리, 기본 학습 파라미터를 선언합니다. |
 | `configs/inference/default.json` | RF-006 1단계 추론 설정이며 모델 경로, 입력/출력 경로, 언어 코드, 생성 파라미터를 선언합니다. |
+| `configs/evaluation/default.json` | RF-007 평가 설정이며 번역 결과 CSV, glossary, BLEU 설정, 로컬 보고서 출력 위치를 선언합니다. |
 | `scripts/glossary_semantic_pipeline.py` | Stanza, jieba, kiwipiepy, wordfreq, `BAAI/bge-m3`를 사용하는 로컬 glossary semantic 정제 pipeline입니다. |
+| `scripts/evaluate_translation.py` | BLEU와 glossary preservation을 계산하는 번역 결과 평가 CLI이며 모델을 로드하지 않습니다. |
 | `scripts/segments_cleaning_pipeline.py` | 로컬 segments semantic 정제 pipeline이며 기본적으로 dry-run review를 생성합니다. |
 | `scripts/train_model.py` | 학습 dry-run CLI입니다. 현재는 설정 검증, 데이터 읽기, train/validation 분할만 수행하고 모델을 로드하지 않습니다. |
 | `scripts/run_inference.py` | 추론 dry-run CLI입니다. 현재는 설정 검증, 입력 읽기, 출력 계획만 보여 주고 모델을 로드하지 않습니다. |
@@ -67,6 +71,7 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 | `src/longtu_translation_pipeline/config.py` | 학습/추론 JSON 설정을 dataclass로 파싱하고 검증합니다. |
 | `src/longtu_translation_pipeline/training.py` | import 가능한 학습 데이터 준비 dry-run API입니다. |
 | `src/longtu_translation_pipeline/inference.py` | import 가능한 추론 입력 계획 dry-run API입니다. |
+| `src/longtu_translation_pipeline/evaluation.py` | import 가능한 BLEU와 glossary preservation 평가 API입니다. |
 | `notebooks/main/` | 주요 학습, 전처리, 생성, 평가 실험 notebook입니다. |
 | `notebooks/analysis/` | train/eval loss 시각화 같은 보조 분석 notebook입니다. |
 | `notebooks/archive/2023-legacy/` | 2023년 legacy 실험 archive이며 첫 번째 정리 단계에서는 삭제하지 않습니다. |
@@ -131,6 +136,12 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
+```
+
+기존 번역 결과 CSV를 평가하려면 RF-007 평가 entry point를 사용합니다. 입력은 notebook의 기존 출력 컬럼인 `source`, `references`, `candidates`를 사용합니다. BLEU는 기본적으로 한국어 공백 단위 토큰화를 사용하며, glossary preservation은 후보 번역에서 `<start>...<end>` marker를 제거한 뒤 한국어 용어가 포함되었는지 검사합니다.
+
+```powershell
+venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\default.json --input translation_result.csv
 ```
 
 학습 notebook에서는 언어 컬럼을 NLLB 코드로 변환합니다.

@@ -29,11 +29,13 @@
 │   └── review/                # 本地生成，Git 忽略
 ├── configs/
 │   ├── glossary/
+│   ├── evaluation/
 │   ├── inference/
 │   ├── segments/
 │   └── training/
 ├── scripts/
 │   ├── glossary_semantic_pipeline.py
+│   ├── evaluate_translation.py
 │   ├── segments_cleaning_pipeline.py
 │   ├── run_inference.py
 │   └── train_model.py
@@ -59,7 +61,9 @@
 | `configs/segments/` | segments 清洗的结构化字符串拆分、term/entity seed 和语义阈值配置。 |
 | `configs/training/default.json` | RF-006 第一阶段训练配置，声明数据路径、语言码、模型名、输出目录和基础训练参数。 |
 | `configs/inference/default.json` | RF-006 第一阶段推理配置，声明模型路径、输入/输出路径、语言码和生成参数。 |
+| `configs/evaluation/default.json` | RF-007 评估配置，声明翻译结果 CSV、glossary、BLEU 口径和本地报告目录。 |
 | `scripts/glossary_semantic_pipeline.py` | 本地 glossary semantic 清洗 pipeline，使用 Stanza、jieba、kiwipiepy、wordfreq 与 `BAAI/bge-m3`。 |
+| `scripts/evaluate_translation.py` | 翻译结果评估 CLI，计算 BLEU 与 glossary preservation，不加载模型。 |
 | `scripts/segments_cleaning_pipeline.py` | 本地 segments 语义清洗 pipeline，默认 dry-run 生成 review CSV。 |
 | `scripts/train_model.py` | 训练 dry-run CLI；当前只校验配置、读取数据、拆分 train/valid，不加载模型。 |
 | `scripts/run_inference.py` | 推理 dry-run CLI；当前只校验配置、读取输入、展示输出计划，不加载模型。 |
@@ -67,6 +71,7 @@
 | `src/longtu_translation_pipeline/config.py` | 训练/推理 JSON 配置的 dataclass 解析和校验。 |
 | `src/longtu_translation_pipeline/training.py` | 可导入的训练数据准备 dry-run API。 |
 | `src/longtu_translation_pipeline/inference.py` | 可导入的推理输入计划 dry-run API。 |
+| `src/longtu_translation_pipeline/evaluation.py` | 可导入的 BLEU 与 glossary preservation 评估 API。 |
 | `notebooks/main/` | 主线训练、预处理、生成和评估实验 notebook。 |
 | `notebooks/analysis/` | 辅助分析 notebook，例如训练 loss 可视化。 |
 | `notebooks/archive/2023-legacy/` | 2023 年旧实验归档，第一轮不直接删除。 |
@@ -131,6 +136,12 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
+```
+
+如需评估已有翻译结果 CSV，使用 RF-007 评估入口。输入默认采用 notebook 旧输出列名：`source`、`references`、`candidates`。BLEU 默认按韩文空格词分词，glossary preservation 会去除候选译文中的 `<start>...<end>` marker 后检查韩文术语是否出现。
+
+```powershell
+venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\default.json --input translation_result.csv
 ```
 
 训练 notebook 中的语言列按 NLLB 语言代码转换：

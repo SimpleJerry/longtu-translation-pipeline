@@ -29,11 +29,13 @@ This README documents the repository as it exists today. The project is still cl
 │   └── review/                # generated locally, ignored by Git
 ├── configs/
 │   ├── glossary/
+│   ├── evaluation/
 │   ├── inference/
 │   ├── segments/
 │   └── training/
 ├── scripts/
 │   ├── glossary_semantic_pipeline.py
+│   ├── evaluate_translation.py
 │   ├── segments_cleaning_pipeline.py
 │   ├── run_inference.py
 │   └── train_model.py
@@ -59,7 +61,9 @@ This README documents the repository as it exists today. The project is still cl
 | `configs/segments/` | Structured-string splitting, term/entity seeds, and semantic thresholds for segment cleanup. |
 | `configs/training/default.json` | RF-006 phase 1 training config for data paths, language codes, model name, output directory, and basic training parameters. |
 | `configs/inference/default.json` | RF-006 phase 1 inference config for model path, input/output paths, language codes, and generation parameters. |
+| `configs/evaluation/default.json` | RF-007 evaluation config for translation-result CSVs, glossary path, BLEU settings, and local report output. |
 | `scripts/glossary_semantic_pipeline.py` | Local glossary semantic cleanup pipeline using Stanza, jieba, kiwipiepy, wordfreq, and `BAAI/bge-m3`. |
+| `scripts/evaluate_translation.py` | Translation evaluation CLI for BLEU and glossary preservation; it does not load models. |
 | `scripts/segments_cleaning_pipeline.py` | Local semantic segment cleanup pipeline; dry-run review output by default. |
 | `scripts/train_model.py` | Training dry-run CLI; currently validates config, reads data, and creates train/validation splits without loading a model. |
 | `scripts/run_inference.py` | Inference dry-run CLI; currently validates config, reads inputs, and shows the output plan without loading a model. |
@@ -67,6 +71,7 @@ This README documents the repository as it exists today. The project is still cl
 | `src/longtu_translation_pipeline/config.py` | Dataclass parsing and validation for training/inference JSON configs. |
 | `src/longtu_translation_pipeline/training.py` | Importable training-data preparation dry-run API. |
 | `src/longtu_translation_pipeline/inference.py` | Importable inference-input planning dry-run API. |
+| `src/longtu_translation_pipeline/evaluation.py` | Importable BLEU and glossary-preservation evaluation API. |
 | `notebooks/main/` | Main training, preprocessing, generation, and evaluation experiment notebooks. |
 | `notebooks/analysis/` | Auxiliary analysis notebooks, such as train/eval loss visualization. |
 | `notebooks/archive/2023-legacy/` | Archived 2023 legacy experiments; not deleted in the first pass. |
@@ -131,6 +136,12 @@ The training/inference engineering entry points are currently in RF-006 phase 1:
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
+```
+
+To evaluate an existing translation-result CSV, use the RF-007 evaluation entry point. Input uses the historical notebook output columns: `source`, `references`, and `candidates`. BLEU defaults to Korean whitespace tokenization, and glossary preservation strips `<start>...<end>` markers from candidate text before checking Korean term presence.
+
+```powershell
+venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\default.json --input translation_result.csv
 ```
 
 Training notebooks convert language columns to NLLB language codes:

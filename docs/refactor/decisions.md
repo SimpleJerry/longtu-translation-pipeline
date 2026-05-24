@@ -85,3 +85,10 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Background:** Notebook cells previously mixed hard-coded paths such as `autodl-tmp/...`, NLLB language codes, split settings, batch sizes, and output directories. The project needs a reviewable configuration skeleton before adding heavyweight training dependencies.
 - **Impact Scope:** `configs/training/default.json`, `configs/inference/default.json`, `src/longtu_translation_pipeline/config.py`, `src/longtu_translation_pipeline/training.py`, `src/longtu_translation_pipeline/inference.py`, `scripts/train_model.py`, `scripts/run_inference.py`, README workflow notes.
 - **Follow-up Notes:** Actual model loading, `transformers` Trainer wiring, dataset tokenization, GPU training, and generation output writing should be added in later phases. Importable modules and dry-run commands should remain safe to execute without downloading NLLB models.
+
+## 2026-05-24: Evaluation Uses BLEU and Glossary Preservation Only
+
+- **Decision:** RF-007 evaluation automates corpus BLEU and glossary preservation for the simplified `<start>...<end>` marker policy. Code-token preservation is not part of the current evaluation mainline.
+- **Background:** The old evaluation notebooks used historical `<middle>` and `<code_id>` assumptions that no longer match RF-005. The project still needs model-output checks before RF-006 moves into real training or generation.
+- **Impact Scope:** `configs/evaluation/default.json`, `src/longtu_translation_pipeline/evaluation.py`, `scripts/evaluate_translation.py`, README workflow notes, RF-007 tests.
+- **Follow-up Notes:** BLEU defaults to Korean whitespace tokenization, with character tokenization available as a config option. Glossary preservation checks Korean term presence after stripping glossary markers from candidate translations.
