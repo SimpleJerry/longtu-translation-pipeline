@@ -1,0 +1,10 @@
+# Korean tokens that strongly indicate game-domain terms.
+스킬
+던전
+보스
+피해
+방어
+공격
+치명타
+펫
+룬

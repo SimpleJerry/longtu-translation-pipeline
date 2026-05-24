@@ -32,6 +32,12 @@ This file defines how AI/Codex agents should work in this repository. It is not 
 - Mention any skipped checks and why.
 - Leave unrelated local changes untouched, especially IDE files and generated data.
 
+## Documentation Consistency
+
+- Keep implementation, README entry points, backlog notes, decision records, and script comments consistent.
+- When changing a data schema, CLI behavior, pipeline rule, or cleanup criterion, update the relevant documentation in the same change.
+- Do not leave docs implying an old behavior after the code has changed.
+
 ## Required Checks
 
 Run the narrowest checks that prove the selected task is safe. For documentation-only changes, run:
@@ -56,6 +62,12 @@ For data pipeline changes, include a small fixture or dry-run command that does 
 - Keep pure transformation logic in importable modules and keep CLI scripts thin.
 - Prefer explicit config files over hard-coded local paths.
 - Use stable, text-based artifacts for version control whenever practical.
+
+## Dependency Governance
+
+- After automatically installing any pip package, update `requirements.txt` in the same change.
+- Record dependencies that were actually installed successfully.
+- Do not add packages from failed temporary install attempts to `requirements.txt`.
 
 ## Commit Granularity
 

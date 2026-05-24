@@ -43,3 +43,17 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Background:** The project contains research workflows that may still be used manually.
 - **Impact Scope:** CLI design, module extraction, data conversion, notebook migration.
 - **Follow-up Notes:** Breaking changes require explicit backlog scope, README updates, and migration notes.
+
+## 2026-05-22: Segment Evidence Is Not a Sufficient Glossary Keep Signal
+
+- **Decision:** `data/segments.csv` provides current product-corpus relevance evidence for glossary cleanup, but matching segment text is not by itself enough to keep a glossary term.
+- **Background:** Common words can appear frequently in product text while still being unsuitable for a company game terminology table.
+- **Impact Scope:** `scripts/glossary_semantic_pipeline.py`, `data/glossary.csv`, glossary review CSVs, README data workflow notes.
+- **Follow-up Notes:** Segment evidence can remove terms that are absent from the current corpus and can be recorded for audit, but hard noise filters, termhood, game-domain signals, POS shape, and semantic checks still decide whether a matched term should remain.
+
+## 2026-05-24: Glossary Pipeline Uses Final Glossary As Baseline
+
+- **Decision:** The glossary semantic pipeline reads the current `data/glossary.csv` as its authoritative baseline and writes audit CSVs only as local ignored artifacts.
+- **Background:** Historical audit baselines and raw source files are not committed because they are intermediate or sensitive data. The committed final glossary must be the reproducible starting point for later cleanup passes.
+- **Impact Scope:** `scripts/glossary_semantic_pipeline.py`, `configs/glossary/`, `.gitignore`, README data workflow notes.
+- **Follow-up Notes:** Long business rule lists and thresholds should live in `configs/glossary/`; `segments.csv` hashes may be recorded or optionally checked, but must not be hard-coded as a required source-code gate.

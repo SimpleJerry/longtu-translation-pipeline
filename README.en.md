@@ -8,7 +8,8 @@ This README documents the repository as it exists today. The project is still cl
 
 ## Current Scope
 
-- Clean multilingual Excel source files and merge them into language-pair CSV files.
+- Keep only final training corpora and glossary data in the repository; sensitive raw Excel/CSV inputs are not committed.
+- Clean the Chinese-Korean game glossary with a local semantic pipeline.
 - Fine-tune `facebook/nllb-200-*` models on game localization data.
 - Preserve glossary terms during translation with `<start>`, `<middle>`, and `<end>` special tokens.
 - Experiment with `<code_id=*>` tokens to protect placeholders, return codes, and game UI tags.
@@ -22,24 +23,22 @@ This README documents the repository as it exists today. The project is still cl
 ├── README.en.md
 ├── README.zh-CN.md
 ├── requirements.txt
-├── glossary_all.xlsx
 ├── data/
-│   ├── data-cleaning-and-merging.py
-│   └── input/
-│       ├── 盾勇/
-│       └── 스크립트(열강,검마,WOG)/
-├── tests/
-│   └── BLEU-score-calculating.ipynb
+│   ├── glossary.csv
+│   ├── segments.csv
+│   └── review/                # generated locally, ignored by Git
+├── configs/
+│   └── glossary/
+├── scripts/
+│   └── glossary_semantic_pipeline.py
 ├── nllb-fine-tune_all.ipynb
 ├── T&N method.ipynb
 ├── T&N method_modified.ipynb
 ├── T&N+R preprocess.ipynb
 ├── T&N+R method.ipynb
 ├── model-generation.ipynb
-├── model-generation-manual.ipynb
 ├── special_token_test.ipynb
 ├── return code tokens.ipynb
-├── tag.ipynb
 └── train_eval_loss_picture.ipynb
 ```
 
@@ -47,21 +46,21 @@ This README documents the repository as it exists today. The project is still cl
 
 | File | Purpose |
 | --- | --- |
-| `data/data-cleaning-and-merging.py` | Reads multiple Excel files and sheets, normalizes language columns, and creates merged files plus language-pair CSV files. |
-| `data/input/` | Raw game script and glossary Excel files. |
-| `glossary_all.xlsx` | Combined terminology data used in Chinese-Korean glossary experiments. |
+| `data/segments.csv` | Final segment training corpus with `segment_id`, `zh-CN`, and `ko` columns. |
+| `data/glossary.csv` | Final Chinese-Korean game glossary with `term_id`, `zh-CN`, and `ko` columns. |
+| `data/review/` | Local data-cleaning audit CSVs and review artifacts; not committed by default. |
+| `configs/glossary/` | Seeds, lexicons, and rules for glossary cleanup. |
+| `scripts/glossary_semantic_pipeline.py` | Local glossary semantic cleanup pipeline using Stanza, jieba, kiwipiepy, wordfreq, and `BAAI/bge-m3`. |
 | `nllb-fine-tune_all.ipynb` | Baseline NLLB fine-tuning workflow. |
 | `T&N method.ipynb` | Terminology and Notation experiment using glossary special tokens. |
 | `T&N+R preprocess.ipynb` | Preprocessing experiment for terminology and code protection. |
 | `T&N+R method.ipynb` | Training experiment that combines terminology, notation, and return-code protection. |
 | `model-generation.ipynb` | Generates translations with a fine-tuned model. |
-| `model-generation-manual.ipynb` | Generates translations with manual decoding that preserves special tokens. |
-| `tests/BLEU-score-calculating.ipynb` | Calculates BLEU between generated translations and references. |
 | `train_eval_loss_picture.ipynb` | Builds train/eval loss charts from training logs. |
 
 ## Environment
 
-A Python virtual environment on Windows or Linux is recommended. `requirements.txt` pins CUDA 11.8 PyTorch packages for GPU training.
+A Python virtual environment on Windows or Linux is recommended. `requirements.txt` records CUDA 13.2 PyTorch packages plus the local glossary-cleanup dependencies.
 
 ```powershell
 python -m venv .venv
@@ -72,30 +71,40 @@ jupyter lab
 
 Notes:
 
-- If `torch==2.0.1+cu118` fails to install, you may need to use the PyTorch CUDA 11.8 wheel index.
+- Stanza Chinese/Korean models and Hugging Face embedding caches live under the local virtual environment and are not committed.
 - The BLEU notebook imports `nltk.translate.bleu_score`; install `nltk` separately if it is missing from your environment.
-- Large models, fine-tuned outputs, translation results, and generated data outputs are excluded by `.gitignore`.
+- Large models, fine-tuned outputs, translation results, raw data, and local model caches are excluded by `.gitignore`.
 
 ## Basic Workflow
 
-1. Put raw Excel files under `data/input/`.
-2. Run the data merge script from the `data/` directory.
+The training data entry points committed to this repository are final CSVs:
+
+- `data/segments.csv`
+- `data/glossary.csv`
+
+Sensitive raw Excel/CSV files are not committed. `data/glossary.csv` is iteratively cleaned by the local semantic cleanup pipeline, and audit files are generated under local `data/review/` but ignored by Git.
+`data/segments.csv` provides current product-corpus evidence for glossary cleanup, but it is not the only criterion or a sufficient keep signal.
+The pipeline also uses local word frequency, POS shape, embeddings, and game-domain signals to separate common words from game terms.
+Both final CSVs are intentionally bilingual: non-Chinese/Korean training columns are removed from the committed corpus.
+
+To rerun glossary cleanup, download the Stanza models first:
 
 ```powershell
-cd data
-python data-cleaning-and-merging.py
+$env:STANZA_RESOURCES_DIR="D:\longtu-translation-pipeline\venv\stanza_resources"
+venv\Scripts\python.exe -c "import stanza; stanza.download('zh', model_dir=r'D:\longtu-translation-pipeline\venv\stanza_resources'); stanza.download('ko', model_dir=r'D:\longtu-translation-pipeline\venv\stanza_resources')"
 ```
 
-3. Check the generated outputs.
+Then run the local pipeline:
 
-```text
-data/output/
-data/all_files_merged.xlsx
-data/all_files_merged.csv
-data/output/all_files_merged_zh-CN_ko.csv
+```powershell
+$env:HF_HOME="D:\longtu-translation-pipeline\venv\hf_cache"
+$env:STANZA_RESOURCES_DIR="D:\longtu-translation-pipeline\venv\stanza_resources"
+venv\Scripts\python.exe scripts\glossary_semantic_pipeline.py
 ```
 
-4. Convert language columns to NLLB language codes in the training notebooks.
+The default rule directory is `configs/glossary/`, which contains seed files, lexicons, and `rules.json`; pass `--config-dir`, `--game-seeds`, and `--common-noun-seeds` to use alternatives.
+
+Training notebooks convert language columns to NLLB language codes:
 
 ```text
 zh-CN -> zho_Hans
@@ -105,9 +114,7 @@ ja    -> jpn_Jpan
 ko    -> kor_Hang
 ```
 
-5. Run `T&N method.ipynb` or `T&N+R method.ipynb` for terminology/code-aware preprocessing and fine-tuning.
-6. Use `model-generation.ipynb` or `model-generation-manual.ipynb` to generate translations.
-7. Evaluate output quality with the BLEU, glossary accuracy, and code accuracy notebooks.
+Run `T&N method.ipynb` or `T&N+R method.ipynb` for terminology/code-aware preprocessing and fine-tuning, then use the generation and evaluation notebooks for BLEU, glossary preservation, and code preservation checks.
 
 ## Architecture and Refactor Notes
 
