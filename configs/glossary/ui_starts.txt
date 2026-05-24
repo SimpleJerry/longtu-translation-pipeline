@@ -1,0 +1,10 @@
+# Chinese starts that often indicate UI messages rather than terms.
+请
+您
+你
+本次
+当前
+已经
+无法
+不能
+是否

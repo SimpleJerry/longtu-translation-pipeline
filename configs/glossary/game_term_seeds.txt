@@ -1,0 +1,28 @@
+# One seed term per line. Blank lines and # comments are ignored.
+# These seeds define the local game-domain embedding centroid.
+PVP
+BOSS
+副本
+技能
+装备
+宝石
+强化
+属性
+伤害
+防御
+暴击
+称号
+坐骑
+宠物
+怪物
+职业
+战斗
+竞技
+传送
+绑定
+被动
+必杀
+护盾
+符文
+龙魂
+神兵

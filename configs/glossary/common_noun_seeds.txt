@@ -1,0 +1,30 @@
+# One seed term per line. Blank lines and # comments are ignored.
+# These seeds define the local ordinary-noun embedding centroid.
+月亮
+太阳
+星星
+天空
+云朵
+大海
+河流
+山峰
+花朵
+树木
+石头
+贝壳
+鼻子
+办公室
+编号
+标本
+半径
+背景
+折扣
+优惠
+价格
+费用
+订单
+付款
+支付
+商品
+本金
+氨基酸

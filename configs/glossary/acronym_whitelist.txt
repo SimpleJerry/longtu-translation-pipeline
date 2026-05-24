@@ -1,0 +1,16 @@
+# Game/technical acronyms that may be valid glossary terms.
+AOE
+BOSS
+BUFF
+CD
+DEBUFF
+DPS
+EXP
+GM
+HP
+MP
+NPC
+PK
+PVP
+UI
+VIP

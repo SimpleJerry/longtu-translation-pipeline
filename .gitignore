@@ -34,6 +34,7 @@ Thumbs.db
 translation_result*
 data/output/
 data/all_files_merged*
+data/review/
 tests/files/
 
 # Raw spreadsheet inputs

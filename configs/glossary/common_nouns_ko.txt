@@ -1,0 +1,27 @@
+# Ordinary Korean nouns that are usually not company-specific game terms.
+달
+태양
+별
+하늘
+구름
+바다
+강
+산
+꽃
+나무
+돌
+조개비
+코
+사무실
+번호
+샘플
+반경
+배경
+할인
+가격
+비용
+주문
+결제
+상품
+원금
+아미노산
