@@ -18,6 +18,7 @@ from longtu_translation_pipeline.evaluation import (  # noqa: E402
     compute_corpus_bleu,
     compute_glossary_preservation,
     evaluate_translation,
+    write_evaluation_reports,
 )
 
 
@@ -40,11 +41,11 @@ class EvaluationTest(unittest.TestCase):
 
     def test_glossary_preservation_counts_row_statuses(self) -> None:
         rows = [
-            TranslationRow("挑战BOSS", "보스 도전", "보스 도전"),
-            TranslationRow("领取VIP卡", "VIP 카드 수령", "<start>VIP 카드<end> 수령"),
-            TranslationRow("挑战BOSS和VIP卡", "보스와 VIP 카드", "보스 등장"),
-            TranslationRow("挑战BOSS", "보스 도전", "도전"),
-            TranslationRow("普通句子", "일반 문장", "일반 문장"),
+            TranslationRow(1, "101", "挑战BOSS", "보스 도전", "보스 도전"),
+            TranslationRow(2, "102", "领取VIP卡", "VIP 카드 수령", "<start>VIP 카드<end> 수령"),
+            TranslationRow(3, "103", "挑战BOSS和VIP卡", "보스와 VIP 카드", "보스 등장"),
+            TranslationRow(4, "104", "挑战BOSS", "보스 도전", "도전"),
+            TranslationRow(5, "105", "普通句子", "일반 문장", "일반 문장"),
         ]
         terms = [GlossaryTerm("BOSS", "보스"), GlossaryTerm("VIP卡", "VIP 카드")]
 
@@ -99,6 +100,61 @@ class EvaluationTest(unittest.TestCase):
         self.assertEqual(result.row_count, 4)
         self.assertEqual(result.glossary.total_terms, 3)
         self.assertEqual(result.glossary.matched_terms, 2)
+        self.assertEqual(result.rows[0].segment_id, "")
+
+    def test_evaluation_reports_write_sample_review_and_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            glossary_path = tmp_path / "glossary.csv"
+            config_path = tmp_path / "evaluation.json"
+            input_path = tmp_path / "generated.csv"
+            report_dir = tmp_path / "report"
+            write_csv(
+                input_path,
+                ["segment_id", "source", "references", "candidates"],
+                [
+                    {
+                        "segment_id": "10",
+                        "source": "挑战BOSS",
+                        "references": "보스 도전",
+                        "candidates": "도전",
+                    },
+                    {
+                        "segment_id": "11",
+                        "source": "普通句子",
+                        "references": "일반 문장",
+                        "candidates": "일반 문장",
+                    },
+                ],
+            )
+            write_csv(
+                glossary_path,
+                ["term_id", "zh-CN", "ko"],
+                [{"term_id": "1", "zh-CN": "BOSS", "ko": "보스"}],
+            )
+            write_config(config_path, input_path, glossary_path)
+
+            result = evaluate_translation(load_evaluation_config(config_path))
+            write_evaluation_reports(
+                result,
+                report_dir,
+                checkpoint_path=Path("fine-tuned-models/checkpoint-4"),
+                config_path=config_path,
+                sample_review_rows=2,
+            )
+
+            summary_rows = read_csv(report_dir / "evaluation_summary.csv")
+            review_rows = read_csv(report_dir / "sample_review.csv")
+            manifest = json.loads((report_dir / "report_manifest.json").read_text(encoding="utf-8"))
+            glossary_rows_exists = (report_dir / "glossary_preservation_rows.csv").exists()
+
+        self.assertTrue(glossary_rows_exists)
+        self.assertEqual(summary_rows[0]["metric"], "input")
+        self.assertEqual(review_rows[0]["segment_id"], "10")
+        self.assertEqual(review_rows[0]["glossary_status"], "not_matched")
+        self.assertEqual(Path(manifest["checkpoint_path"]), Path("fine-tuned-models/checkpoint-4"))
+        self.assertEqual(manifest["row_count"], 2)
+        self.assertEqual(manifest["generation_csv"], str(input_path))
 
     def test_missing_translation_column_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -158,6 +214,11 @@ def write_config(config_path: Path, input_path: Path, glossary_path: Path) -> No
         ),
         encoding="utf-8",
     )
+
+
+def read_csv(path: Path) -> list[dict[str, str]]:
+    with path.open(encoding="utf-8-sig", newline="") as f:
+        return list(csv.DictReader(f))
 
 
 if __name__ == "__main__":

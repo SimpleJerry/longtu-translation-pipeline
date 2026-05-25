@@ -114,6 +114,13 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Impact Scope:** `configs/inference/default.json`, `src/longtu_translation_pipeline/inference.py`, `scripts/run_inference.py`, local inference review artifacts, README workflow notes.
 - **Follow-up Notes:** Generated inference CSVs are local artifacts under ignored `data/review/inference/`. Full validation generation and fixed split selection belong to later RF-006/RF-007 phases.
 
+## 2026-05-25: Generation Evaluation Reports Are Local Engineering Artifacts
+
+- **Decision:** Generation evaluation reports live under ignored `data/review/evaluation/` and record checkpoint/generation metadata, BLEU, glossary preservation, and sample review rows without implying model quality.
+- **Background:** The project needs a fixed report shape for RF-006 generation outputs before running long training or full validation.
+- **Impact Scope:** `configs/evaluation/generation_report.json`, `src/longtu_translation_pipeline/evaluation.py`, `scripts/evaluate_translation.py`, README workflow notes.
+- **Follow-up Notes:** Use this report format for pilot and future validation outputs. Full-run quality conclusions require a real training run, fixed validation split, and a selected checkpoint.
+
 ## 2026-05-24: Evaluation Uses BLEU and Glossary Preservation Only
 
 - **Decision:** RF-007 evaluation automates corpus BLEU and glossary preservation for the simplified `<start>...<end>` marker policy. Code-token preservation is not part of the current evaluation mainline.

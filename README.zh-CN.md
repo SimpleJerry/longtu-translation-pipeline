@@ -90,7 +90,7 @@ python -m pip install -r requirements.txt
 jupyter lab
 ```
 
-如需运行 RF-006-P2 训练 smoke test，再安装训练链路依赖：
+如需运行 RF-006-P2 及之后的训练/推理链路命令，再安装训练链路依赖：
 
 ```powershell
 python -m pip install -r requirements-training.txt
@@ -139,7 +139,7 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 该 pipeline 会先剥离 `<c=...>` 等表现层样式标签并解开对称外层包装，再使用 Stanza、jieba、kiwipiepy 和 `BAAI/bge-m3` 判断 term/entity-like segment；placeholder 行默认保留，只做 mismatch 审计。该命令不会改写 `data/segments.csv`，只会在本地 `data/review/segments/` 下生成审计 CSV。人工确认后再使用 `--apply` 重写最终语料。
 
-训练/推理工程入口目前处于 RF-006 的 smoke-test / pilot 工程化阶段：dry-run 只做配置读取、数据校验和 train/valid 计划。RF-006-P2 提供本地 tiny tokenizer smoke；RF-006-P3 使用真实 NLLB tokenizer 和随机初始化 tiny seq2seq model 跑 Trainer 1-step；RF-006-P4 使用真实 NLLB 模型权重跑 1-step smoke，用来验证 CUDA、special token resize、数据张量和 Trainer 链路；RF-006-P5 使用真实 NLLB 模型跑小步数 pilot training，用来验证 checkpoint 保存、resume、loss 和输出目录；RF-006-P6 加载 checkpoint 生成小样本翻译 CSV，并验证它能被 RF-007 评估入口读取。P4/P5/P6 会通过本地 Hugging Face cache 下载或加载真实 NLLB 权重，但仍不代表正式训练质量。
+训练/推理工程入口目前处于 RF-006 的 smoke-test / pilot 工程化阶段：dry-run 只做配置读取、数据校验和 train/valid 计划。RF-006-P2 提供本地 tiny tokenizer smoke；RF-006-P3 使用真实 NLLB tokenizer 和随机初始化 tiny seq2seq model 跑 Trainer 1-step；RF-006-P4 使用真实 NLLB 模型权重跑 1-step smoke，用来验证 CUDA、special token resize、数据张量和 Trainer 链路；RF-006-P5 使用真实 NLLB 模型跑小步数 pilot training，用来验证 checkpoint 保存、resume、loss 和输出目录；RF-006-P6 加载 checkpoint 生成小样本翻译 CSV，并验证它能被 RF-007 评估入口读取；RF-007-P2 会把该 generation CSV 固定评估到报告目录，生成 summary、glossary rows、sample review 和 manifest。P4/P5/P6/P2 都是工程链路验证，不代表正式训练质量。
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
@@ -155,6 +155,7 @@ venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\defa
 
 ```powershell
 venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\default.json --input translation_result.csv
+venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint fine-tuned-models\nllb-200-distilled-600M\zh2ko\pilot\run-20260525-093832\checkpoint-4
 ```
 
 训练 notebook 中的语言列按 NLLB 语言代码转换：

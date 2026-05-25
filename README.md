@@ -90,7 +90,7 @@ python -m pip install -r requirements.txt
 jupyter lab
 ```
 
-RF-006-P2 학습 smoke test를 실행하려면 학습 chain 의존성도 설치합니다.
+RF-006-P2 이후 학습/inference chain을 실행하려면 학습 chain 의존성도 설치합니다.
 
 ```powershell
 python -m pip install -r requirements-training.txt
@@ -139,7 +139,7 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 이 pipeline은 먼저 `<c=...>` 같은 표현용 스타일 태그를 제거하고 대칭 외부 wrapper를 푼 뒤, Stanza, jieba, kiwipiepy, `BAAI/bge-m3`로 term/entity-like segment를 점수화합니다. Placeholder 행은 기본적으로 보존하고 mismatch만 감사합니다. 이 명령은 `data/segments.csv`를 다시 쓰지 않고 로컬 `data/review/segments/` 아래에 감사 CSV만 생성합니다. 수동 확인 후에만 `--apply`를 사용합니다.
 
-학습/추론 engineering entry point는 현재 RF-006 smoke-test/pilot engineering 단계입니다. dry-run은 설정 읽기, 데이터 검증, train/validation 계획만 수행합니다. RF-006-P2는 로컬 tiny tokenizer smoke를 제공하고, RF-006-P3는 실제 NLLB tokenizer와 랜덤 초기화 tiny seq2seq model로 Trainer 1-step smoke를 실행합니다. RF-006-P4는 실제 NLLB model weight로 1-step smoke를 실행해 CUDA, special token resize, 데이터 tensor, Trainer 연결을 검증합니다. RF-006-P5는 실제 NLLB model로 작은 pilot training을 실행해 checkpoint 저장, resume, loss, 출력 디렉터리를 검증합니다. RF-006-P6는 checkpoint를 로드해 sample generation CSV를 만들고 RF-007 평가 입력 schema와 연결되는지 확인합니다. P4/P5/P6는 실제 NLLB weight를 로컬 Hugging Face cache에 다운로드하거나 로드하지만 모델 품질을 의미하지 않습니다.
+학습/추론 engineering entry point는 현재 RF-006 smoke-test/pilot engineering 단계입니다. dry-run은 설정 읽기, 데이터 검증, train/validation 계획만 수행합니다. RF-006-P2는 로컬 tiny tokenizer smoke를 제공하고, RF-006-P3는 실제 NLLB tokenizer와 랜덤 초기화 tiny seq2seq model로 Trainer 1-step smoke를 실행합니다. RF-006-P4는 실제 NLLB model weight로 1-step smoke를 실행해 CUDA, special token resize, 데이터 tensor, Trainer 연결을 검증합니다. RF-006-P5는 실제 NLLB model로 작은 pilot training을 실행해 checkpoint 저장, resume, loss, 출력 디렉터리를 검증합니다. RF-006-P6는 checkpoint를 로드해 sample generation CSV를 만들고 RF-007 평가 입력 schema와 연결되는지 확인합니다. RF-007-P2는 이 generation CSV를 고정 report directory로 평가해 summary, glossary rows, sample review, manifest를 생성합니다. P4/P5/P6/P2는 engineering chain 검증이며 모델 품질 결론이 아닙니다.
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
@@ -155,6 +155,7 @@ venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\defa
 
 ```powershell
 venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\default.json --input translation_result.csv
+venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint fine-tuned-models\nllb-200-distilled-600M\zh2ko\pilot\run-20260525-093832\checkpoint-4
 ```
 
 학습 notebook에서는 언어 컬럼을 NLLB 코드로 변환합니다.

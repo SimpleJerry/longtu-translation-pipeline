@@ -90,7 +90,7 @@ python -m pip install -r requirements.txt
 jupyter lab
 ```
 
-To run the RF-006-P2 training smoke test, also install the training-chain dependencies:
+To run RF-006-P2 and later training/inference-chain commands, also install the training-chain dependencies:
 
 ```powershell
 python -m pip install -r requirements-training.txt
@@ -139,7 +139,7 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 This pipeline first strips presentation tags such as `<c=...>` and unwraps symmetric outer wrappers, then uses Stanza, jieba, kiwipiepy, and `BAAI/bge-m3` to score term/entity-like segments. Placeholder rows are kept by default and only audited for mismatch. The command does not rewrite `data/segments.csv`; it only writes local audit CSVs under `data/review/segments/`. Use `--apply` only after manual review.
 
-The training/inference engineering entry points are currently in the RF-006 smoke-test/pilot engineering phase. Dry-run reads config, validates data, and plans train/validation counts. RF-006-P2 adds a local tiny-tokenizer smoke test; RF-006-P3 uses the real NLLB tokenizer and a randomly initialized tiny seq2seq model for a one-step Trainer smoke test; RF-006-P4 uses real NLLB model weights for a one-step smoke test to validate CUDA, special-token resize, data tensors, and Trainer wiring; RF-006-P5 runs a small real-model pilot training job to validate checkpoint saving, resume, loss logging, and output directories; RF-006-P6 loads a checkpoint, writes a sample generation CSV, and verifies the RF-007-compatible evaluation schema. P4/P5/P6 download or load real NLLB weights through the local Hugging Face cache, but they still do not imply model quality.
+The training/inference engineering entry points are currently in the RF-006 smoke-test/pilot engineering phase. Dry-run reads config, validates data, and plans train/validation counts. RF-006-P2 adds a local tiny-tokenizer smoke test; RF-006-P3 uses the real NLLB tokenizer and a randomly initialized tiny seq2seq model for a one-step Trainer smoke test; RF-006-P4 uses real NLLB model weights for a one-step smoke test to validate CUDA, special-token resize, data tensors, and Trainer wiring; RF-006-P5 runs a small real-model pilot training job to validate checkpoint saving, resume, loss logging, and output directories; RF-006-P6 loads a checkpoint, writes a sample generation CSV, and verifies the RF-007-compatible evaluation schema. RF-007-P2 evaluates that generation CSV into a fixed report directory with summary, glossary rows, sample review, and manifest files. P4/P5/P6/P2 are engineering-chain checks, not model-quality conclusions.
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
@@ -155,6 +155,7 @@ To evaluate an existing translation-result CSV, use the RF-007 evaluation entry 
 
 ```powershell
 venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\default.json --input translation_result.csv
+venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint fine-tuned-models\nllb-200-distilled-600M\zh2ko\pilot\run-20260525-093832\checkpoint-4
 ```
 
 Training notebooks convert language columns to NLLB language codes:

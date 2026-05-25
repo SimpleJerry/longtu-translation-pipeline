@@ -1,0 +1,22 @@
+{
+  "input": {
+    "path": "data/review/inference/generated_samples.csv",
+    "source_column": "source",
+    "reference_column": "references",
+    "candidate_column": "candidates"
+  },
+  "glossary": {
+    "path": "data/glossary.csv",
+    "source_column": "zh-CN",
+    "target_column": "ko"
+  },
+  "bleu": {
+    "tokenization": "whitespace",
+    "max_order": 4,
+    "smooth_value": 0.1
+  },
+  "output": {
+    "report_dir": "data/review/evaluation/generation_report",
+    "write_reports": true
+  }
+}

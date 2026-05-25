@@ -8,9 +8,11 @@ Korean text, with a character mode available through config.
 from __future__ import annotations
 
 import csv
+import json
 import math
 from collections import Counter
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -20,6 +22,8 @@ from .text_protection import strip_glossary_markers
 
 @dataclass(frozen=True)
 class TranslationRow:
+    row_number: int
+    segment_id: str
     source: str
     reference: str
     candidate: str
@@ -70,6 +74,7 @@ class GlossaryPreservationResult:
 class EvaluationResult:
     input_path: Path
     row_count: int
+    rows: list[TranslationRow]
     bleu: BleuResult
     glossary: GlossaryPreservationResult
 
@@ -97,7 +102,13 @@ def evaluate_translation(config: EvaluationConfig, input_override: str | Path | 
         smooth_value=config.bleu.smooth_value,
     )
     glossary = compute_glossary_preservation(rows, terms)
-    return EvaluationResult(input_path=input_path, row_count=len(rows), bleu=bleu, glossary=glossary)
+    return EvaluationResult(
+        input_path=input_path,
+        row_count=len(rows),
+        rows=rows,
+        bleu=bleu,
+        glossary=glossary,
+    )
 
 
 def read_translation_rows(
@@ -111,17 +122,25 @@ def read_translation_rows(
     with input_path.open(encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
         require_columns(input_path, reader.fieldnames, [source_column, reference_column, candidate_column])
-        for row_number, row in enumerate(reader, start=2):
+        for csv_row_number, row in enumerate(reader, start=2):
             source = row.get(source_column, "").strip()
             reference = row.get(reference_column, "").strip()
             candidate = row.get(candidate_column, "").strip()
             if not source:
-                raise ValueError(f"Empty source at {input_path}:{row_number}")
+                raise ValueError(f"Empty source at {input_path}:{csv_row_number}")
             if not reference:
-                raise ValueError(f"Empty reference at {input_path}:{row_number}")
+                raise ValueError(f"Empty reference at {input_path}:{csv_row_number}")
             if not candidate:
-                raise ValueError(f"Empty candidate at {input_path}:{row_number}")
-            rows.append(TranslationRow(source=source, reference=reference, candidate=candidate))
+                raise ValueError(f"Empty candidate at {input_path}:{csv_row_number}")
+            rows.append(
+                TranslationRow(
+                    row_number=len(rows) + 1,
+                    segment_id=row.get("segment_id", "").strip(),
+                    source=source,
+                    reference=reference,
+                    candidate=candidate,
+                )
+            )
 
     if not rows:
         raise ValueError(f"No translation rows found: {input_path}")
@@ -325,7 +344,13 @@ def format_evaluation_summary(result: EvaluationResult) -> str:
     )
 
 
-def write_evaluation_reports(result: EvaluationResult, report_dir: str | Path) -> None:
+def write_evaluation_reports(
+    result: EvaluationResult,
+    report_dir: str | Path,
+    checkpoint_path: str | Path | None = None,
+    config_path: str | Path | None = None,
+    sample_review_rows: int = 50,
+) -> None:
     output_dir = Path(report_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -361,6 +386,107 @@ def write_evaluation_reports(result: EvaluationResult, report_dir: str | Path) -
                     "candidate": row.candidate,
                 }
             )
+
+    write_sample_review(
+        result,
+        output_dir / "sample_review.csv",
+        sample_review_rows=sample_review_rows,
+    )
+    write_report_manifest(
+        result,
+        output_dir / "report_manifest.json",
+        report_dir=output_dir,
+        checkpoint_path=checkpoint_path,
+        config_path=config_path,
+    )
+
+
+def write_sample_review(
+    result: EvaluationResult,
+    path: str | Path,
+    sample_review_rows: int = 50,
+) -> None:
+    if sample_review_rows <= 0:
+        raise ValueError("sample_review_rows must be a positive integer")
+
+    selected_rows = select_sample_review_rows(result, sample_review_rows)
+    glossary_by_row = {row.row_number: row for row in result.glossary.row_results}
+    translation_by_row = {row.row_number: row for row in result.rows}
+
+    with Path(path).open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "row_number",
+                "segment_id",
+                "source",
+                "references",
+                "candidates",
+                "glossary_status",
+                "term_count",
+                "matched_count",
+                "missing_terms",
+            ],
+        )
+        writer.writeheader()
+        for row_number in selected_rows:
+            glossary_row = glossary_by_row[row_number]
+            translation_row = translation_by_row[row_number]
+            writer.writerow(
+                {
+                    "row_number": row_number,
+                    "segment_id": translation_row.segment_id,
+                    "source": translation_row.source,
+                    "references": translation_row.reference,
+                    "candidates": translation_row.candidate,
+                    "glossary_status": glossary_row.status,
+                    "term_count": glossary_row.term_count,
+                    "matched_count": glossary_row.matched_count,
+                    "missing_terms": ";".join(glossary_row.missing_terms),
+                }
+            )
+
+
+def select_sample_review_rows(result: EvaluationResult, sample_review_rows: int) -> list[int]:
+    priority_statuses = {"not_matched", "partially_matched"}
+    selected: list[int] = []
+    seen: set[int] = set()
+
+    for row in result.glossary.row_results:
+        if row.status in priority_statuses:
+            selected.append(row.row_number)
+            seen.add(row.row_number)
+            if len(selected) >= sample_review_rows:
+                return selected
+
+    for row in result.rows:
+        if row.row_number in seen:
+            continue
+        selected.append(row.row_number)
+        if len(selected) >= sample_review_rows:
+            break
+    return selected
+
+
+def write_report_manifest(
+    result: EvaluationResult,
+    path: str | Path,
+    report_dir: str | Path,
+    checkpoint_path: str | Path | None = None,
+    config_path: str | Path | None = None,
+) -> None:
+    manifest = {
+        "checkpoint_path": str(checkpoint_path) if checkpoint_path is not None else "",
+        "generation_csv": str(result.input_path),
+        "evaluation_config": str(config_path) if config_path is not None else "",
+        "report_dir": str(report_dir),
+        "row_count": result.row_count,
+        "bleu": f"{result.bleu.score:.6f}",
+        "glossary_preservation_rate": f"{result.glossary.preservation_rate:.6f}",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    with Path(path).open("w", encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
 
 
 def summary_rows(result: EvaluationResult) -> list[tuple[str, str]]:
