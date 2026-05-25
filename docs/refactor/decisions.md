@@ -100,6 +100,13 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Impact Scope:** `scripts/train_model.py`, `src/longtu_translation_pipeline/training.py`, local Hugging Face cache, README workflow notes.
 - **Follow-up Notes:** Do not retain checkpoints from smoke tests. Keep outputs under ignored `data/review/`. Quality evaluation, checkpoint naming, and actual training duration belong to a later RF-006 phase.
 
+## 2026-05-25: Pilot Training May Save Ignored Local Checkpoints
+
+- **Decision:** RF-006 pilot training may save checkpoints under ignored `fine-tuned-models/.../pilot/run-*` and resume from them to validate the real training lifecycle.
+- **Background:** One-step smoke tests did not verify checkpoint persistence, Trainer resume behavior, loss logging across runs, or final output directory shape.
+- **Impact Scope:** `scripts/train_model.py`, `src/longtu_translation_pipeline/training.py`, ignored model output directories, README workflow notes.
+- **Follow-up Notes:** Pilot checkpoints are local engineering artifacts, not final deliverables. Full training duration, final checkpoint selection, generation, and RF-007 quality evaluation still require a later training phase.
+
 ## 2026-05-24: Evaluation Uses BLEU and Glossary Preservation Only
 
 - **Decision:** RF-007 evaluation automates corpus BLEU and glossary preservation for the simplified `<start>...<end>` marker policy. Code-token preservation is not part of the current evaluation mainline.

@@ -66,7 +66,7 @@ This README documents the repository as it exists today. The project is still cl
 | `scripts/glossary_semantic_pipeline.py` | Local glossary semantic cleanup pipeline using Stanza, jieba, kiwipiepy, wordfreq, and `BAAI/bge-m3`. |
 | `scripts/evaluate_translation.py` | Translation evaluation CLI for BLEU and glossary preservation; it does not load models. |
 | `scripts/segments_cleaning_pipeline.py` | Local semantic segment cleanup pipeline; dry-run review output by default. |
-| `scripts/train_model.py` | Training CLI for config dry-run, local tiny-tokenizer smoke, real tokenizer + tiny Trainer smoke, and real NLLB model one-step smoke. |
+| `scripts/train_model.py` | Training CLI for config dry-run, local tiny-tokenizer smoke, real tokenizer + tiny Trainer smoke, real NLLB model one-step smoke, and pilot training. |
 | `scripts/run_inference.py` | Inference dry-run CLI; currently validates config, reads inputs, and shows the output plan without loading a model. |
 | `src/longtu_translation_pipeline/text_protection.py` | Testable pure-function module for terminology marker protection. |
 | `src/longtu_translation_pipeline/config.py` | Dataclass parsing and validation for training/inference JSON configs. |
@@ -139,13 +139,14 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 This pipeline first strips presentation tags such as `<c=...>` and unwraps symmetric outer wrappers, then uses Stanza, jieba, kiwipiepy, and `BAAI/bge-m3` to score term/entity-like segments. Placeholder rows are kept by default and only audited for mismatch. The command does not rewrite `data/segments.csv`; it only writes local audit CSVs under `data/review/segments/`. Use `--apply` only after manual review.
 
-The training/inference engineering entry points are currently in the RF-006 smoke-test engineering phase. Dry-run reads config, validates data, and plans train/validation counts. RF-006-P2 adds a local tiny-tokenizer smoke test; RF-006-P3 uses the real NLLB tokenizer and a randomly initialized tiny seq2seq model for a one-step Trainer smoke test; RF-006-P4 uses real NLLB model weights for a one-step smoke test to validate CUDA, special-token resize, data tensors, and Trainer wiring. P4 downloads real NLLB weights to the local Hugging Face cache, but it still does not imply model quality.
+The training/inference engineering entry points are currently in the RF-006 smoke-test/pilot engineering phase. Dry-run reads config, validates data, and plans train/validation counts. RF-006-P2 adds a local tiny-tokenizer smoke test; RF-006-P3 uses the real NLLB tokenizer and a randomly initialized tiny seq2seq model for a one-step Trainer smoke test; RF-006-P4 uses real NLLB model weights for a one-step smoke test to validate CUDA, special-token resize, data tensors, and Trainer wiring; RF-006-P5 runs a small real-model pilot training job to validate checkpoint saving, resume, loss logging, and output directories. P4/P5 download real NLLB weights to the local Hugging Face cache, but they still do not imply model quality.
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --smoke-test
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --nllb-smoke-test --smoke-rows 2
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --real-model-smoke-test --smoke-rows 2
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --pilot-train --pilot-rows 64 --max-steps 4 --save-steps 2
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
 ```
 

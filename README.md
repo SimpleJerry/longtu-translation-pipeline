@@ -66,7 +66,7 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 | `scripts/glossary_semantic_pipeline.py` | Stanza, jieba, kiwipiepy, wordfreq, `BAAI/bge-m3`를 사용하는 로컬 glossary semantic 정제 pipeline입니다. |
 | `scripts/evaluate_translation.py` | BLEU와 glossary preservation을 계산하는 번역 결과 평가 CLI이며 모델을 로드하지 않습니다. |
 | `scripts/segments_cleaning_pipeline.py` | 로컬 segments semantic 정제 pipeline이며 기본적으로 dry-run review를 생성합니다. |
-| `scripts/train_model.py` | 설정 dry-run, 로컬 tiny tokenizer smoke, 실제 tokenizer + tiny Trainer smoke, 실제 NLLB model 1-step smoke를 지원하는 학습 CLI입니다. |
+| `scripts/train_model.py` | 설정 dry-run, 로컬 tiny tokenizer smoke, 실제 tokenizer + tiny Trainer smoke, 실제 NLLB model 1-step smoke, pilot training을 지원하는 학습 CLI입니다. |
 | `scripts/run_inference.py` | 추론 dry-run CLI입니다. 현재는 설정 검증, 입력 읽기, 출력 계획만 보여 주고 모델을 로드하지 않습니다. |
 | `src/longtu_translation_pipeline/text_protection.py` | 테스트 가능한 용어 marker 보호 pure-function 모듈입니다. |
 | `src/longtu_translation_pipeline/config.py` | 학습/추론 JSON 설정을 dataclass로 파싱하고 검증합니다. |
@@ -139,13 +139,14 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 이 pipeline은 먼저 `<c=...>` 같은 표현용 스타일 태그를 제거하고 대칭 외부 wrapper를 푼 뒤, Stanza, jieba, kiwipiepy, `BAAI/bge-m3`로 term/entity-like segment를 점수화합니다. Placeholder 행은 기본적으로 보존하고 mismatch만 감사합니다. 이 명령은 `data/segments.csv`를 다시 쓰지 않고 로컬 `data/review/segments/` 아래에 감사 CSV만 생성합니다. 수동 확인 후에만 `--apply`를 사용합니다.
 
-학습/추론 engineering entry point는 현재 RF-006 smoke-test engineering 단계입니다. dry-run은 설정 읽기, 데이터 검증, train/validation 계획만 수행합니다. RF-006-P2는 로컬 tiny tokenizer smoke를 제공하고, RF-006-P3는 실제 NLLB tokenizer와 랜덤 초기화 tiny seq2seq model로 Trainer 1-step smoke를 실행합니다. RF-006-P4는 실제 NLLB model weight로 1-step smoke를 실행해 CUDA, special token resize, 데이터 tensor, Trainer 연결을 검증합니다. P4는 실제 NLLB weight를 로컬 Hugging Face cache에 다운로드하지만 모델 품질을 의미하지 않습니다.
+학습/추론 engineering entry point는 현재 RF-006 smoke-test/pilot engineering 단계입니다. dry-run은 설정 읽기, 데이터 검증, train/validation 계획만 수행합니다. RF-006-P2는 로컬 tiny tokenizer smoke를 제공하고, RF-006-P3는 실제 NLLB tokenizer와 랜덤 초기화 tiny seq2seq model로 Trainer 1-step smoke를 실행합니다. RF-006-P4는 실제 NLLB model weight로 1-step smoke를 실행해 CUDA, special token resize, 데이터 tensor, Trainer 연결을 검증합니다. RF-006-P5는 실제 NLLB model로 작은 pilot training을 실행해 checkpoint 저장, resume, loss, 출력 디렉터리를 검증합니다. P4/P5는 실제 NLLB weight를 로컬 Hugging Face cache에 다운로드하지만 모델 품질을 의미하지 않습니다.
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --smoke-test
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --nllb-smoke-test --smoke-rows 2
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --real-model-smoke-test --smoke-rows 2
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --pilot-train --pilot-rows 64 --max-steps 4 --save-steps 2
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
 ```
 

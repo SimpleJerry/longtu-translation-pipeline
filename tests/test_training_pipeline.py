@@ -14,15 +14,19 @@ sys.path.insert(0, str(ROOT / "src"))
 from longtu_translation_pipeline.config import load_training_config  # noqa: E402
 from longtu_translation_pipeline.training import (  # noqa: E402
     NllbTrainerSmokeResult,
+    RealModelPilotTrainingResult,
     RealModelSmokeResult,
     TorchTrainingDataset,
     TokenizedTrainingExample,
     build_training_dry_run,
     build_training_smoke_test,
+    find_latest_checkpoint,
     format_nllb_trainer_smoke_test,
+    format_real_model_pilot_training,
     format_real_model_smoke_test,
     format_training_dry_run,
     format_training_smoke_test,
+    list_checkpoint_paths,
     prepare_training_examples,
     shape_text,
     tokenize_training_examples,
@@ -346,6 +350,66 @@ class TrainingPipelineTest(unittest.TestCase):
         self.assertIn("device=cuda", formatted)
         self.assertIn("cuda_device_name=NVIDIA Test GPU", formatted)
         self.assertIn("torch_dtype=float16", formatted)
+
+    def test_checkpoint_helpers_ignore_non_numeric_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            (tmp_path / "checkpoint-2").mkdir()
+            (tmp_path / "checkpoint-final").mkdir()
+            (tmp_path / "checkpoint-10").mkdir()
+            (tmp_path / "other").mkdir()
+
+            checkpoints = list_checkpoint_paths(tmp_path)
+
+            self.assertEqual([checkpoint.name for checkpoint in checkpoints], ["checkpoint-2", "checkpoint-10"])
+            self.assertEqual(find_latest_checkpoint(tmp_path).name, "checkpoint-10")
+
+    def test_real_model_pilot_training_result_format(self) -> None:
+        result = RealModelPilotTrainingResult(
+            config_path=Path("training.json"),
+            segments_path=Path("segments.csv"),
+            glossary_path=Path("glossary.csv"),
+            model_name="facebook/nllb-200-distilled-600M",
+            output_dir=Path("fine-tuned-models/model/pilot/run-20260525-120000"),
+            source_code="zho_Hans",
+            target_code="kor_Hang",
+            target_language_token_id=256098,
+            special_tokens_added=2,
+            tokenizer_vocab_size=256206,
+            embedding_size_before=256204,
+            embedding_size_after=256206,
+            parameter_count=615000000,
+            device="cuda",
+            cuda_device_name="NVIDIA Test GPU",
+            cuda_memory_summary="allocated_gb=2.00;reserved_gb=4.00",
+            torch_dtype="float32+bf16_trainer",
+            max_length=400,
+            prepared_rows=64,
+            tokenized_rows=64,
+            input_shape="64 x 400",
+            label_shape="64 x 400",
+            first_stage_steps=2,
+            final_max_steps=4,
+            save_steps=2,
+            resume_checkpoint=Path("fine-tuned-models/model/pilot/run-20260525-120000/checkpoint-2"),
+            checkpoint_paths=[
+                Path("fine-tuned-models/model/pilot/run-20260525-120000/checkpoint-2"),
+                Path("fine-tuned-models/model/pilot/run-20260525-120000/checkpoint-4"),
+            ],
+            first_stage_loss=14.5,
+            final_train_loss=13.75,
+            final_global_step=4,
+        )
+
+        formatted = format_real_model_pilot_training(result)
+
+        self.assertIn("Real NLLB model pilot training result", formatted)
+        self.assertIn("first_stage_steps=2", formatted)
+        self.assertIn("final_max_steps=4", formatted)
+        self.assertIn("resume_checkpoint=fine-tuned-models", formatted)
+        self.assertIn("checkpoint-4", formatted)
+        self.assertIn("torch_dtype=float32+bf16_trainer", formatted)
+        self.assertIn("final_global_step=4", formatted)
 
 
 def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:

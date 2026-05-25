@@ -15,7 +15,9 @@ from longtu_translation_pipeline.training import (  # noqa: E402
     format_training_dry_run,
     format_training_smoke_test,
     format_nllb_trainer_smoke_test,
+    format_real_model_pilot_training,
     format_real_model_smoke_test,
+    run_real_nllb_pilot_training,
     run_real_nllb_model_smoke_test,
     run_nllb_trainer_smoke_test,
 )
@@ -41,16 +43,39 @@ def parse_args() -> argparse.Namespace:
         help="Run a real NLLB model one-step Trainer smoke test.",
     )
     parser.add_argument(
+        "--pilot-train",
+        action="store_true",
+        help="Run real NLLB pilot training with checkpoint and resume validation.",
+    )
+    parser.add_argument(
         "--device",
         choices=["auto", "cuda", "cpu"],
         default="auto",
-        help="Device for --real-model-smoke-test.",
+        help="Device for real-model smoke and pilot training.",
     )
     parser.add_argument(
         "--smoke-rows",
         type=int,
         default=3,
         help="Number of rows to tokenize during --smoke-test.",
+    )
+    parser.add_argument(
+        "--pilot-rows",
+        type=int,
+        default=64,
+        help="Number of rows to use during --pilot-train.",
+    )
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=4,
+        help="Final Trainer max_steps for --pilot-train.",
+    )
+    parser.add_argument(
+        "--save-steps",
+        type=int,
+        default=2,
+        help="Checkpoint save interval and first-stage step count for --pilot-train.",
     )
     return parser.parse_args()
 
@@ -60,11 +85,17 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8")
 
     args = parse_args()
-    if not args.dry_run and not args.smoke_test and not args.nllb_smoke_test and not args.real_model_smoke_test:
+    if (
+        not args.dry_run
+        and not args.smoke_test
+        and not args.nllb_smoke_test
+        and not args.real_model_smoke_test
+        and not args.pilot_train
+    ):
         print(
-            "Actual model training is deferred to a later RF-006 phase. "
+            "Full model training is deferred to a later RF-006 phase. "
             "Re-run with --dry-run, --smoke-test, --nllb-smoke-test, "
-            "or --real-model-smoke-test."
+            "--real-model-smoke-test, or --pilot-train."
         )
         return 2
 
@@ -96,6 +127,15 @@ def main() -> int:
             device=args.device,
         )
         outputs.append(format_real_model_smoke_test(result))
+    if args.pilot_train:
+        result = run_real_nllb_pilot_training(
+            config,
+            pilot_rows=args.pilot_rows,
+            max_steps=args.max_steps,
+            save_steps=args.save_steps,
+            device=args.device,
+        )
+        outputs.append(format_real_model_pilot_training(result))
 
     print("\n\n".join(outputs))
     return 0

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import random
+from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
@@ -111,6 +112,40 @@ class RealModelSmokeResult:
     label_shape: str
     trainer_max_steps: int
     train_loss: float | None
+
+
+@dataclass(frozen=True)
+class RealModelPilotTrainingResult:
+    config_path: Path
+    segments_path: Path
+    glossary_path: Path
+    model_name: str
+    output_dir: Path
+    source_code: str
+    target_code: str
+    target_language_token_id: int
+    special_tokens_added: int
+    tokenizer_vocab_size: int
+    embedding_size_before: int
+    embedding_size_after: int
+    parameter_count: int
+    device: str
+    cuda_device_name: str
+    cuda_memory_summary: str
+    torch_dtype: str
+    max_length: int
+    prepared_rows: int
+    tokenized_rows: int
+    input_shape: str
+    label_shape: str
+    first_stage_steps: int
+    final_max_steps: int
+    save_steps: int
+    resume_checkpoint: Path
+    checkpoint_paths: list[Path]
+    first_stage_loss: float | None
+    final_train_loss: float | None
+    final_global_step: int
 
 
 def build_training_dry_run(config: TrainingConfig) -> TrainingDryRunPlan:
@@ -328,6 +363,126 @@ def run_real_nllb_model_smoke_test(
     )
 
 
+def run_real_nllb_pilot_training(
+    config: TrainingConfig,
+    output_dir: str | Path | None = None,
+    pilot_rows: int = 64,
+    max_steps: int = 4,
+    save_steps: int = 2,
+    device: str = "auto",
+) -> RealModelPilotTrainingResult:
+    if pilot_rows <= 0:
+        raise ValueError("pilot_rows must be a positive integer")
+    if max_steps <= 0:
+        raise ValueError("max_steps must be a positive integer")
+    if save_steps <= 0:
+        raise ValueError("save_steps must be a positive integer")
+    if save_steps >= max_steps:
+        raise ValueError("save_steps must be smaller than max_steps so resume can be verified")
+
+    tokenizer = load_nllb_tokenizer(config)
+    special_tokens_added = add_marker_special_tokens(tokenizer)
+    target_language_token_id = tokenizer.convert_tokens_to_ids(config.language.target_code)
+    if target_language_token_id is None or target_language_token_id < 0:
+        raise ValueError(f"Tokenizer does not know target language code: {config.language.target_code}")
+
+    prepared_examples = prepare_training_examples(config, limit=pilot_rows)
+    tokenized_examples = tokenize_training_examples(config, tokenizer, prepared_examples)
+    dataset = TorchTrainingDataset(tokenized_examples)
+
+    from transformers import AutoModelForSeq2SeqLM
+
+    training_device = resolve_training_device(device)
+    precision_mode = resolve_trainer_precision(training_device)
+    torch_dtype = "float32"
+    if precision_mode != "fp32":
+        torch_dtype = f"float32+{precision_mode}_trainer"
+
+    model = AutoModelForSeq2SeqLM.from_pretrained(config.model.base_model)
+    embedding_size_before = model.get_input_embeddings().num_embeddings
+    model.resize_token_embeddings(len(tokenizer))
+    embedding_size_after = model.get_input_embeddings().num_embeddings
+    parameter_count = sum(parameter.numel() for parameter in model.parameters())
+
+    pilot_output_dir = resolve_pilot_output_dir(config, output_dir)
+    pilot_output_dir.mkdir(parents=True, exist_ok=False)
+
+    first_trainer = build_trainer(
+        model=model,
+        dataset=dataset,
+        output_dir=pilot_output_dir,
+        max_steps=max_steps,
+        use_cpu=training_device == "cpu",
+        fp16=precision_mode == "fp16",
+        bf16=precision_mode == "bf16",
+        save_strategy="steps",
+        save_steps=save_steps,
+        save_total_limit=2,
+        logging_strategy="steps",
+        logging_steps=1,
+        stop_after_steps=save_steps,
+    )
+    first_result = first_trainer.train()
+    resume_checkpoint = find_latest_checkpoint(pilot_output_dir)
+    if resume_checkpoint is None:
+        raise RuntimeError(f"No checkpoint was created in {pilot_output_dir}")
+
+    second_trainer = build_trainer(
+        model=model,
+        dataset=dataset,
+        output_dir=pilot_output_dir,
+        max_steps=max_steps,
+        use_cpu=training_device == "cpu",
+        fp16=precision_mode == "fp16",
+        bf16=precision_mode == "bf16",
+        save_strategy="steps",
+        save_steps=save_steps,
+        save_total_limit=2,
+        logging_strategy="steps",
+        logging_steps=1,
+    )
+    final_result = second_trainer.train(resume_from_checkpoint=str(resume_checkpoint))
+
+    input_shape = shape_text([example.input_ids for example in tokenized_examples])
+    label_shape = shape_text([example.labels for example in tokenized_examples])
+    return RealModelPilotTrainingResult(
+        config_path=config.path,
+        segments_path=config.data.segments_path,
+        glossary_path=config.data.glossary_path,
+        model_name=config.model.base_model,
+        output_dir=pilot_output_dir,
+        source_code=config.language.source_code,
+        target_code=config.language.target_code,
+        target_language_token_id=int(target_language_token_id),
+        special_tokens_added=special_tokens_added,
+        tokenizer_vocab_size=len(tokenizer),
+        embedding_size_before=embedding_size_before,
+        embedding_size_after=embedding_size_after,
+        parameter_count=parameter_count,
+        device=training_device,
+        cuda_device_name=cuda_device_name(training_device),
+        cuda_memory_summary=cuda_memory_summary(training_device),
+        torch_dtype=torch_dtype,
+        max_length=config.tokenization.max_length,
+        prepared_rows=len(prepared_examples),
+        tokenized_rows=len(tokenized_examples),
+        input_shape=input_shape,
+        label_shape=label_shape,
+        first_stage_steps=save_steps,
+        final_max_steps=max_steps,
+        save_steps=save_steps,
+        resume_checkpoint=resume_checkpoint,
+        checkpoint_paths=list_checkpoint_paths(pilot_output_dir),
+        first_stage_loss=float(first_result.training_loss)
+        if first_result.training_loss is not None
+        else None,
+        final_train_loss=float(final_result.training_loss)
+        if final_result.training_loss is not None
+        else None,
+        final_global_step=int(second_trainer.state.global_step),
+    )
+
+
 def read_training_examples(config: TrainingConfig) -> list[TrainingExample]:
     return read_segment_examples(
         config.data.segments_path,
@@ -516,24 +671,101 @@ def build_trainer(
     max_steps: int,
     use_cpu: bool,
     fp16: bool,
+    bf16: bool = False,
+    save_strategy: str = "no",
+    save_steps: int | None = None,
+    save_total_limit: int | None = None,
+    logging_strategy: str = "no",
+    logging_steps: int | None = None,
+    stop_after_steps: int | None = None,
 ) -> Any:
-    from transformers import Trainer, TrainingArguments
+    from transformers import Trainer, TrainerCallback, TrainingArguments
 
-    training_args = TrainingArguments(
-        output_dir=str(output_dir),
-        max_steps=max_steps,
-        per_device_train_batch_size=1,
-        report_to="none",
-        save_strategy="no",
-        logging_strategy="no",
-        disable_tqdm=True,
-        do_train=True,
-        optim="adamw_torch",
-        use_cpu=use_cpu,
-        fp16=fp16,
-        remove_unused_columns=False,
+    training_kwargs: dict[str, Any] = {
+        "output_dir": str(output_dir),
+        "max_steps": max_steps,
+        "per_device_train_batch_size": 1,
+        "report_to": "none",
+        "save_strategy": save_strategy,
+        "logging_strategy": logging_strategy,
+        "disable_tqdm": True,
+        "do_train": True,
+        "optim": "adamw_torch",
+        "use_cpu": use_cpu,
+        "fp16": fp16,
+        "bf16": bf16,
+        "remove_unused_columns": False,
+    }
+    if save_steps is not None:
+        training_kwargs["save_steps"] = save_steps
+    if save_total_limit is not None:
+        training_kwargs["save_total_limit"] = save_total_limit
+    if logging_steps is not None:
+        training_kwargs["logging_steps"] = logging_steps
+
+    callbacks = []
+    if stop_after_steps is not None:
+        if stop_after_steps <= 0:
+            raise ValueError("stop_after_steps must be a positive integer")
+
+        class StopAfterStepCallback(TrainerCallback):
+            def on_step_end(self, args: Any, state: Any, control: Any, **kwargs: Any) -> Any:
+                if state.global_step >= stop_after_steps:
+                    control.should_save = True
+                    control.should_training_stop = True
+                return control
+
+        callbacks.append(StopAfterStepCallback())
+
+    training_args = TrainingArguments(**training_kwargs)
+    return Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=dataset,
+        callbacks=callbacks,
     )
-    return Trainer(model=model, args=training_args, train_dataset=dataset)
+
+
+def resolve_pilot_output_dir(
+    config: TrainingConfig,
+    output_dir: str | Path | None = None,
+) -> Path:
+    if output_dir is not None:
+        return Path(output_dir)
+
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    base_dir = config.model.output_dir / "pilot" / f"run-{timestamp}"
+    candidate = base_dir
+    index = 2
+    while candidate.exists():
+        candidate = base_dir.with_name(f"{base_dir.name}-{index}")
+        index += 1
+    return candidate
+
+
+def list_checkpoint_paths(output_dir: str | Path) -> list[Path]:
+    path = Path(output_dir)
+    if not path.exists():
+        return []
+
+    checkpoints: list[tuple[int, Path]] = []
+    for child in path.iterdir():
+        if not child.is_dir() or not child.name.startswith("checkpoint-"):
+            continue
+        step_text = child.name[len("checkpoint-") :]
+        try:
+            step = int(step_text)
+        except ValueError:
+            continue
+        checkpoints.append((step, child))
+    return [checkpoint for _, checkpoint in sorted(checkpoints)]
+
+
+def find_latest_checkpoint(output_dir: str | Path) -> Path | None:
+    checkpoints = list_checkpoint_paths(output_dir)
+    if not checkpoints:
+        return None
+    return checkpoints[-1]
 
 
 def resolve_training_device(device: str) -> str:
@@ -548,6 +780,17 @@ def resolve_training_device(device: str) -> str:
     if device == "cuda" and not cuda_available:
         raise RuntimeError("CUDA was requested but torch.cuda.is_available() is False")
     return device
+
+
+def resolve_trainer_precision(device: str) -> str:
+    if device != "cuda":
+        return "fp32"
+
+    import torch
+
+    if hasattr(torch.cuda, "is_bf16_supported") and torch.cuda.is_bf16_supported():
+        return "bf16"
+    return "fp16"
 
 
 def cuda_device_name(device: str) -> str:
@@ -722,5 +965,41 @@ def format_real_model_smoke_test(result: RealModelSmokeResult) -> str:
         f"label_shape={result.label_shape}",
         f"trainer_max_steps={result.trainer_max_steps}",
         f"train_loss={result.train_loss}",
+    ]
+    return "\n".join(lines)
+
+
+def format_real_model_pilot_training(result: RealModelPilotTrainingResult) -> str:
+    lines = [
+        "Real NLLB model pilot training result",
+        f"config={result.config_path}",
+        f"segments={result.segments_path}",
+        f"glossary={result.glossary_path}",
+        f"model={result.model_name}",
+        f"output_dir={result.output_dir}",
+        f"language_pair={result.source_code}->{result.target_code}",
+        f"target_language_token_id={result.target_language_token_id}",
+        f"special_tokens_added={result.special_tokens_added}",
+        f"tokenizer_vocab_size={result.tokenizer_vocab_size}",
+        f"embedding_size_before={result.embedding_size_before}",
+        f"embedding_size_after={result.embedding_size_after}",
+        f"parameter_count={result.parameter_count}",
+        f"device={result.device}",
+        f"cuda_device_name={result.cuda_device_name}",
+        f"cuda_memory_summary={result.cuda_memory_summary}",
+        f"torch_dtype={result.torch_dtype}",
+        f"max_length={result.max_length}",
+        f"prepared_rows={result.prepared_rows}",
+        f"tokenized_rows={result.tokenized_rows}",
+        f"input_shape={result.input_shape}",
+        f"label_shape={result.label_shape}",
+        f"first_stage_steps={result.first_stage_steps}",
+        f"final_max_steps={result.final_max_steps}",
+        f"save_steps={result.save_steps}",
+        f"resume_checkpoint={result.resume_checkpoint}",
+        f"checkpoint_paths={';'.join(str(path) for path in result.checkpoint_paths)}",
+        f"first_stage_loss={result.first_stage_loss}",
+        f"final_train_loss={result.final_train_loss}",
+        f"final_global_step={result.final_global_step}",
     ]
     return "\n".join(lines)

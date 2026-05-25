@@ -66,7 +66,7 @@
 | `scripts/glossary_semantic_pipeline.py` | 本地 glossary semantic 清洗 pipeline，使用 Stanza、jieba、kiwipiepy、wordfreq 与 `BAAI/bge-m3`。 |
 | `scripts/evaluate_translation.py` | 翻译结果评估 CLI，计算 BLEU 与 glossary preservation，不加载模型。 |
 | `scripts/segments_cleaning_pipeline.py` | 本地 segments 语义清洗 pipeline，默认 dry-run 生成 review CSV。 |
-| `scripts/train_model.py` | 训练 CLI；支持配置 dry-run、本地 tiny tokenizer smoke、真实 tokenizer + tiny Trainer smoke，以及真实 NLLB 模型 1-step smoke。 |
+| `scripts/train_model.py` | 训练 CLI；支持配置 dry-run、本地 tiny tokenizer smoke、真实 tokenizer + tiny Trainer smoke、真实 NLLB 模型 1-step smoke，以及 pilot training。 |
 | `scripts/run_inference.py` | 推理 dry-run CLI；当前只校验配置、读取输入、展示输出计划，不加载模型。 |
 | `src/longtu_translation_pipeline/text_protection.py` | 可测试的术语 marker 保护纯函数模块。 |
 | `src/longtu_translation_pipeline/config.py` | 训练/推理 JSON 配置的 dataclass 解析和校验。 |
@@ -139,13 +139,14 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 该 pipeline 会先剥离 `<c=...>` 等表现层样式标签并解开对称外层包装，再使用 Stanza、jieba、kiwipiepy 和 `BAAI/bge-m3` 判断 term/entity-like segment；placeholder 行默认保留，只做 mismatch 审计。该命令不会改写 `data/segments.csv`，只会在本地 `data/review/segments/` 下生成审计 CSV。人工确认后再使用 `--apply` 重写最终语料。
 
-训练/推理工程入口目前处于 RF-006 的 smoke-test 工程化阶段：dry-run 只做配置读取、数据校验和 train/valid 计划。RF-006-P2 提供本地 tiny tokenizer smoke；RF-006-P3 使用真实 NLLB tokenizer 和随机初始化 tiny seq2seq model 跑 Trainer 1-step；RF-006-P4 使用真实 NLLB 模型权重跑 1-step smoke，用来验证 CUDA、special token resize、数据张量和 Trainer 链路。P4 会下载真实 NLLB 权重到本地 Hugging Face cache，但仍不代表正式训练质量。
+训练/推理工程入口目前处于 RF-006 的 smoke-test / pilot 工程化阶段：dry-run 只做配置读取、数据校验和 train/valid 计划。RF-006-P2 提供本地 tiny tokenizer smoke；RF-006-P3 使用真实 NLLB tokenizer 和随机初始化 tiny seq2seq model 跑 Trainer 1-step；RF-006-P4 使用真实 NLLB 模型权重跑 1-step smoke，用来验证 CUDA、special token resize、数据张量和 Trainer 链路；RF-006-P5 使用真实 NLLB 模型跑小步数 pilot training，用来验证 checkpoint 保存、resume、loss 和输出目录。P4/P5 会下载真实 NLLB 权重到本地 Hugging Face cache，但仍不代表正式训练质量。
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --smoke-test
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --nllb-smoke-test --smoke-rows 2
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --real-model-smoke-test --smoke-rows 2
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --pilot-train --pilot-rows 64 --max-steps 4 --save-steps 2
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
 ```
 
