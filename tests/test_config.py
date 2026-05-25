@@ -30,7 +30,9 @@ class ConfigTest(unittest.TestCase):
         config = load_inference_config(ROOT / "configs" / "inference" / "default.json")
 
         self.assertEqual(config.input.text_column, "zh-CN")
+        self.assertEqual(config.input.reference_column, "ko")
         self.assertEqual(config.language.target_code, "kor_Hang")
+        self.assertEqual(config.model.tokenizer_name, "facebook/nllb-200-distilled-600M")
         self.assertTrue(config.output.strip_glossary_markers)
 
     def test_training_paths_can_resolve_against_base_dir(self) -> None:
@@ -83,10 +85,14 @@ class ConfigTest(unittest.TestCase):
                     "input": {
                         "path": "data/segments.csv",
                         "text_column": "zh-CN",
+                        "reference_column": "ko",
                         "id_column": "segment_id",
                     },
                     "language": {"source_code": "zho_Hans", "target_code": "kor_Hang"},
-                    "model": {"path": "fine-tuned-models/test"},
+                    "model": {
+                        "path": "fine-tuned-models/test",
+                        "tokenizer_name": "facebook/nllb-200-distilled-600M",
+                    },
                     "output": {"path": "translation_result.csv", "strip_glossary_markers": True},
                     "generation": {"batch_size": 4, "max_length": 64},
                     "dry_run": {"preview_rows": 1},

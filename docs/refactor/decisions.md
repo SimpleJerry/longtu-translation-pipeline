@@ -107,6 +107,13 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Impact Scope:** `scripts/train_model.py`, `src/longtu_translation_pipeline/training.py`, ignored model output directories, README workflow notes.
 - **Follow-up Notes:** Pilot checkpoints are local engineering artifacts, not final deliverables. Full training duration, final checkpoint selection, generation, and RF-007 quality evaluation still require a later training phase.
 
+## 2026-05-25: Inference Output Stays RF-007-Compatible
+
+- **Decision:** Checkpoint inference writes CSVs with `segment_id,source,references,candidates`; RF-007 continues to evaluate the `source`, `references`, and `candidates` columns while `segment_id` provides row traceability.
+- **Background:** The project needs generation output that can flow directly into the existing BLEU and glossary-preservation evaluator without losing the link back to `data/segments.csv`.
+- **Impact Scope:** `configs/inference/default.json`, `src/longtu_translation_pipeline/inference.py`, `scripts/run_inference.py`, local inference review artifacts, README workflow notes.
+- **Follow-up Notes:** Generated inference CSVs are local artifacts under ignored `data/review/inference/`. Full validation generation and fixed split selection belong to later RF-006/RF-007 phases.
+
 ## 2026-05-24: Evaluation Uses BLEU and Glossary Preservation Only
 
 - **Decision:** RF-007 evaluation automates corpus BLEU and glossary preservation for the simplified `<start>...<end>` marker policy. Code-token preservation is not part of the current evaluation mainline.

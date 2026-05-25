@@ -78,12 +78,14 @@ class TrainingConfig:
 class InferenceInputConfig:
     path: Path
     text_column: str
+    reference_column: str
     id_column: str
 
 
 @dataclass(frozen=True)
 class InferenceModelConfig:
     path: Path
+    tokenizer_name: str
 
 
 @dataclass(frozen=True)
@@ -232,11 +234,13 @@ def load_inference_config(path: str | Path, base_dir: str | Path | None = None) 
         input=InferenceInputConfig(
             path=resolve_config_path(require_str(input_section, "path", config_path), path_base),
             text_column=require_str(input_section, "text_column", config_path),
+            reference_column=require_str(input_section, "reference_column", config_path),
             id_column=require_str(input_section, "id_column", config_path),
         ),
         language=load_language_config(language_section, config_path),
         model=InferenceModelConfig(
             path=resolve_config_path(require_str(model_section, "path", config_path), path_base),
+            tokenizer_name=require_str(model_section, "tokenizer_name", config_path),
         ),
         output=InferenceOutputConfig(
             path=resolve_config_path(require_str(output_section, "path", config_path), path_base),

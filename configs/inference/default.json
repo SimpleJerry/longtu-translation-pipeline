@@ -2,6 +2,7 @@
   "input": {
     "path": "data/segments.csv",
     "text_column": "zh-CN",
+    "reference_column": "ko",
     "id_column": "segment_id"
   },
   "language": {
@@ -9,10 +10,11 @@
     "target_code": "kor_Hang"
   },
   "model": {
-    "path": "fine-tuned-models/nllb-200-distilled-600M/zh2ko"
+    "path": "fine-tuned-models/nllb-200-distilled-600M/zh2ko",
+    "tokenizer_name": "facebook/nllb-200-distilled-600M"
   },
   "output": {
-    "path": "translation_result.csv",
+    "path": "data/review/inference/generated_samples.csv",
     "strip_glossary_markers": true
   },
   "generation": {
