@@ -66,11 +66,11 @@
 | `scripts/glossary_semantic_pipeline.py` | 本地 glossary semantic 清洗 pipeline，使用 Stanza、jieba、kiwipiepy、wordfreq 与 `BAAI/bge-m3`。 |
 | `scripts/evaluate_translation.py` | 翻译结果评估 CLI，计算 BLEU 与 glossary preservation，不加载模型。 |
 | `scripts/segments_cleaning_pipeline.py` | 本地 segments 语义清洗 pipeline，默认 dry-run 生成 review CSV。 |
-| `scripts/train_model.py` | 训练 CLI；支持配置 dry-run、本地 tiny tokenizer smoke、真实 tokenizer + tiny Trainer smoke、真实 NLLB 模型 1-step smoke，以及 pilot training。 |
+| `scripts/train_model.py` | 训练 CLI；支持配置 dry-run、本地 tiny tokenizer smoke、真实 tokenizer + tiny Trainer smoke、真实 NLLB 模型 1-step smoke、pilot training 和正式 run 目录训练。 |
 | `scripts/run_inference.py` | 推理 CLI；支持配置 dry-run 和基于真实 checkpoint 的小样本 generation。 |
 | `src/longtu_translation_pipeline/text_protection.py` | 可测试的术语 marker 保护纯函数模块。 |
 | `src/longtu_translation_pipeline/config.py` | 训练/推理 JSON 配置的 dataclass 解析和校验。 |
-| `src/longtu_translation_pipeline/training.py` | 可导入的训练数据准备 dry-run API。 |
+| `src/longtu_translation_pipeline/training.py` | 可导入的训练数据准备和 Trainer 链路 API。 |
 | `src/longtu_translation_pipeline/inference.py` | 可导入的推理输入计划 dry-run API。 |
 | `src/longtu_translation_pipeline/evaluation.py` | 可导入的 BLEU 与 glossary preservation 评估 API。 |
 | `notebooks/main/` | 主线训练、预处理、生成和评估实验 notebook。 |
@@ -139,7 +139,7 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 该 pipeline 会先剥离 `<c=...>` 等表现层样式标签并解开对称外层包装，再使用 Stanza、jieba、kiwipiepy 和 `BAAI/bge-m3` 判断 term/entity-like segment；placeholder 行默认保留，只做 mismatch 审计。该命令不会改写 `data/segments.csv`，只会在本地 `data/review/segments/` 下生成审计 CSV。人工确认后再使用 `--apply` 重写最终语料。
 
-训练/推理工程入口目前处于 RF-006 的 smoke-test / pilot 工程化阶段：dry-run 只做配置读取、数据校验和 train/valid 计划。RF-006-P2 提供本地 tiny tokenizer smoke；RF-006-P3 使用真实 NLLB tokenizer 和随机初始化 tiny seq2seq model 跑 Trainer 1-step；RF-006-P4 使用真实 NLLB 模型权重跑 1-step smoke，用来验证 CUDA、special token resize、数据张量和 Trainer 链路；RF-006-P5 使用真实 NLLB 模型跑小步数 pilot training，用来验证 checkpoint 保存、resume、loss 和输出目录；RF-006-P6 加载 checkpoint 生成小样本翻译 CSV，并验证它能被 RF-007 评估入口读取；RF-007-P2 会把该 generation CSV 固定评估到报告目录，生成 summary、glossary rows、sample review 和 manifest。P4/P5/P6/P2 都是工程链路验证，不代表正式训练质量。
+训练/推理工程入口目前处于 RF-006 的 smoke-test / pilot / 正式 run 硬化阶段：dry-run 只做配置读取、数据校验和 train/valid 计划。RF-006-P2 提供本地 tiny tokenizer smoke；RF-006-P3 使用真实 NLLB tokenizer 和随机初始化 tiny seq2seq model 跑 Trainer 1-step；RF-006-P4 使用真实 NLLB 模型权重跑 1-step smoke，用来验证 CUDA、special token resize、数据张量和 Trainer 链路；RF-006-P5 使用真实 NLLB 模型跑小步数 pilot training，用来验证 checkpoint 保存、resume、loss 和输出目录；RF-006-P6 加载 checkpoint 生成小样本翻译 CSV，并验证它能被 RF-007 评估入口读取；RF-007-P2 会把该 generation CSV 固定评估到报告目录，生成 summary、glossary rows、sample review 和 manifest。RF-006-P7 增加正式 `--train` 命令，会在 ignored 的 `fine-tuned-models/.../runs/run-*` 下写入固定 split artifact 和 `run_manifest.json`。P4/P5/P6/P7/P2 都是工程链路验证，直到显式启动 full training 之前不代表正式模型质量。
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
@@ -147,6 +147,8 @@ venv\Scripts\python.exe scripts\train_model.py --config configs\training\default
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --nllb-smoke-test --smoke-rows 2
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --real-model-smoke-test --smoke-rows 2
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --pilot-train --pilot-rows 64 --max-steps 4 --save-steps 2
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --train --limit-rows 128 --max-steps 4 --save-steps 2 --save-total-limit 2 --logging-steps 1
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --train --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-name --resume-from-checkpoint latest --max-steps 6 --save-steps 2 --save-total-limit 2 --logging-steps 1
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate --model-path fine-tuned-models\nllb-200-distilled-600M\zh2ko\pilot\run-20260525-093832\checkpoint-4 --sample-rows 8
 ```

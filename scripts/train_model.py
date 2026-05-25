@@ -12,11 +12,13 @@ from longtu_translation_pipeline.config import load_training_config  # noqa: E40
 from longtu_translation_pipeline.training import (  # noqa: E402
     build_training_dry_run,
     build_training_smoke_test,
+    format_formal_training_run,
     format_training_dry_run,
     format_training_smoke_test,
     format_nllb_trainer_smoke_test,
     format_real_model_pilot_training,
     format_real_model_smoke_test,
+    run_real_nllb_formal_training,
     run_real_nllb_pilot_training,
     run_real_nllb_model_smoke_test,
     run_nllb_trainer_smoke_test,
@@ -48,6 +50,11 @@ def parse_args() -> argparse.Namespace:
         help="Run real NLLB pilot training with checkpoint and resume validation.",
     )
     parser.add_argument(
+        "--train",
+        action="store_true",
+        help="Run a formal real-model training command with split artifacts and a run manifest.",
+    )
+    parser.add_argument(
         "--device",
         choices=["auto", "cuda", "cpu"],
         default="auto",
@@ -69,13 +76,46 @@ def parse_args() -> argparse.Namespace:
         "--max-steps",
         type=int,
         default=4,
-        help="Final Trainer max_steps for --pilot-train.",
+        help="Final Trainer max_steps for training modes.",
     )
     parser.add_argument(
         "--save-steps",
         type=int,
         default=2,
-        help="Checkpoint save interval and first-stage step count for --pilot-train.",
+        help="Checkpoint save interval for training modes.",
+    )
+    parser.add_argument(
+        "--save-total-limit",
+        type=int,
+        default=2,
+        help="Maximum number of checkpoints to keep for --train.",
+    )
+    parser.add_argument(
+        "--logging-steps",
+        type=int,
+        default=1,
+        help="Trainer logging interval for --train.",
+    )
+    parser.add_argument(
+        "--limit-rows",
+        type=int,
+        default=None,
+        help="Optional row limit for --train engineering validation; omit for full data.",
+    )
+    parser.add_argument(
+        "--run-name",
+        default=None,
+        help="Optional run directory name under the configured runs directory for --train.",
+    )
+    parser.add_argument(
+        "--run-dir",
+        default=None,
+        help="Optional explicit run directory for --train or resume.",
+    )
+    parser.add_argument(
+        "--resume-from-checkpoint",
+        default=None,
+        help="Checkpoint path or 'latest' for --train resume.",
     )
     return parser.parse_args()
 
@@ -91,11 +131,12 @@ def main() -> int:
         and not args.nllb_smoke_test
         and not args.real_model_smoke_test
         and not args.pilot_train
+        and not args.train
     ):
         print(
             "Full model training is deferred to a later RF-006 phase. "
             "Re-run with --dry-run, --smoke-test, --nllb-smoke-test, "
-            "--real-model-smoke-test, or --pilot-train."
+            "--real-model-smoke-test, --pilot-train, or --train."
         )
         return 2
 
@@ -136,6 +177,22 @@ def main() -> int:
             device=args.device,
         )
         outputs.append(format_real_model_pilot_training(result))
+    if args.train:
+        result = run_real_nllb_formal_training(
+            config,
+            run_dir=args.run_dir,
+            run_name=args.run_name,
+            row_limit=args.limit_rows,
+            max_steps=args.max_steps,
+            save_steps=args.save_steps,
+            save_total_limit=args.save_total_limit,
+            logging_steps=args.logging_steps,
+            device=args.device,
+            resume_from_checkpoint=args.resume_from_checkpoint,
+            command=sys.argv,
+            repo_root=ROOT,
+        )
+        outputs.append(format_formal_training_run(result))
 
     print("\n\n".join(outputs))
     return 0

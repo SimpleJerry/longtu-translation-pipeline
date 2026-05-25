@@ -13,23 +13,32 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from longtu_translation_pipeline.config import load_training_config  # noqa: E402
 from longtu_translation_pipeline.training import (  # noqa: E402
+    FormalTrainingRunResult,
     NllbTrainerSmokeResult,
     RealModelPilotTrainingResult,
     RealModelSmokeResult,
     TorchTrainingDataset,
+    TrainingExample,
     TokenizedTrainingExample,
     build_training_dry_run,
     build_training_smoke_test,
+    checkpoint_step,
     find_latest_checkpoint,
+    format_formal_training_run,
     format_nllb_trainer_smoke_test,
     format_real_model_pilot_training,
     format_real_model_smoke_test,
     format_training_dry_run,
     format_training_smoke_test,
+    resolve_formal_run_dir,
+    resolve_resume_row_limit,
+    resolve_resume_checkpoint,
     list_checkpoint_paths,
     prepare_training_examples,
+    read_manifest_row_limit,
     shape_text,
     tokenize_training_examples,
+    write_split_artifacts,
 )
 
 
@@ -364,6 +373,125 @@ class TrainingPipelineTest(unittest.TestCase):
             self.assertEqual([checkpoint.name for checkpoint in checkpoints], ["checkpoint-2", "checkpoint-10"])
             self.assertEqual(find_latest_checkpoint(tmp_path).name, "checkpoint-10")
 
+    def test_formal_run_dir_uses_runs_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            segments_path = tmp_path / "segments.csv"
+            glossary_path = tmp_path / "glossary.csv"
+            config_path = tmp_path / "training.json"
+            config_data = build_training_config(segments_path, glossary_path)
+            config_data["model"]["output_dir"] = str(tmp_path / "fine-tuned")
+            config_path.write_text(json.dumps(config_data, ensure_ascii=False), encoding="utf-8")
+
+            config = load_training_config(config_path)
+            run_dir = resolve_formal_run_dir(config, run_name="run-test")
+
+        self.assertEqual(run_dir, tmp_path / "fine-tuned" / "runs" / "run-test")
+
+    def test_split_artifacts_write_raw_train_and_validation_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp)
+            train_path, validation_path = write_split_artifacts(
+                output_dir,
+                [TrainingExample("1", "打开神秘宝箱", "신비한 보물상자 열기")],
+                [TrainingExample("2", "领取奖励", "보상 수령")],
+                id_column="segment_id",
+                source_column="zh-CN",
+                target_column="ko",
+            )
+
+            train_rows = read_csv_rows(train_path)
+            validation_rows = read_csv_rows(validation_path)
+
+        self.assertEqual(train_rows[0]["segment_id"], "1")
+        self.assertEqual(train_rows[0]["zh-CN"], "打开神秘宝箱")
+        self.assertEqual(validation_rows[0]["ko"], "보상 수령")
+
+    def test_resolve_resume_checkpoint_accepts_latest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            (tmp_path / "checkpoint-2").mkdir()
+            (tmp_path / "checkpoint-4").mkdir()
+
+            checkpoint = resolve_resume_checkpoint(tmp_path, "latest")
+
+        self.assertEqual(checkpoint.name, "checkpoint-4")
+
+    def test_checkpoint_step_parses_numeric_checkpoint_name(self) -> None:
+        self.assertEqual(checkpoint_step(Path("checkpoint-42")), 42)
+        self.assertIsNone(checkpoint_step(Path("checkpoint-final")))
+
+    def test_manifest_row_limit_can_be_reused_for_resume(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            (tmp_path / "run_manifest.json").write_text(
+                json.dumps({"data": {"row_limit": 128}}),
+                encoding="utf-8",
+            )
+
+            row_limit = read_manifest_row_limit(tmp_path)
+
+        self.assertEqual(row_limit, 128)
+
+    def test_resume_row_limit_must_match_manifest_when_explicit(self) -> None:
+        self.assertEqual(resolve_resume_row_limit(None, 128), 128)
+        self.assertEqual(resolve_resume_row_limit(128, 128), 128)
+        with self.assertRaisesRegex(ValueError, "resume row_limit"):
+            resolve_resume_row_limit(256, 128)
+
+    def test_formal_training_result_format(self) -> None:
+        result = FormalTrainingRunResult(
+            config_path=Path("training.json"),
+            segments_path=Path("segments.csv"),
+            glossary_path=Path("glossary.csv"),
+            model_name="facebook/nllb-200-distilled-600M",
+            output_dir=Path("fine-tuned-models/model/runs/run-test"),
+            manifest_path=Path("fine-tuned-models/model/runs/run-test/run_manifest.json"),
+            train_split_path=Path("fine-tuned-models/model/runs/run-test/splits/train.csv"),
+            validation_split_path=Path("fine-tuned-models/model/runs/run-test/splits/validation.csv"),
+            source_code="zho_Hans",
+            target_code="kor_Hang",
+            target_language_token_id=256098,
+            special_tokens_added=2,
+            tokenizer_vocab_size=256206,
+            embedding_size_before=256204,
+            embedding_size_after=256206,
+            parameter_count=615000000,
+            device="cuda",
+            cuda_device_name="NVIDIA Test GPU",
+            cuda_memory_summary="allocated_gb=2.00;reserved_gb=4.00",
+            torch_dtype="float32+bf16_trainer",
+            max_length=400,
+            total_rows=75462,
+            row_limit=128,
+            train_rows=103,
+            validation_rows=25,
+            tokenized_train_rows=103,
+            tokenized_validation_rows=25,
+            input_shape="103 x 400",
+            label_shape="103 x 400",
+            max_steps=4,
+            save_steps=2,
+            save_total_limit=2,
+            logging_steps=1,
+            resume_checkpoint=Path("fine-tuned-models/model/runs/run-test/checkpoint-2"),
+            checkpoint_paths=[
+                Path("fine-tuned-models/model/runs/run-test/checkpoint-2"),
+                Path("fine-tuned-models/model/runs/run-test/checkpoint-4"),
+            ],
+            train_loss=12.5,
+            eval_loss=11.5,
+            final_global_step=4,
+        )
+
+        formatted = format_formal_training_run(result)
+
+        self.assertIn("Real NLLB formal training run result", formatted)
+        self.assertIn("manifest=fine-tuned-models", formatted)
+        self.assertIn("train_split=fine-tuned-models", formatted)
+        self.assertIn("row_limit=128", formatted)
+        self.assertIn("eval_loss=11.5", formatted)
+
     def test_real_model_pilot_training_result_format(self) -> None:
         result = RealModelPilotTrainingResult(
             config_path=Path("training.json"),
@@ -417,6 +545,11 @@ def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> 
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
+
+
+def read_csv_rows(path: Path) -> list[dict[str, str]]:
+    with path.open(encoding="utf-8", newline="") as f:
+        return list(csv.DictReader(f))
 
 
 def build_training_config(segments_path: Path, glossary_path: Path) -> dict[str, object]:

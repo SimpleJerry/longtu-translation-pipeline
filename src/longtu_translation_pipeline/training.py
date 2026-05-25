@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import csv
+import importlib.metadata
+import json
 import random
+import subprocess
 from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
@@ -145,6 +148,48 @@ class RealModelPilotTrainingResult:
     checkpoint_paths: list[Path]
     first_stage_loss: float | None
     final_train_loss: float | None
+    final_global_step: int
+
+
+@dataclass(frozen=True)
+class FormalTrainingRunResult:
+    config_path: Path
+    segments_path: Path
+    glossary_path: Path
+    model_name: str
+    output_dir: Path
+    manifest_path: Path
+    train_split_path: Path
+    validation_split_path: Path
+    source_code: str
+    target_code: str
+    target_language_token_id: int
+    special_tokens_added: int
+    tokenizer_vocab_size: int
+    embedding_size_before: int
+    embedding_size_after: int
+    parameter_count: int
+    device: str
+    cuda_device_name: str
+    cuda_memory_summary: str
+    torch_dtype: str
+    max_length: int
+    total_rows: int
+    row_limit: int | None
+    train_rows: int
+    validation_rows: int
+    tokenized_train_rows: int
+    tokenized_validation_rows: int
+    input_shape: str
+    label_shape: str
+    max_steps: int
+    save_steps: int
+    save_total_limit: int
+    logging_steps: int
+    resume_checkpoint: Path | None
+    checkpoint_paths: list[Path]
+    train_loss: float | None
+    eval_loss: float | None
     final_global_step: int
 
 
@@ -483,6 +528,174 @@ def run_real_nllb_pilot_training(
     )
 
 
+def run_real_nllb_formal_training(
+    config: TrainingConfig,
+    run_dir: str | Path | None = None,
+    run_name: str | None = None,
+    row_limit: int | None = None,
+    max_steps: int = 4,
+    save_steps: int = 2,
+    save_total_limit: int = 2,
+    logging_steps: int = 1,
+    device: str = "auto",
+    resume_from_checkpoint: str | Path | None = None,
+    command: Sequence[str] | None = None,
+    repo_root: str | Path | None = None,
+) -> FormalTrainingRunResult:
+    if row_limit is not None and row_limit <= 0:
+        raise ValueError("row_limit must be a positive integer when provided")
+    if max_steps <= 0:
+        raise ValueError("max_steps must be a positive integer")
+    if save_steps <= 0:
+        raise ValueError("save_steps must be a positive integer")
+    if save_total_limit <= 0:
+        raise ValueError("save_total_limit must be a positive integer")
+    if logging_steps <= 0:
+        raise ValueError("logging_steps must be a positive integer")
+
+    output_dir = resolve_formal_run_dir(config, run_dir=run_dir, run_name=run_name)
+    resolved_resume_checkpoint = resolve_resume_checkpoint(output_dir, resume_from_checkpoint)
+    if resolved_resume_checkpoint is not None:
+        resume_step = checkpoint_step(resolved_resume_checkpoint)
+        if resume_step is not None and resume_step >= max_steps:
+            raise ValueError(
+                "resume checkpoint step must be smaller than max_steps: "
+                f"{resolved_resume_checkpoint} >= {max_steps}"
+            )
+    if resolved_resume_checkpoint is not None:
+        manifest_row_limit = read_manifest_row_limit(output_dir)
+        row_limit = resolve_resume_row_limit(row_limit, manifest_row_limit)
+
+    all_examples = read_training_examples(config)
+    selected_examples = all_examples[:row_limit] if row_limit is not None else all_examples
+    if len(selected_examples) < 2:
+        raise ValueError("Formal training requires at least two selected rows for train/validation split")
+
+    train_examples, validation_examples = split_examples(
+        selected_examples,
+        config.split.validation_ratio,
+        config.split.seed,
+    )
+    if not validation_examples:
+        raise ValueError("Formal training requires a non-empty validation split")
+
+    prepare_run_output_dir(output_dir, resume=resolved_resume_checkpoint is not None)
+    train_split_path, validation_split_path = write_split_artifacts(
+        output_dir,
+        train_examples,
+        validation_examples,
+        id_column=config.data.id_column,
+        source_column=config.data.source_column,
+        target_column=config.data.target_column,
+    )
+
+    tokenizer = load_nllb_tokenizer(config)
+    special_tokens_added = add_marker_special_tokens(tokenizer)
+    target_language_token_id = tokenizer.convert_tokens_to_ids(config.language.target_code)
+    if target_language_token_id is None or target_language_token_id < 0:
+        raise ValueError(f"Tokenizer does not know target language code: {config.language.target_code}")
+
+    marked_train_examples = apply_optional_terminology_markers(train_examples, config)
+    marked_validation_examples = apply_optional_terminology_markers(validation_examples, config)
+    tokenized_train_examples = tokenize_training_examples(config, tokenizer, marked_train_examples)
+    tokenized_validation_examples = tokenize_training_examples(config, tokenizer, marked_validation_examples)
+    train_dataset = TorchTrainingDataset(tokenized_train_examples)
+    validation_dataset = TorchTrainingDataset(tokenized_validation_examples)
+
+    from transformers import AutoModelForSeq2SeqLM
+
+    training_device = resolve_training_device(device)
+    precision_mode = resolve_trainer_precision(training_device)
+    torch_dtype = "float32"
+    if precision_mode != "fp32":
+        torch_dtype = f"float32+{precision_mode}_trainer"
+
+    model = AutoModelForSeq2SeqLM.from_pretrained(config.model.base_model)
+    embedding_size_before = model.get_input_embeddings().num_embeddings
+    model.resize_token_embeddings(len(tokenizer))
+    embedding_size_after = model.get_input_embeddings().num_embeddings
+    parameter_count = sum(parameter.numel() for parameter in model.parameters())
+
+    trainer = build_trainer(
+        model=model,
+        dataset=train_dataset,
+        output_dir=output_dir,
+        max_steps=max_steps,
+        use_cpu=training_device == "cpu",
+        fp16=precision_mode == "fp16",
+        bf16=precision_mode == "bf16",
+        save_strategy="steps",
+        save_steps=save_steps,
+        save_total_limit=save_total_limit,
+        logging_strategy="steps",
+        logging_steps=logging_steps,
+        eval_dataset=validation_dataset,
+        eval_strategy="steps",
+        eval_steps=save_steps,
+        per_device_train_batch_size=config.training.per_device_train_batch_size,
+        per_device_eval_batch_size=config.training.per_device_eval_batch_size,
+    )
+    train_result = trainer.train(
+        resume_from_checkpoint=str(resolved_resume_checkpoint)
+        if resolved_resume_checkpoint is not None
+        else None
+    )
+    eval_loss = find_last_log_value(trainer.state.log_history, "eval_loss")
+
+    checkpoint_paths = list_checkpoint_paths(output_dir)
+    input_shape = shape_text([example.input_ids for example in tokenized_train_examples])
+    label_shape = shape_text([example.labels for example in tokenized_train_examples])
+    manifest_path = output_dir / "run_manifest.json"
+    result = FormalTrainingRunResult(
+        config_path=config.path,
+        segments_path=config.data.segments_path,
+        glossary_path=config.data.glossary_path,
+        model_name=config.model.base_model,
+        output_dir=output_dir,
+        manifest_path=manifest_path,
+        train_split_path=train_split_path,
+        validation_split_path=validation_split_path,
+        source_code=config.language.source_code,
+        target_code=config.language.target_code,
+        target_language_token_id=int(target_language_token_id),
+        special_tokens_added=special_tokens_added,
+        tokenizer_vocab_size=len(tokenizer),
+        embedding_size_before=embedding_size_before,
+        embedding_size_after=embedding_size_after,
+        parameter_count=parameter_count,
+        device=training_device,
+        cuda_device_name=cuda_device_name(training_device),
+        cuda_memory_summary=cuda_memory_summary(training_device),
+        torch_dtype=torch_dtype,
+        max_length=config.tokenization.max_length,
+        total_rows=len(all_examples),
+        row_limit=row_limit,
+        train_rows=len(train_examples),
+        validation_rows=len(validation_examples),
+        tokenized_train_rows=len(tokenized_train_examples),
+        tokenized_validation_rows=len(tokenized_validation_examples),
+        input_shape=input_shape,
+        label_shape=label_shape,
+        max_steps=max_steps,
+        save_steps=save_steps,
+        save_total_limit=save_total_limit,
+        logging_steps=logging_steps,
+        resume_checkpoint=resolved_resume_checkpoint,
+        checkpoint_paths=checkpoint_paths,
+        train_loss=float(train_result.training_loss)
+        if train_result.training_loss is not None
+        else None,
+        eval_loss=eval_loss,
+        final_global_step=int(trainer.state.global_step),
+    )
+    write_run_manifest(
+        result,
+        command=command,
+        repo_root=Path(repo_root) if repo_root is not None else None,
+    )
+    return result
+
+
 def read_training_examples(config: TrainingConfig) -> list[TrainingExample]:
     return read_segment_examples(
         config.data.segments_path,
@@ -678,13 +891,19 @@ def build_trainer(
     logging_strategy: str = "no",
     logging_steps: int | None = None,
     stop_after_steps: int | None = None,
+    eval_dataset: Any | None = None,
+    eval_strategy: str = "no",
+    eval_steps: int | None = None,
+    per_device_train_batch_size: int = 1,
+    per_device_eval_batch_size: int = 1,
 ) -> Any:
     from transformers import Trainer, TrainerCallback, TrainingArguments
 
     training_kwargs: dict[str, Any] = {
         "output_dir": str(output_dir),
         "max_steps": max_steps,
-        "per_device_train_batch_size": 1,
+        "per_device_train_batch_size": per_device_train_batch_size,
+        "per_device_eval_batch_size": per_device_eval_batch_size,
         "report_to": "none",
         "save_strategy": save_strategy,
         "logging_strategy": logging_strategy,
@@ -702,6 +921,11 @@ def build_trainer(
         training_kwargs["save_total_limit"] = save_total_limit
     if logging_steps is not None:
         training_kwargs["logging_steps"] = logging_steps
+    if eval_dataset is not None and eval_strategy != "no":
+        training_kwargs["do_eval"] = True
+        training_kwargs["eval_strategy"] = eval_strategy
+    if eval_steps is not None:
+        training_kwargs["eval_steps"] = eval_steps
 
     callbacks = []
     if stop_after_steps is not None:
@@ -722,6 +946,7 @@ def build_trainer(
         model=model,
         args=training_args,
         train_dataset=dataset,
+        eval_dataset=eval_dataset,
         callbacks=callbacks,
     )
 
@@ -741,6 +966,140 @@ def resolve_pilot_output_dir(
         candidate = base_dir.with_name(f"{base_dir.name}-{index}")
         index += 1
     return candidate
+
+
+def resolve_formal_run_dir(
+    config: TrainingConfig,
+    run_dir: str | Path | None = None,
+    run_name: str | None = None,
+) -> Path:
+    if run_dir is not None:
+        return Path(run_dir)
+
+    runs_dir = config.model.output_dir / "runs"
+    if run_name:
+        return runs_dir / run_name
+
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    base_dir = runs_dir / f"run-{timestamp}"
+    candidate = base_dir
+    index = 2
+    while candidate.exists():
+        candidate = base_dir.with_name(f"{base_dir.name}-{index}")
+        index += 1
+    return candidate
+
+
+def prepare_run_output_dir(output_dir: Path, resume: bool) -> None:
+    if resume:
+        if not output_dir.exists():
+            raise ValueError(f"Cannot resume because run directory does not exist: {output_dir}")
+        return
+
+    if output_dir.exists() and any(output_dir.iterdir()):
+        raise ValueError(f"Run directory already exists and is not empty: {output_dir}")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+
+def resolve_resume_checkpoint(
+    output_dir: Path,
+    resume_from_checkpoint: str | Path | None,
+) -> Path | None:
+    if resume_from_checkpoint is None:
+        return None
+
+    if str(resume_from_checkpoint) == "latest":
+        checkpoint = find_latest_checkpoint(output_dir)
+        if checkpoint is None:
+            raise ValueError(f"No checkpoint found for resume in {output_dir}")
+        return checkpoint
+
+    checkpoint = Path(resume_from_checkpoint)
+    if not checkpoint.is_absolute() and not checkpoint.exists():
+        candidate = output_dir / checkpoint
+        if candidate.exists():
+            checkpoint = candidate
+    if not checkpoint.exists() or not checkpoint.is_dir():
+        raise ValueError(f"Resume checkpoint does not exist or is not a directory: {checkpoint}")
+    return checkpoint
+
+
+def checkpoint_step(checkpoint_path: Path) -> int | None:
+    if not checkpoint_path.name.startswith("checkpoint-"):
+        return None
+    step_text = checkpoint_path.name[len("checkpoint-") :]
+    try:
+        return int(step_text)
+    except ValueError:
+        return None
+
+
+def read_manifest_row_limit(output_dir: Path) -> int | None:
+    manifest_path = output_dir / "run_manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    row_limit = data.get("data", {}).get("row_limit")
+    if isinstance(row_limit, bool):
+        return None
+    if isinstance(row_limit, int) and row_limit > 0:
+        return row_limit
+    return None
+
+
+def resolve_resume_row_limit(
+    requested_row_limit: int | None,
+    manifest_row_limit: int | None,
+) -> int | None:
+    if requested_row_limit is None:
+        return manifest_row_limit
+    if manifest_row_limit is not None and requested_row_limit != manifest_row_limit:
+        raise ValueError(
+            "resume row_limit must match the existing run manifest: "
+            f"{requested_row_limit} != {manifest_row_limit}"
+        )
+    return requested_row_limit
+
+
+def write_split_artifacts(
+    output_dir: Path,
+    train_examples: Sequence[TrainingExample],
+    validation_examples: Sequence[TrainingExample],
+    id_column: str,
+    source_column: str,
+    target_column: str,
+) -> tuple[Path, Path]:
+    split_dir = output_dir / "splits"
+    split_dir.mkdir(parents=True, exist_ok=True)
+    train_path = split_dir / "train.csv"
+    validation_path = split_dir / "validation.csv"
+    write_examples_csv(train_path, train_examples, id_column, source_column, target_column)
+    write_examples_csv(validation_path, validation_examples, id_column, source_column, target_column)
+    return train_path, validation_path
+
+
+def write_examples_csv(
+    path: Path,
+    examples: Sequence[TrainingExample],
+    id_column: str,
+    source_column: str,
+    target_column: str,
+) -> None:
+    fieldnames = [id_column, source_column, target_column]
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for example in examples:
+            writer.writerow(
+                {
+                    id_column: example.segment_id,
+                    source_column: example.source_text,
+                    target_column: example.target_text,
+                }
+            )
 
 
 def list_checkpoint_paths(output_dir: str | Path) -> list[Path]:
@@ -837,6 +1196,129 @@ def shape_text(batch: Sequence[Sequence[int]]) -> str:
     if not batch:
         return "0 x 0"
     return f"{len(batch)} x {len(batch[0])}"
+
+
+def write_run_manifest(
+    result: FormalTrainingRunResult,
+    command: Sequence[str] | None = None,
+    repo_root: Path | None = None,
+) -> None:
+    manifest = {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "command": list(command) if command is not None else [],
+        "git": collect_git_info(repo_root),
+        "config": {
+            "path": str(result.config_path),
+            "segments_path": str(result.segments_path),
+            "glossary_path": str(result.glossary_path),
+        },
+        "data": {
+            "total_rows": result.total_rows,
+            "row_limit": result.row_limit,
+            "train_rows": result.train_rows,
+            "validation_rows": result.validation_rows,
+            "train_split_path": str(result.train_split_path),
+            "validation_split_path": str(result.validation_split_path),
+        },
+        "model": {
+            "name": result.model_name,
+            "output_dir": str(result.output_dir),
+            "parameter_count": result.parameter_count,
+            "embedding_size_before": result.embedding_size_before,
+            "embedding_size_after": result.embedding_size_after,
+        },
+        "language": {
+            "source_code": result.source_code,
+            "target_code": result.target_code,
+            "target_language_token_id": result.target_language_token_id,
+        },
+        "tokenization": {
+            "max_length": result.max_length,
+            "special_tokens_added": result.special_tokens_added,
+            "tokenizer_vocab_size": result.tokenizer_vocab_size,
+            "input_shape": result.input_shape,
+            "label_shape": result.label_shape,
+        },
+        "checkpoint_policy": {
+            "save_strategy": "steps",
+            "save_steps": result.save_steps,
+            "save_total_limit": result.save_total_limit,
+            "resume_from_checkpoint": str(result.resume_checkpoint)
+            if result.resume_checkpoint is not None
+            else None,
+            "checkpoint_paths": [str(path) for path in result.checkpoint_paths],
+        },
+        "training": {
+            "max_steps": result.max_steps,
+            "logging_steps": result.logging_steps,
+            "final_global_step": result.final_global_step,
+            "train_loss": result.train_loss,
+            "eval_loss": result.eval_loss,
+            "device": result.device,
+            "cuda_device_name": result.cuda_device_name,
+            "cuda_memory_summary": result.cuda_memory_summary,
+            "torch_dtype": result.torch_dtype,
+        },
+        "dependencies": dependency_versions(
+            [
+                "torch",
+                "transformers",
+                "accelerate",
+                "tokenizers",
+                "sentencepiece",
+            ]
+        ),
+    }
+    result.manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def collect_git_info(repo_root: Path | None) -> dict[str, str]:
+    if repo_root is None:
+        return {"branch": "unknown", "commit": "unknown"}
+    return {
+        "branch": run_git_text(repo_root, ["rev-parse", "--abbrev-ref", "HEAD"]),
+        "commit": run_git_text(repo_root, ["rev-parse", "HEAD"]),
+    }
+
+
+def run_git_text(repo_root: Path, args: Sequence[str]) -> str:
+    safe_directory = str(repo_root).replace("\\", "/")
+    try:
+        completed = subprocess.run(
+            ["git", "-c", f"safe.directory={safe_directory}", "-C", str(repo_root), *args],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+    except OSError:
+        return "unknown"
+    if completed.returncode != 0:
+        return "unknown"
+    return completed.stdout.strip() or "unknown"
+
+
+def dependency_versions(names: Sequence[str]) -> dict[str, str]:
+    versions: dict[str, str] = {}
+    for name in names:
+        try:
+            versions[name] = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            versions[name] = "not_installed"
+    return versions
+
+
+def find_last_log_value(log_history: Sequence[dict[str, Any]], key: str) -> float | None:
+    for item in reversed(log_history):
+        if key not in item:
+            continue
+        value = item[key]
+        if isinstance(value, (int, float)):
+            return float(value)
+    return None
 
 
 def split_examples(
@@ -1000,6 +1482,49 @@ def format_real_model_pilot_training(result: RealModelPilotTrainingResult) -> st
         f"checkpoint_paths={';'.join(str(path) for path in result.checkpoint_paths)}",
         f"first_stage_loss={result.first_stage_loss}",
         f"final_train_loss={result.final_train_loss}",
+        f"final_global_step={result.final_global_step}",
+    ]
+    return "\n".join(lines)
+
+
+def format_formal_training_run(result: FormalTrainingRunResult) -> str:
+    lines = [
+        "Real NLLB formal training run result",
+        f"config={result.config_path}",
+        f"segments={result.segments_path}",
+        f"glossary={result.glossary_path}",
+        f"model={result.model_name}",
+        f"output_dir={result.output_dir}",
+        f"manifest={result.manifest_path}",
+        f"train_split={result.train_split_path}",
+        f"validation_split={result.validation_split_path}",
+        f"language_pair={result.source_code}->{result.target_code}",
+        f"target_language_token_id={result.target_language_token_id}",
+        f"special_tokens_added={result.special_tokens_added}",
+        f"tokenizer_vocab_size={result.tokenizer_vocab_size}",
+        f"embedding_size_before={result.embedding_size_before}",
+        f"embedding_size_after={result.embedding_size_after}",
+        f"parameter_count={result.parameter_count}",
+        f"device={result.device}",
+        f"cuda_device_name={result.cuda_device_name}",
+        f"cuda_memory_summary={result.cuda_memory_summary}",
+        f"torch_dtype={result.torch_dtype}",
+        f"total_rows={result.total_rows}",
+        f"row_limit={result.row_limit}",
+        f"train_rows={result.train_rows}",
+        f"validation_rows={result.validation_rows}",
+        f"tokenized_train_rows={result.tokenized_train_rows}",
+        f"tokenized_validation_rows={result.tokenized_validation_rows}",
+        f"input_shape={result.input_shape}",
+        f"label_shape={result.label_shape}",
+        f"max_steps={result.max_steps}",
+        f"save_steps={result.save_steps}",
+        f"save_total_limit={result.save_total_limit}",
+        f"logging_steps={result.logging_steps}",
+        f"resume_checkpoint={result.resume_checkpoint}",
+        f"checkpoint_paths={';'.join(str(path) for path in result.checkpoint_paths)}",
+        f"train_loss={result.train_loss}",
+        f"eval_loss={result.eval_loss}",
         f"final_global_step={result.final_global_step}",
     ]
     return "\n".join(lines)

@@ -121,6 +121,13 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Impact Scope:** `configs/evaluation/generation_report.json`, `src/longtu_translation_pipeline/evaluation.py`, `scripts/evaluate_translation.py`, README workflow notes.
 - **Follow-up Notes:** Use this report format for pilot and future validation outputs. Full-run quality conclusions require a real training run, fixed validation split, and a selected checkpoint.
 
+## 2026-05-25: Formal Training Runs Require Split Artifacts And Manifests
+
+- **Decision:** Formal training must run through `scripts/train_model.py --train`, write fixed train/validation split CSVs, and record `run_manifest.json` inside an ignored `fine-tuned-models/.../runs/run-*` directory.
+- **Background:** Pilot training verified checkpoints and resume, but it did not provide enough metadata or split stability for a future full run to be reproducible.
+- **Impact Scope:** `scripts/train_model.py`, `src/longtu_translation_pipeline/training.py`, local fine-tuned model directories, README workflow notes, future RF-006-P8 validation generation.
+- **Follow-up Notes:** Resume commands inherit the existing manifest row limit, explicit resume row limits must match the manifest, and checkpoint steps must be smaller than the requested `max_steps`. Validation generation should consume the fixed run split in a later RF-006 phase.
+
 ## 2026-05-24: Evaluation Uses BLEU and Glossary Preservation Only
 
 - **Decision:** RF-007 evaluation automates corpus BLEU and glossary preservation for the simplified `<start>...<end>` marker policy. Code-token preservation is not part of the current evaluation mainline.
