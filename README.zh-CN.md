@@ -61,6 +61,7 @@
 | `configs/glossary/` | glossary 清洗的 seed、词表和规则配置。 |
 | `configs/segments/` | segments 清洗的结构化字符串拆分、term/entity seed 和语义阈值配置。 |
 | `configs/training/default.json` | RF-006 第一阶段训练配置，声明数据路径、语言码、模型名、输出目录和基础训练参数。 |
+| `configs/training/full_10k.json` | 首轮 full-data 10k 训练 profile，显式声明步数、checkpoint、eval 和优化器参数。 |
 | `configs/inference/default.json` | RF-006 第一阶段推理配置，声明模型路径、输入/输出路径、语言码和生成参数。 |
 | `configs/evaluation/default.json` | RF-007 评估配置，声明翻译结果 CSV、glossary、BLEU 口径和本地报告目录。 |
 | `scripts/glossary_semantic_pipeline.py` | 本地 glossary semantic 清洗 pipeline，使用 Stanza、jieba、kiwipiepy、wordfreq 与 `BAAI/bge-m3`。 |
@@ -139,7 +140,7 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 该 pipeline 会先剥离 `<c=...>` 等表现层样式标签并解开对称外层包装，再使用 Stanza、jieba、kiwipiepy 和 `BAAI/bge-m3` 判断 term/entity-like segment；placeholder 行默认保留，只做 mismatch 审计。该命令不会改写 `data/segments.csv`，只会在本地 `data/review/segments/` 下生成审计 CSV。人工确认后再使用 `--apply` 重写最终语料。
 
-训练/推理工程入口目前处于 RF-006 的 smoke-test / pilot / 正式 run 硬化阶段：dry-run 只做配置读取、数据校验和 train/valid 计划。RF-006-P2 提供本地 tiny tokenizer smoke；RF-006-P3 使用真实 NLLB tokenizer 和随机初始化 tiny seq2seq model 跑 Trainer 1-step；RF-006-P4 使用真实 NLLB 模型权重跑 1-step smoke，用来验证 CUDA、special token resize、数据张量和 Trainer 链路；RF-006-P5 使用真实 NLLB 模型跑小步数 pilot training，用来验证 checkpoint 保存、resume、loss 和输出目录；RF-006-P6 加载 checkpoint 生成小样本翻译 CSV，并验证它能被 RF-007 评估入口读取；RF-007-P2 会把该 generation CSV 固定评估到报告目录，生成 summary、glossary rows、sample review 和 manifest。RF-006-P7 增加正式 `--train` 命令，会在 ignored 的 `fine-tuned-models/.../runs/run-*` 下写入固定 split artifact 和 `run_manifest.json`。RF-006-P8 会基于该固定 validation split 生成翻译 CSV，而不是使用 `data/segments.csv` 前 N 行。P4/P5/P6/P7/P8/P2 都是工程链路验证，直到显式启动 full training 之前不代表正式模型质量。
+训练/推理工程入口目前处于 RF-006 的 smoke-test / pilot / 正式 run 硬化阶段：dry-run 只做配置读取、数据校验和确定性的 train/validation/test 计划。RF-006-P7 会在 ignored 的 `fine-tuned-models/.../runs/run-*` 下写入固定 split artifact 和 `run_manifest.json`；RF-006-P10 将正式实验修正为 seed `42` 的 8:1:1 划分。validation 只用于训练期间 eval 和 checkpoint 观察，最终性能报告必须使用独立 test split。RF-006-P8 基于固定 validation split 生成翻译 CSV，`--generate-test` 基于固定 test split 生成最终评估 CSV。P4/P5/P6/P7/P8/P2 都是工程链路验证，直到显式启动 full training 之前不代表正式模型质量。
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
@@ -149,16 +150,19 @@ venv\Scripts\python.exe scripts\train_model.py --config configs\training\default
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --pilot-train --pilot-rows 64 --max-steps 4 --save-steps 2
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --train --limit-rows 128 --max-steps 4 --save-steps 2 --save-total-limit 2 --logging-steps 1
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --train --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-name --resume-from-checkpoint latest --max-steps 6 --save-steps 2 --save-total-limit 2 --logging-steps 1
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --train --run-name run-full-10k-corrected-v1
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate --model-path fine-tuned-models\nllb-200-distilled-600M\zh2ko\pilot\run-20260525-093832\checkpoint-4 --sample-rows 8
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate-validation --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-name
+venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate-test --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-full-10k-corrected-v1
 ```
 
-如需评估已有翻译结果 CSV，使用 RF-007 评估入口。输入默认采用 notebook 旧输出列名：`source`、`references`、`candidates`。BLEU 默认按韩文空格词分词，glossary preservation 会去除候选译文中的 `<start>...<end>` marker 后检查韩文术语是否出现。
+如需评估已有翻译结果 CSV，使用 RF-007 评估入口。输入默认采用 notebook 旧输出列名：`source`、`references`、`candidates`。BLEU 默认按韩文空格词分词，glossary preservation 会去除候选译文中的 `<start>...<end>` marker 后检查韩文术语是否出现。模型生成的空 `candidates` 会作为评估结果中的 `empty_candidate_rows` 记录，而不是让报告中断。
 
 ```powershell
 venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\default.json --input translation_result.csv
 venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint fine-tuned-models\nllb-200-distilled-600M\zh2ko\pilot\run-20260525-093832\checkpoint-4
+venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --input data\review\inference\test\run-full-10k-corrected-v1\test_generated.csv --report-dir data\review\evaluation\test_report\run-full-10k-corrected-v1 --checkpoint fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-full-10k-corrected-v1\checkpoint-10000
 ```
 
 训练 notebook 中的语言列按 NLLB 语言代码转换：

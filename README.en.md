@@ -61,6 +61,7 @@ This README documents the repository as it exists today. The project is still cl
 | `configs/glossary/` | Seeds, lexicons, and rules for glossary cleanup. |
 | `configs/segments/` | Structured-string splitting, term/entity seeds, and semantic thresholds for segment cleanup. |
 | `configs/training/default.json` | RF-006 phase 1 training config for data paths, language codes, model name, output directory, and basic training parameters. |
+| `configs/training/full_10k.json` | First full-data 10k training profile with explicit step, checkpoint, eval, and optimizer settings. |
 | `configs/inference/default.json` | RF-006 phase 1 inference config for model path, input/output paths, language codes, and generation parameters. |
 | `configs/evaluation/default.json` | RF-007 evaluation config for translation-result CSVs, glossary path, BLEU settings, and local report output. |
 | `scripts/glossary_semantic_pipeline.py` | Local glossary semantic cleanup pipeline using Stanza, jieba, kiwipiepy, wordfreq, and `BAAI/bge-m3`. |
@@ -139,7 +140,7 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 This pipeline first strips presentation tags such as `<c=...>` and unwraps symmetric outer wrappers, then uses Stanza, jieba, kiwipiepy, and `BAAI/bge-m3` to score term/entity-like segments. Placeholder rows are kept by default and only audited for mismatch. The command does not rewrite `data/segments.csv`; it only writes local audit CSVs under `data/review/segments/`. Use `--apply` only after manual review.
 
-The training/inference engineering entry points are currently in the RF-006 smoke-test/pilot/formal-run hardening phase. Dry-run reads config, validates data, and plans train/validation counts. RF-006-P2 adds a local tiny-tokenizer smoke test; RF-006-P3 uses the real NLLB tokenizer and a randomly initialized tiny seq2seq model for a one-step Trainer smoke test; RF-006-P4 uses real NLLB model weights for a one-step smoke test to validate CUDA, special-token resize, data tensors, and Trainer wiring; RF-006-P5 runs a small real-model pilot training job to validate checkpoint saving, resume, loss logging, and output directories; RF-006-P6 loads a checkpoint, writes a sample generation CSV, and verifies the RF-007-compatible evaluation schema. RF-007-P2 evaluates that generation CSV into a fixed report directory with summary, glossary rows, sample review, and manifest files. RF-006-P7 adds a formal `--train` command that writes fixed split artifacts and `run_manifest.json` under ignored `fine-tuned-models/.../runs/run-*`. RF-006-P8 generates translation CSVs from that fixed validation split instead of the first N rows of `data/segments.csv`. P4/P5/P6/P7/P8/P2 are engineering-chain checks until a full training run is explicitly started.
+The training/inference engineering entry points are currently in the RF-006 smoke-test/pilot/formal-run hardening phase. Dry-run reads config, validates data, and plans deterministic train/validation/test counts. RF-006-P7 writes fixed split artifacts and `run_manifest.json` under ignored `fine-tuned-models/.../runs/run-*`; RF-006-P10 corrects formal experiments to an 8:1:1 split with seed `42`. Validation is used for training-time eval and checkpoint observation only. Final performance reports must use the held-out test split. RF-006-P8 generates translation CSVs from the fixed validation split, and `--generate-test` generates final-evaluation CSVs from the fixed test split. P4/P5/P6/P7/P8/P2 are engineering-chain checks until a full training run is explicitly started.
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
@@ -149,16 +150,19 @@ venv\Scripts\python.exe scripts\train_model.py --config configs\training\default
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --pilot-train --pilot-rows 64 --max-steps 4 --save-steps 2
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --train --limit-rows 128 --max-steps 4 --save-steps 2 --save-total-limit 2 --logging-steps 1
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --train --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-name --resume-from-checkpoint latest --max-steps 6 --save-steps 2 --save-total-limit 2 --logging-steps 1
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --train --run-name run-full-10k-corrected-v1
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate --model-path fine-tuned-models\nllb-200-distilled-600M\zh2ko\pilot\run-20260525-093832\checkpoint-4 --sample-rows 8
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate-validation --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-name
+venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate-test --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-full-10k-corrected-v1
 ```
 
-To evaluate an existing translation-result CSV, use the RF-007 evaluation entry point. Input uses the historical notebook output columns: `source`, `references`, and `candidates`. BLEU defaults to Korean whitespace tokenization, and glossary preservation strips `<start>...<end>` markers from candidate text before checking Korean term presence.
+To evaluate an existing translation-result CSV, use the RF-007 evaluation entry point. Input uses the historical notebook output columns: `source`, `references`, and `candidates`. BLEU defaults to Korean whitespace tokenization, and glossary preservation strips `<start>...<end>` markers from candidate text before checking Korean term presence. Empty generated `candidates` are reported as `empty_candidate_rows` instead of stopping the report.
 
 ```powershell
 venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\default.json --input translation_result.csv
 venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint fine-tuned-models\nllb-200-distilled-600M\zh2ko\pilot\run-20260525-093832\checkpoint-4
+venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --input data\review\inference\test\run-full-10k-corrected-v1\test_generated.csv --report-dir data\review\evaluation\test_report\run-full-10k-corrected-v1 --checkpoint fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-full-10k-corrected-v1\checkpoint-10000
 ```
 
 Training notebooks convert language columns to NLLB language codes:

@@ -38,7 +38,9 @@ class TrainingModelConfig:
 
 @dataclass(frozen=True)
 class SplitConfig:
+    train_ratio: float
     validation_ratio: float
+    test_ratio: float
     seed: int
 
 
@@ -53,8 +55,18 @@ class TokenizationConfig:
 @dataclass(frozen=True)
 class TrainingArgumentsConfig:
     num_train_epochs: float
+    max_steps: int | None
     per_device_train_batch_size: int
     per_device_eval_batch_size: int
+    gradient_accumulation_steps: int
+    learning_rate: float | None
+    warmup_ratio: float
+    weight_decay: float
+    max_grad_norm: float | None
+    save_steps: int | None
+    eval_steps: int | None
+    save_total_limit: int | None
+    logging_steps: int | None
 
 
 @dataclass(frozen=True)
@@ -161,9 +173,10 @@ def load_training_config(path: str | Path, base_dir: str | Path | None = None) -
     training_section = require_mapping(data, "training", config_path)
     dry_run_section = require_mapping(data, "dry_run", config_path)
 
+    train_ratio = require_float(split_section, "train_ratio", config_path)
     validation_ratio = require_float(split_section, "validation_ratio", config_path)
-    if not 0 <= validation_ratio < 1:
-        raise ValueError(f"split.validation_ratio must be >= 0 and < 1: {config_path}")
+    test_ratio = require_float(split_section, "test_ratio", config_path)
+    validate_split_ratios(train_ratio, validation_ratio, test_ratio, config_path)
 
     return TrainingConfig(
         path=config_path,
@@ -189,7 +202,9 @@ def load_training_config(path: str | Path, base_dir: str | Path | None = None) -
             ),
         ),
         split=SplitConfig(
+            train_ratio=train_ratio,
             validation_ratio=validation_ratio,
+            test_ratio=test_ratio,
             seed=require_int(split_section, "seed", config_path),
         ),
         tokenization=TokenizationConfig(
@@ -198,19 +213,7 @@ def load_training_config(path: str | Path, base_dir: str | Path | None = None) -
             truncation=require_bool(tokenization_section, "truncation", config_path),
             terminology_markers=require_bool(tokenization_section, "terminology_markers", config_path),
         ),
-        training=TrainingArgumentsConfig(
-            num_train_epochs=require_positive_float(training_section, "num_train_epochs", config_path),
-            per_device_train_batch_size=require_positive_int(
-                training_section,
-                "per_device_train_batch_size",
-                config_path,
-            ),
-            per_device_eval_batch_size=require_positive_int(
-                training_section,
-                "per_device_eval_batch_size",
-                config_path,
-            ),
-        ),
+        training=load_training_arguments_config(training_section, config_path),
         dry_run=DryRunConfig(
             preview_rows=require_non_negative_int(dry_run_section, "preview_rows", config_path),
         ),
@@ -314,6 +317,69 @@ def load_language_config(data: JsonObject, path: Path) -> LanguageConfig:
     )
 
 
+def load_training_arguments_config(data: JsonObject, path: Path) -> TrainingArgumentsConfig:
+    warmup_ratio = optional_non_negative_float(data, "warmup_ratio", path, default=0.0)
+    if warmup_ratio >= 1:
+        raise ValueError(f"training.warmup_ratio must be >= 0 and < 1: {path}")
+
+    return TrainingArgumentsConfig(
+        num_train_epochs=require_positive_float(data, "num_train_epochs", path),
+        max_steps=optional_positive_int(data, "max_steps", path),
+        per_device_train_batch_size=require_positive_int(
+            data,
+            "per_device_train_batch_size",
+            path,
+        ),
+        per_device_eval_batch_size=require_positive_int(
+            data,
+            "per_device_eval_batch_size",
+            path,
+        ),
+        gradient_accumulation_steps=optional_positive_int(
+            data,
+            "gradient_accumulation_steps",
+            path,
+            default=1,
+        ),
+        learning_rate=optional_positive_float(data, "learning_rate", path),
+        warmup_ratio=warmup_ratio,
+        weight_decay=optional_non_negative_float(data, "weight_decay", path, default=0.0),
+        max_grad_norm=optional_positive_float(data, "max_grad_norm", path),
+        save_steps=optional_positive_int(data, "save_steps", path),
+        eval_steps=optional_positive_int(data, "eval_steps", path),
+        save_total_limit=optional_positive_int(data, "save_total_limit", path),
+        logging_steps=optional_positive_int(data, "logging_steps", path),
+    )
+
+
+def validate_split_ratios(
+    train_ratio: float,
+    validation_ratio: float,
+    test_ratio: float,
+    path: Path,
+) -> None:
+    ratios = {
+        "split.train_ratio": train_ratio,
+        "split.validation_ratio": validation_ratio,
+        "split.test_ratio": test_ratio,
+    }
+    for name, value in ratios.items():
+        if value < 0 or value >= 1:
+            raise ValueError(f"{name} must be >= 0 and < 1: {path}")
+    if train_ratio <= 0:
+        raise ValueError(f"split.train_ratio must be > 0: {path}")
+    if validation_ratio <= 0:
+        raise ValueError(f"split.validation_ratio must be > 0: {path}")
+    if test_ratio <= 0:
+        raise ValueError(f"split.test_ratio must be > 0: {path}")
+    total = train_ratio + validation_ratio + test_ratio
+    if abs(total - 1.0) > 1e-9:
+        raise ValueError(
+            "split.train_ratio + split.validation_ratio + split.test_ratio "
+            f"must equal 1.0: {path}"
+        )
+
+
 def resolve_config_path(value: str, base_dir: Path) -> Path:
     path = Path(value)
     if path.is_absolute():
@@ -380,4 +446,40 @@ def require_positive_float(data: JsonObject, key: str, path: Path) -> float:
     value = require_float(data, key, path)
     if value <= 0:
         raise ValueError(f"{key} must be a positive number: {path}")
+    return value
+
+
+def optional_positive_int(
+    data: JsonObject,
+    key: str,
+    path: Path,
+    default: int | None = None,
+) -> int | None:
+    if key not in data:
+        return default
+    return require_positive_int(data, key, path)
+
+
+def optional_positive_float(
+    data: JsonObject,
+    key: str,
+    path: Path,
+    default: float | None = None,
+) -> float | None:
+    if key not in data:
+        return default
+    return require_positive_float(data, key, path)
+
+
+def optional_non_negative_float(
+    data: JsonObject,
+    key: str,
+    path: Path,
+    default: float = 0.0,
+) -> float:
+    if key not in data:
+        return default
+    value = require_float(data, key, path)
+    if value < 0:
+        raise ValueError(f"{key} must be a non-negative number: {path}")
     return value

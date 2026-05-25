@@ -24,7 +24,29 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(config.data.target_column, "ko")
         self.assertEqual(config.language.source_code, "zho_Hans")
         self.assertEqual(config.language.target_code, "kor_Hang")
+        self.assertEqual(config.split.train_ratio, 0.8)
+        self.assertEqual(config.split.validation_ratio, 0.1)
+        self.assertEqual(config.split.test_ratio, 0.1)
         self.assertTrue(config.tokenization.terminology_markers)
+        self.assertIsNone(config.training.max_steps)
+
+    def test_full_10k_training_config_loads_profile_parameters(self) -> None:
+        config = load_training_config(ROOT / "configs" / "training" / "full_10k.json", base_dir=ROOT)
+
+        self.assertEqual(config.training.max_steps, 10000)
+        self.assertEqual(config.training.save_steps, 1000)
+        self.assertEqual(config.training.eval_steps, 5000)
+        self.assertEqual(config.training.save_total_limit, 6)
+        self.assertEqual(config.training.logging_steps, 100)
+        self.assertEqual(config.training.gradient_accumulation_steps, 1)
+        self.assertEqual(config.training.learning_rate, 0.00002)
+        self.assertEqual(config.training.warmup_ratio, 0.03)
+        self.assertEqual(config.training.weight_decay, 0.01)
+        self.assertEqual(config.training.max_grad_norm, 1.0)
+        self.assertEqual(config.split.train_ratio, 0.8)
+        self.assertEqual(config.split.validation_ratio, 0.1)
+        self.assertEqual(config.split.test_ratio, 0.1)
+        self.assertEqual(config.data.segments_path, ROOT / "data" / "segments.csv")
 
     def test_default_inference_config_loads(self) -> None:
         config = load_inference_config(ROOT / "configs" / "inference" / "default.json")
@@ -51,7 +73,12 @@ class ConfigTest(unittest.TestCase):
                         "base_model": "test-model",
                         "output_dir": "fine-tuned-models/test",
                     },
-                    "split": {"validation_ratio": 0.2, "seed": 42},
+                    "split": {
+                        "train_ratio": 0.8,
+                        "validation_ratio": 0.1,
+                        "test_ratio": 0.1,
+                        "seed": 42,
+                    },
                     "tokenization": {
                         "max_length": 32,
                         "padding": "max_length",

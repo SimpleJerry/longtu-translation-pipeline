@@ -39,6 +39,12 @@ class EvaluationTest(unittest.TestCase):
 
         self.assertAlmostEqual(result.score, 1.0)
 
+    def test_bleu_allows_empty_candidates_as_zero_length_outputs(self) -> None:
+        result = compute_corpus_bleu(["보스 도전"], [""], tokenization="whitespace")
+
+        self.assertEqual(result.candidate_length, 0)
+        self.assertEqual(result.score, 0.0)
+
     def test_glossary_preservation_counts_row_statuses(self) -> None:
         rows = [
             TranslationRow(1, "101", "挑战BOSS", "보스 도전", "보스 도전"),
@@ -183,6 +189,38 @@ class EvaluationTest(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "No translation rows found"):
                 evaluate_translation(load_evaluation_config(config_path))
+
+    def test_empty_candidate_is_reported_not_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_path = tmp_path / "generated.csv"
+            glossary_path = tmp_path / "glossary.csv"
+            config_path = tmp_path / "evaluation.json"
+            report_dir = tmp_path / "report"
+
+            write_csv(
+                input_path,
+                ["segment_id", "source", "references", "candidates"],
+                [{"segment_id": "1", "source": "挑战BOSS", "references": "보스 도전", "candidates": ""}],
+            )
+            write_csv(
+                glossary_path,
+                ["term_id", "zh-CN", "ko"],
+                [{"term_id": "1", "zh-CN": "BOSS", "ko": "보스"}],
+            )
+            write_config(config_path, input_path, glossary_path)
+
+            result = evaluate_translation(load_evaluation_config(config_path))
+            write_evaluation_reports(result, report_dir, sample_review_rows=1)
+            summary_rows = read_csv(report_dir / "evaluation_summary.csv")
+            review_rows = read_csv(report_dir / "sample_review.csv")
+
+        self.assertEqual(result.empty_candidate_rows, 1)
+        self.assertEqual(result.bleu.score, 0.0)
+        self.assertEqual(result.glossary.rows_not_matched, 1)
+        self.assertIn({"metric": "empty_candidate_rows", "value": "1"}, summary_rows)
+        self.assertEqual(review_rows[0]["segment_id"], "1")
+        self.assertEqual(review_rows[0]["candidates"], "")
 
 
 def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:

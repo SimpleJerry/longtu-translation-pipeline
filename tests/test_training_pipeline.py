@@ -36,7 +36,9 @@ from longtu_translation_pipeline.training import (  # noqa: E402
     list_checkpoint_paths,
     prepare_training_examples,
     read_manifest_row_limit,
+    run_real_nllb_formal_training,
     shape_text,
+    split_examples,
     tokenize_training_examples,
     write_split_artifacts,
 )
@@ -76,8 +78,9 @@ class TrainingPipelineTest(unittest.TestCase):
             second_plan = build_training_dry_run(config)
 
         self.assertEqual(first_plan.total_rows, 5)
-        self.assertEqual(first_plan.validation_rows, 2)
         self.assertEqual(first_plan.train_rows, 3)
+        self.assertEqual(first_plan.validation_rows, 1)
+        self.assertEqual(first_plan.test_rows, 1)
         self.assertEqual(first_plan.terminology_marker_scope, "preview_only")
         self.assertEqual(first_plan.preview_examples, second_plan.preview_examples)
         self.assertIn("terminology_marker_scope=preview_only", format_training_dry_run(first_plan))
@@ -388,13 +391,58 @@ class TrainingPipelineTest(unittest.TestCase):
 
         self.assertEqual(run_dir, tmp_path / "fine-tuned" / "runs" / "run-test")
 
-    def test_split_artifacts_write_raw_train_and_validation_rows(self) -> None:
+    def test_formal_training_requires_explicit_max_steps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            segments_path = tmp_path / "segments.csv"
+            glossary_path = tmp_path / "glossary.csv"
+            config_path = tmp_path / "training.json"
+            config_path.write_text(
+                json.dumps(build_training_config(segments_path, glossary_path), ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            config = load_training_config(config_path)
+
+        with self.assertRaisesRegex(ValueError, "requires max_steps"):
+            run_real_nllb_formal_training(config)
+
+    def test_split_examples_uses_deterministic_8_1_1_three_way_split(self) -> None:
+        examples = [
+            TrainingExample(str(index), f"zh-{index}", f"ko-{index}")
+            for index in range(10)
+        ]
+
+        first_train, first_validation, first_test = split_examples(
+            examples,
+            train_ratio=0.8,
+            validation_ratio=0.1,
+            test_ratio=0.1,
+            seed=42,
+        )
+        second_train, second_validation, second_test = split_examples(
+            examples,
+            train_ratio=0.8,
+            validation_ratio=0.1,
+            test_ratio=0.1,
+            seed=42,
+        )
+
+        self.assertEqual(len(first_train), 8)
+        self.assertEqual(len(first_validation), 1)
+        self.assertEqual(len(first_test), 1)
+        self.assertEqual(first_validation, second_validation)
+        self.assertEqual(first_test, second_test)
+        self.assertEqual(first_train, second_train)
+
+    def test_split_artifacts_write_raw_train_validation_and_test_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             output_dir = Path(tmp)
-            train_path, validation_path = write_split_artifacts(
+            train_path, validation_path, test_path = write_split_artifacts(
                 output_dir,
                 [TrainingExample("1", "打开神秘宝箱", "신비한 보물상자 열기")],
                 [TrainingExample("2", "领取奖励", "보상 수령")],
+                [TrainingExample("3", "挑战BOSS", "보스 도전")],
                 id_column="segment_id",
                 source_column="zh-CN",
                 target_column="ko",
@@ -402,10 +450,12 @@ class TrainingPipelineTest(unittest.TestCase):
 
             train_rows = read_csv_rows(train_path)
             validation_rows = read_csv_rows(validation_path)
+            test_rows = read_csv_rows(test_path)
 
         self.assertEqual(train_rows[0]["segment_id"], "1")
         self.assertEqual(train_rows[0]["zh-CN"], "打开神秘宝箱")
         self.assertEqual(validation_rows[0]["ko"], "보상 수령")
+        self.assertEqual(test_rows[0]["segment_id"], "3")
 
     def test_resolve_resume_checkpoint_accepts_latest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -449,6 +499,7 @@ class TrainingPipelineTest(unittest.TestCase):
             manifest_path=Path("fine-tuned-models/model/runs/run-test/run_manifest.json"),
             train_split_path=Path("fine-tuned-models/model/runs/run-test/splits/train.csv"),
             validation_split_path=Path("fine-tuned-models/model/runs/run-test/splits/validation.csv"),
+            test_split_path=Path("fine-tuned-models/model/runs/run-test/splits/test.csv"),
             source_code="zho_Hans",
             target_code="kor_Hang",
             target_language_token_id=256098,
@@ -464,16 +515,28 @@ class TrainingPipelineTest(unittest.TestCase):
             max_length=400,
             total_rows=75462,
             row_limit=128,
-            train_rows=103,
-            validation_rows=25,
-            tokenized_train_rows=103,
-            tokenized_validation_rows=25,
+            segments_sha256="ABCDEF",
+            split_seed=42,
+            train_ratio=0.8,
+            validation_ratio=0.1,
+            test_ratio=0.1,
+            train_rows=102,
+            validation_rows=12,
+            test_rows=14,
+            tokenized_train_rows=102,
+            tokenized_validation_rows=12,
             input_shape="103 x 400",
             label_shape="103 x 400",
             max_steps=4,
             save_steps=2,
+            eval_steps=2,
             save_total_limit=2,
             logging_steps=1,
+            gradient_accumulation_steps=1,
+            learning_rate=0.00002,
+            warmup_ratio=0.03,
+            weight_decay=0.01,
+            max_grad_norm=1.0,
             resume_checkpoint=Path("fine-tuned-models/model/runs/run-test/checkpoint-2"),
             checkpoint_paths=[
                 Path("fine-tuned-models/model/runs/run-test/checkpoint-2"),
@@ -489,7 +552,12 @@ class TrainingPipelineTest(unittest.TestCase):
         self.assertIn("Real NLLB formal training run result", formatted)
         self.assertIn("manifest=fine-tuned-models", formatted)
         self.assertIn("train_split=fine-tuned-models", formatted)
+        self.assertIn("test_split=fine-tuned-models", formatted)
         self.assertIn("row_limit=128", formatted)
+        self.assertIn("split_ratios=0.8:0.1:0.1", formatted)
+        self.assertIn("test_rows=14", formatted)
+        self.assertIn("eval_steps=2", formatted)
+        self.assertIn("learning_rate=2e-05", formatted)
         self.assertIn("eval_loss=11.5", formatted)
 
     def test_real_model_pilot_training_result_format(self) -> None:
@@ -563,7 +631,12 @@ def build_training_config(segments_path: Path, glossary_path: Path) -> dict[str,
         },
         "language": {"source_code": "zho_Hans", "target_code": "kor_Hang"},
         "model": {"base_model": "test-model", "output_dir": "out"},
-        "split": {"validation_ratio": 0.4, "seed": 7},
+        "split": {
+            "train_ratio": 0.6,
+            "validation_ratio": 0.2,
+            "test_ratio": 0.2,
+            "seed": 7,
+        },
         "tokenization": {
             "max_length": 32,
             "padding": "max_length",

@@ -15,11 +15,15 @@ from longtu_translation_pipeline.config import load_inference_config  # noqa: E4
 from longtu_translation_pipeline.inference import (  # noqa: E402
     GeneratedTranslationRow,
     InferenceGenerationResult,
+    TestGenerationResult,
     build_inference_dry_run,
+    default_test_output_path,
     default_validation_output_path,
     format_inference_generation,
+    format_test_generation,
     format_validation_generation,
     read_run_manifest,
+    read_test_records,
     read_validation_records,
     resolve_latest_run_checkpoint,
     resolve_manifest_path,
@@ -213,6 +217,36 @@ class InferencePipelineTest(unittest.TestCase):
         self.assertEqual(records[0].text, "挑战BOSS")
         self.assertEqual(records[0].reference, "보스 도전")
 
+    def test_test_split_can_be_read_from_run_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_dir = root / "fine-tuned-models" / "model" / "runs" / "run-test"
+            split_path = run_dir / "splits" / "test.csv"
+            split_path.parent.mkdir(parents=True)
+            write_csv(
+                split_path,
+                ["segment_id", "zh-CN", "ko"],
+                [{"segment_id": "9", "zh-CN": "领取奖励", "ko": "보상 수령"}],
+            )
+            manifest_path = run_dir / "run_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {"data": {"test_split_path": str(split_path.relative_to(root))}},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            manifest = read_run_manifest(manifest_path)
+            raw_path = require_manifest_string(manifest, ["data", "test_split_path"], manifest_path)
+            resolved = resolve_manifest_path(raw_path, run_dir=run_dir, repo_root=root)
+            records = read_test_records(resolved)
+
+        self.assertEqual(resolved, split_path)
+        self.assertEqual(records[0].record_id, "9")
+        self.assertEqual(records[0].text, "领取奖励")
+        self.assertEqual(records[0].reference, "보상 수령")
+
     def test_latest_run_checkpoint_uses_numeric_suffix(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             run_dir = Path(tmp)
@@ -240,6 +274,17 @@ class InferencePipelineTest(unittest.TestCase):
         self.assertEqual(
             output_path,
             Path("repo/data/review/inference/validation/run-test/validation_generated.csv"),
+        )
+
+    def test_default_test_output_path_contains_run_name(self) -> None:
+        root = Path("repo")
+        run_dir = Path("fine-tuned-models/model/runs/run-test")
+
+        output_path = default_test_output_path(root, run_dir)
+
+        self.assertEqual(
+            output_path,
+            Path("repo/data/review/inference/test/run-test/test_generated.csv"),
         )
 
     def test_validation_generation_manifest_records_paths(self) -> None:
@@ -274,6 +319,22 @@ class InferencePipelineTest(unittest.TestCase):
 
         self.assertIn("Validation generation result", formatted)
         self.assertIn("validation_split=fine-tuned-models", formatted)
+        self.assertIn("generation_manifest=data", formatted)
+        self.assertIn("output_columns=segment_id,source,references,candidates", formatted)
+
+    def test_test_generation_format_reports_manifest_and_schema(self) -> None:
+        result = TestGenerationResult(
+            generation=build_generation_result(Path("data/review/inference/test/run-test/test_generated.csv")),
+            run_dir=Path("fine-tuned-models/model/runs/run-test"),
+            training_manifest_path=Path("fine-tuned-models/model/runs/run-test/run_manifest.json"),
+            test_split_path=Path("fine-tuned-models/model/runs/run-test/splits/test.csv"),
+            generation_manifest_path=Path("data/review/inference/test/run-test/test_generation_manifest.json"),
+        )
+
+        formatted = format_test_generation(result)
+
+        self.assertIn("Test generation result", formatted)
+        self.assertIn("test_split=fine-tuned-models", formatted)
         self.assertIn("generation_manifest=data", formatted)
         self.assertIn("output_columns=segment_id,source,references,candidates", formatted)
 

@@ -74,6 +74,7 @@ class GlossaryPreservationResult:
 class EvaluationResult:
     input_path: Path
     row_count: int
+    empty_candidate_rows: int
     rows: list[TranslationRow]
     bleu: BleuResult
     glossary: GlossaryPreservationResult
@@ -105,6 +106,7 @@ def evaluate_translation(config: EvaluationConfig, input_override: str | Path | 
     return EvaluationResult(
         input_path=input_path,
         row_count=len(rows),
+        empty_candidate_rows=sum(1 for row in rows if not row.candidate.strip()),
         rows=rows,
         bleu=bleu,
         glossary=glossary,
@@ -130,8 +132,6 @@ def read_translation_rows(
                 raise ValueError(f"Empty source at {input_path}:{csv_row_number}")
             if not reference:
                 raise ValueError(f"Empty reference at {input_path}:{csv_row_number}")
-            if not candidate:
-                raise ValueError(f"Empty candidate at {input_path}:{csv_row_number}")
             rows.append(
                 TranslationRow(
                     row_number=len(rows) + 1,
@@ -183,11 +183,13 @@ def compute_corpus_bleu(
     for reference, candidate in zip(references, candidates):
         reference_tokens = tokenize(reference, tokenization)
         candidate_tokens = tokenize(candidate, tokenization)
-        if not reference_tokens or not candidate_tokens:
-            raise ValueError("BLEU inputs must not tokenize to empty sequences")
+        if not reference_tokens:
+            raise ValueError("BLEU references must not tokenize to empty sequences")
 
         reference_length += len(reference_tokens)
         candidate_length += len(candidate_tokens)
+        if not candidate_tokens:
+            continue
         for order in range(1, max_order + 1):
             ref_counts = ngram_counts(reference_tokens, order)
             cand_counts = ngram_counts(candidate_tokens, order)
@@ -329,6 +331,7 @@ def format_evaluation_summary(result: EvaluationResult) -> str:
             "Evaluation summary",
             f"input={result.input_path}",
             f"rows={result.row_count}",
+            f"empty_candidate_rows={result.empty_candidate_rows}",
             f"bleu={bleu.score:.6f}",
             f"bleu_tokenization={bleu.tokenization}",
             f"bleu_brevity_penalty={bleu.brevity_penalty:.6f}",
@@ -452,7 +455,17 @@ def select_sample_review_rows(result: EvaluationResult, sample_review_rows: int)
     selected: list[int] = []
     seen: set[int] = set()
 
+    for row in result.rows:
+        if row.candidate.strip():
+            continue
+        selected.append(row.row_number)
+        seen.add(row.row_number)
+        if len(selected) >= sample_review_rows:
+            return selected
+
     for row in result.glossary.row_results:
+        if row.row_number in seen:
+            continue
         if row.status in priority_statuses:
             selected.append(row.row_number)
             seen.add(row.row_number)
@@ -481,6 +494,7 @@ def write_report_manifest(
         "evaluation_config": str(config_path) if config_path is not None else "",
         "report_dir": str(report_dir),
         "row_count": result.row_count,
+        "empty_candidate_rows": result.empty_candidate_rows,
         "bleu": f"{result.bleu.score:.6f}",
         "glossary_preservation_rate": f"{result.glossary.preservation_rate:.6f}",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -495,6 +509,7 @@ def summary_rows(result: EvaluationResult) -> list[tuple[str, str]]:
     return [
         ("input", str(result.input_path)),
         ("rows", str(result.row_count)),
+        ("empty_candidate_rows", str(result.empty_candidate_rows)),
         ("bleu", f"{bleu.score:.6f}"),
         ("bleu_tokenization", bleu.tokenization),
         ("bleu_reference_length", str(bleu.reference_length)),

@@ -85,6 +85,15 @@ class ValidationGenerationResult:
     generation_manifest_path: Path
 
 
+@dataclass(frozen=True)
+class TestGenerationResult:
+    generation: InferenceGenerationResult
+    run_dir: Path
+    training_manifest_path: Path
+    test_split_path: Path
+    generation_manifest_path: Path
+
+
 def build_inference_dry_run(config: InferenceConfig) -> InferenceDryRunPlan:
     records = read_inference_records(config)
     return InferenceDryRunPlan(
@@ -161,20 +170,83 @@ def generate_validation_translations(
     device: str = "auto",
     repo_root: str | Path | None = None,
 ) -> ValidationGenerationResult:
-    if validation_rows is not None and validation_rows <= 0:
-        raise ValueError("validation_rows must be a positive integer when provided")
+    generation, run_dir_path, manifest_path, split_path, generation_manifest_path = (
+        generate_run_split_translations(
+            config,
+            run_dir=run_dir,
+            split_name="validation",
+            model_path=model_path,
+            output_path=output_path,
+            row_limit=validation_rows,
+            device=device,
+            repo_root=repo_root,
+        )
+    )
+    return ValidationGenerationResult(
+        generation=generation,
+        run_dir=run_dir_path,
+        training_manifest_path=manifest_path,
+        validation_split_path=split_path,
+        generation_manifest_path=generation_manifest_path,
+    )
+
+
+def generate_test_translations(
+    config: InferenceConfig,
+    run_dir: str | Path,
+    model_path: str | Path | None = None,
+    output_path: str | Path | None = None,
+    test_rows: int | None = None,
+    device: str = "auto",
+    repo_root: str | Path | None = None,
+) -> TestGenerationResult:
+    generation, run_dir_path, manifest_path, split_path, generation_manifest_path = (
+        generate_run_split_translations(
+            config,
+            run_dir=run_dir,
+            split_name="test",
+            model_path=model_path,
+            output_path=output_path,
+            row_limit=test_rows,
+            device=device,
+            repo_root=repo_root,
+        )
+    )
+    return TestGenerationResult(
+        generation=generation,
+        run_dir=run_dir_path,
+        training_manifest_path=manifest_path,
+        test_split_path=split_path,
+        generation_manifest_path=generation_manifest_path,
+    )
+
+
+def generate_run_split_translations(
+    config: InferenceConfig,
+    run_dir: str | Path,
+    split_name: str,
+    model_path: str | Path | None = None,
+    output_path: str | Path | None = None,
+    row_limit: int | None = None,
+    device: str = "auto",
+    repo_root: str | Path | None = None,
+) -> tuple[InferenceGenerationResult, Path, Path, Path, Path]:
+    if split_name not in {"validation", "test"}:
+        raise ValueError("split_name must be 'validation' or 'test'")
+    if row_limit is not None and row_limit <= 0:
+        raise ValueError(f"{split_name}_rows must be a positive integer when provided")
 
     resolved_run_dir = Path(run_dir)
     root = Path(repo_root) if repo_root is not None else Path.cwd()
     manifest_path = resolved_run_dir / "run_manifest.json"
     manifest = read_run_manifest(manifest_path)
-    validation_split_path = resolve_manifest_path(
-        require_manifest_string(manifest, ["data", "validation_split_path"], manifest_path),
+    split_path = resolve_manifest_path(
+        require_manifest_string(manifest, ["data", f"{split_name}_split_path"], manifest_path),
         run_dir=resolved_run_dir,
         repo_root=root,
     )
-    if not validation_split_path.exists():
-        raise ValueError(f"Validation split does not exist: {validation_split_path}")
+    if not split_path.exists():
+        raise ValueError(f"{split_name.title()} split does not exist: {split_path}")
 
     resolved_model_path = (
         Path(model_path)
@@ -188,16 +260,16 @@ def generate_validation_translations(
     if not resolved_model_path.exists() or not resolved_model_path.is_dir():
         raise ValueError(f"Checkpoint does not exist or is not a directory: {resolved_model_path}")
 
-    records = read_validation_records(validation_split_path)
-    if validation_rows is not None:
-        records = records[:validation_rows]
+    records = read_split_records(split_path, split_name)
+    if row_limit is not None:
+        records = records[:row_limit]
     if not records:
-        raise ValueError("No validation records selected for generation")
+        raise ValueError(f"No {split_name} records selected for generation")
 
     resolved_output_path = (
         Path(output_path)
         if output_path is not None
-        else default_validation_output_path(root, resolved_run_dir)
+        else default_split_output_path(root, resolved_run_dir, split_name)
     )
     generation = generate_records(
         config,
@@ -205,23 +277,18 @@ def generate_validation_translations(
         resolved_model_path,
         resolved_output_path,
         device=device,
-        input_path=validation_split_path,
+        input_path=split_path,
     )
-    generation_manifest_path = resolved_output_path.with_name("validation_generation_manifest.json")
-    write_validation_generation_manifest(
+    generation_manifest_path = resolved_output_path.with_name(f"{split_name}_generation_manifest.json")
+    write_split_generation_manifest(
         generation_manifest_path,
         generation,
         run_dir=resolved_run_dir,
         training_manifest_path=manifest_path,
-        validation_split_path=validation_split_path,
+        split_name=split_name,
+        split_path=split_path,
     )
-    return ValidationGenerationResult(
-        generation=generation,
-        run_dir=resolved_run_dir,
-        training_manifest_path=manifest_path,
-        validation_split_path=validation_split_path,
-        generation_manifest_path=generation_manifest_path,
-    )
+    return generation, resolved_run_dir, manifest_path, split_path, generation_manifest_path
 
 
 def generate_records(
@@ -283,20 +350,28 @@ def generate_records(
 
 
 def read_validation_records(path: str | Path) -> list[InferenceRecord]:
-    validation_path = Path(path)
+    return read_split_records(path, "validation")
+
+
+def read_test_records(path: str | Path) -> list[InferenceRecord]:
+    return read_split_records(path, "test")
+
+
+def read_split_records(path: str | Path, split_name: str) -> list[InferenceRecord]:
+    split_path = Path(path)
     records: list[InferenceRecord] = []
-    with validation_path.open(encoding="utf-8-sig", newline="") as f:
+    with split_path.open(encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
-        require_columns(validation_path, reader.fieldnames, ["segment_id", "zh-CN", "ko"])
+        require_columns(split_path, reader.fieldnames, ["segment_id", "zh-CN", "ko"])
         for row_number, row in enumerate(reader, start=2):
             record_id = row.get("segment_id", "").strip()
             text = row.get("zh-CN", "").strip()
             reference = row.get("ko", "").strip()
             if not record_id or not text or not reference:
-                raise ValueError(f"Empty validation value at {validation_path}:{row_number}")
+                raise ValueError(f"Empty {split_name} value at {split_path}:{row_number}")
             records.append(InferenceRecord(record_id=record_id, text=text, reference=reference))
     if not records:
-        raise ValueError(f"No validation records found: {validation_path}")
+        raise ValueError(f"No {split_name} records found: {split_path}")
     return records
 
 
@@ -343,7 +418,23 @@ def resolve_latest_run_checkpoint(run_dir: str | Path) -> Path:
 
 
 def default_validation_output_path(repo_root: Path, run_dir: Path) -> Path:
-    return repo_root / "data" / "review" / "inference" / "validation" / run_dir.name / "validation_generated.csv"
+    return default_split_output_path(repo_root, run_dir, "validation")
+
+
+def default_test_output_path(repo_root: Path, run_dir: Path) -> Path:
+    return default_split_output_path(repo_root, run_dir, "test")
+
+
+def default_split_output_path(repo_root: Path, run_dir: Path, split_name: str) -> Path:
+    return (
+        repo_root
+        / "data"
+        / "review"
+        / "inference"
+        / split_name
+        / run_dir.name
+        / f"{split_name}_generated.csv"
+    )
 
 
 def write_validation_generation_manifest(
@@ -353,13 +444,32 @@ def write_validation_generation_manifest(
     training_manifest_path: Path,
     validation_split_path: Path,
 ) -> None:
+    write_split_generation_manifest(
+        path,
+        generation,
+        run_dir=run_dir,
+        training_manifest_path=training_manifest_path,
+        split_name="validation",
+        split_path=validation_split_path,
+    )
+
+
+def write_split_generation_manifest(
+    path: Path,
+    generation: InferenceGenerationResult,
+    run_dir: Path,
+    training_manifest_path: Path,
+    split_name: str,
+    split_path: Path,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     data = {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "run_dir": str(run_dir),
         "training_manifest_path": str(training_manifest_path),
         "checkpoint_path": str(generation.model_path),
-        "validation_split_path": str(validation_split_path),
+        "split_name": split_name,
+        f"{split_name}_split_path": str(split_path),
         "output_csv": str(generation.output_path),
         "row_count": generation.generated_rows,
         "language_pair": f"{generation.source_code}->{generation.target_code}",
@@ -504,6 +614,18 @@ def format_validation_generation(result: ValidationGenerationResult) -> str:
         f"run_dir={result.run_dir}",
         f"training_manifest={result.training_manifest_path}",
         f"validation_split={result.validation_split_path}",
+        f"generation_manifest={result.generation_manifest_path}",
+    ]
+    lines.extend(format_inference_generation(result.generation).splitlines()[1:])
+    return "\n".join(lines)
+
+
+def format_test_generation(result: TestGenerationResult) -> str:
+    lines = [
+        "Test generation result",
+        f"run_dir={result.run_dir}",
+        f"training_manifest={result.training_manifest_path}",
+        f"test_split={result.test_split_path}",
         f"generation_manifest={result.generation_manifest_path}",
     ]
     lines.extend(format_inference_generation(result.generation).splitlines()[1:])

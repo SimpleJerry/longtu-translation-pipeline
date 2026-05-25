@@ -75,26 +75,62 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-steps",
         type=int,
-        default=4,
-        help="Final Trainer max_steps for training modes.",
+        default=None,
+        help="Final Trainer max_steps for training modes. Formal --train also accepts this from config.",
     )
     parser.add_argument(
         "--save-steps",
         type=int,
-        default=2,
-        help="Checkpoint save interval for training modes.",
+        default=None,
+        help="Checkpoint save interval for training modes. Formal --train also accepts this from config.",
+    )
+    parser.add_argument(
+        "--eval-steps",
+        type=int,
+        default=None,
+        help="Evaluation interval for formal --train; defaults to config or save_steps.",
     )
     parser.add_argument(
         "--save-total-limit",
         type=int,
-        default=2,
+        default=None,
         help="Maximum number of checkpoints to keep for --train.",
     )
     parser.add_argument(
         "--logging-steps",
         type=int,
-        default=1,
+        default=None,
         help="Trainer logging interval for --train.",
+    )
+    parser.add_argument(
+        "--gradient-accumulation-steps",
+        type=int,
+        default=None,
+        help="Gradient accumulation steps for formal --train.",
+    )
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=None,
+        help="Learning rate for formal --train.",
+    )
+    parser.add_argument(
+        "--warmup-ratio",
+        type=float,
+        default=None,
+        help="Warmup ratio for formal --train.",
+    )
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=None,
+        help="Weight decay for formal --train.",
+    )
+    parser.add_argument(
+        "--max-grad-norm",
+        type=float,
+        default=None,
+        help="Max gradient norm for formal --train.",
     )
     parser.add_argument(
         "--limit-rows",
@@ -172,26 +208,36 @@ def main() -> int:
         result = run_real_nllb_pilot_training(
             config,
             pilot_rows=args.pilot_rows,
-            max_steps=args.max_steps,
-            save_steps=args.save_steps,
+            max_steps=args.max_steps if args.max_steps is not None else 4,
+            save_steps=args.save_steps if args.save_steps is not None else 2,
             device=args.device,
         )
         outputs.append(format_real_model_pilot_training(result))
     if args.train:
-        result = run_real_nllb_formal_training(
-            config,
-            run_dir=args.run_dir,
-            run_name=args.run_name,
-            row_limit=args.limit_rows,
-            max_steps=args.max_steps,
-            save_steps=args.save_steps,
-            save_total_limit=args.save_total_limit,
-            logging_steps=args.logging_steps,
-            device=args.device,
-            resume_from_checkpoint=args.resume_from_checkpoint,
-            command=sys.argv,
-            repo_root=ROOT,
-        )
+        try:
+            result = run_real_nllb_formal_training(
+                config,
+                run_dir=args.run_dir,
+                run_name=args.run_name,
+                row_limit=args.limit_rows,
+                max_steps=args.max_steps,
+                save_steps=args.save_steps,
+                eval_steps=args.eval_steps,
+                save_total_limit=args.save_total_limit,
+                logging_steps=args.logging_steps,
+                gradient_accumulation_steps=args.gradient_accumulation_steps,
+                learning_rate=args.learning_rate,
+                warmup_ratio=args.warmup_ratio,
+                weight_decay=args.weight_decay,
+                max_grad_norm=args.max_grad_norm,
+                device=args.device,
+                resume_from_checkpoint=args.resume_from_checkpoint,
+                command=sys.argv,
+                repo_root=ROOT,
+            )
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
         outputs.append(format_formal_training_run(result))
 
     print("\n\n".join(outputs))

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import importlib.metadata
 import json
 import random
@@ -37,6 +38,7 @@ class TrainingDryRunPlan:
     total_rows: int
     train_rows: int
     validation_rows: int
+    test_rows: int
     preview_examples: list[TrainingExample]
 
 
@@ -161,6 +163,7 @@ class FormalTrainingRunResult:
     manifest_path: Path
     train_split_path: Path
     validation_split_path: Path
+    test_split_path: Path
     source_code: str
     target_code: str
     target_language_token_id: int
@@ -176,16 +179,28 @@ class FormalTrainingRunResult:
     max_length: int
     total_rows: int
     row_limit: int | None
+    segments_sha256: str
+    split_seed: int
+    train_ratio: float
+    validation_ratio: float
+    test_ratio: float
     train_rows: int
     validation_rows: int
+    test_rows: int
     tokenized_train_rows: int
     tokenized_validation_rows: int
     input_shape: str
     label_shape: str
     max_steps: int
     save_steps: int
+    eval_steps: int
     save_total_limit: int
     logging_steps: int
+    gradient_accumulation_steps: int
+    learning_rate: float | None
+    warmup_ratio: float
+    weight_decay: float
+    max_grad_norm: float | None
     resume_checkpoint: Path | None
     checkpoint_paths: list[Path]
     train_loss: float | None
@@ -195,9 +210,11 @@ class FormalTrainingRunResult:
 
 def build_training_dry_run(config: TrainingConfig) -> TrainingDryRunPlan:
     examples = read_training_examples(config)
-    train_examples, validation_examples = split_examples(
+    train_examples, validation_examples, test_examples = split_examples(
         examples,
+        config.split.train_ratio,
         config.split.validation_ratio,
+        config.split.test_ratio,
         config.split.seed,
     )
     preview_examples = apply_optional_terminology_markers(
@@ -218,6 +235,7 @@ def build_training_dry_run(config: TrainingConfig) -> TrainingDryRunPlan:
         total_rows=len(examples),
         train_rows=len(train_examples),
         validation_rows=len(validation_examples),
+        test_rows=len(test_examples),
         preview_examples=preview_examples,
     )
 
@@ -533,34 +551,92 @@ def run_real_nllb_formal_training(
     run_dir: str | Path | None = None,
     run_name: str | None = None,
     row_limit: int | None = None,
-    max_steps: int = 4,
-    save_steps: int = 2,
-    save_total_limit: int = 2,
-    logging_steps: int = 1,
+    max_steps: int | None = None,
+    save_steps: int | None = None,
+    eval_steps: int | None = None,
+    save_total_limit: int | None = None,
+    logging_steps: int | None = None,
+    gradient_accumulation_steps: int | None = None,
+    learning_rate: float | None = None,
+    warmup_ratio: float | None = None,
+    weight_decay: float | None = None,
+    max_grad_norm: float | None = None,
     device: str = "auto",
     resume_from_checkpoint: str | Path | None = None,
     command: Sequence[str] | None = None,
     repo_root: str | Path | None = None,
 ) -> FormalTrainingRunResult:
+    resolved_max_steps = resolve_required_positive_int(
+        "max_steps",
+        max_steps,
+        config.training.max_steps,
+    )
+    resolved_save_steps = resolve_positive_int(
+        "save_steps",
+        save_steps,
+        config.training.save_steps,
+        default=500,
+    )
+    resolved_eval_steps = resolve_positive_int(
+        "eval_steps",
+        eval_steps,
+        config.training.eval_steps,
+        default=resolved_save_steps,
+    )
+    resolved_save_total_limit = resolve_positive_int(
+        "save_total_limit",
+        save_total_limit,
+        config.training.save_total_limit,
+        default=2,
+    )
+    resolved_logging_steps = resolve_positive_int(
+        "logging_steps",
+        logging_steps,
+        config.training.logging_steps,
+        default=50,
+    )
+    resolved_gradient_accumulation_steps = resolve_positive_int(
+        "gradient_accumulation_steps",
+        gradient_accumulation_steps,
+        config.training.gradient_accumulation_steps,
+        default=1,
+    )
+    resolved_learning_rate = resolve_positive_float(
+        "learning_rate",
+        learning_rate,
+        config.training.learning_rate,
+    )
+    resolved_warmup_ratio = resolve_non_negative_float(
+        "warmup_ratio",
+        warmup_ratio,
+        config.training.warmup_ratio,
+        default=0.0,
+    )
+    if resolved_warmup_ratio >= 1:
+        raise ValueError("warmup_ratio must be >= 0 and < 1")
+    resolved_weight_decay = resolve_non_negative_float(
+        "weight_decay",
+        weight_decay,
+        config.training.weight_decay,
+        default=0.0,
+    )
+    resolved_max_grad_norm = resolve_positive_float(
+        "max_grad_norm",
+        max_grad_norm,
+        config.training.max_grad_norm,
+    )
+
     if row_limit is not None and row_limit <= 0:
         raise ValueError("row_limit must be a positive integer when provided")
-    if max_steps <= 0:
-        raise ValueError("max_steps must be a positive integer")
-    if save_steps <= 0:
-        raise ValueError("save_steps must be a positive integer")
-    if save_total_limit <= 0:
-        raise ValueError("save_total_limit must be a positive integer")
-    if logging_steps <= 0:
-        raise ValueError("logging_steps must be a positive integer")
 
     output_dir = resolve_formal_run_dir(config, run_dir=run_dir, run_name=run_name)
     resolved_resume_checkpoint = resolve_resume_checkpoint(output_dir, resume_from_checkpoint)
     if resolved_resume_checkpoint is not None:
         resume_step = checkpoint_step(resolved_resume_checkpoint)
-        if resume_step is not None and resume_step >= max_steps:
+        if resume_step is not None and resume_step >= resolved_max_steps:
             raise ValueError(
                 "resume checkpoint step must be smaller than max_steps: "
-                f"{resolved_resume_checkpoint} >= {max_steps}"
+                f"{resolved_resume_checkpoint} >= {resolved_max_steps}"
             )
     if resolved_resume_checkpoint is not None:
         manifest_row_limit = read_manifest_row_limit(output_dir)
@@ -568,22 +644,29 @@ def run_real_nllb_formal_training(
 
     all_examples = read_training_examples(config)
     selected_examples = all_examples[:row_limit] if row_limit is not None else all_examples
-    if len(selected_examples) < 2:
-        raise ValueError("Formal training requires at least two selected rows for train/validation split")
+    if len(selected_examples) < 3:
+        raise ValueError(
+            "Formal training requires at least three selected rows for train/validation/test split"
+        )
 
-    train_examples, validation_examples = split_examples(
+    train_examples, validation_examples, test_examples = split_examples(
         selected_examples,
+        config.split.train_ratio,
         config.split.validation_ratio,
+        config.split.test_ratio,
         config.split.seed,
     )
     if not validation_examples:
         raise ValueError("Formal training requires a non-empty validation split")
+    if not test_examples:
+        raise ValueError("Formal training requires a non-empty test split")
 
     prepare_run_output_dir(output_dir, resume=resolved_resume_checkpoint is not None)
-    train_split_path, validation_split_path = write_split_artifacts(
+    train_split_path, validation_split_path, test_split_path = write_split_artifacts(
         output_dir,
         train_examples,
         validation_examples,
+        test_examples,
         id_column=config.data.id_column,
         source_column=config.data.source_column,
         target_column=config.data.target_column,
@@ -620,20 +703,25 @@ def run_real_nllb_formal_training(
         model=model,
         dataset=train_dataset,
         output_dir=output_dir,
-        max_steps=max_steps,
+        max_steps=resolved_max_steps,
         use_cpu=training_device == "cpu",
         fp16=precision_mode == "fp16",
         bf16=precision_mode == "bf16",
         save_strategy="steps",
-        save_steps=save_steps,
-        save_total_limit=save_total_limit,
+        save_steps=resolved_save_steps,
+        save_total_limit=resolved_save_total_limit,
         logging_strategy="steps",
-        logging_steps=logging_steps,
+        logging_steps=resolved_logging_steps,
         eval_dataset=validation_dataset,
         eval_strategy="steps",
-        eval_steps=save_steps,
+        eval_steps=resolved_eval_steps,
         per_device_train_batch_size=config.training.per_device_train_batch_size,
         per_device_eval_batch_size=config.training.per_device_eval_batch_size,
+        gradient_accumulation_steps=resolved_gradient_accumulation_steps,
+        learning_rate=resolved_learning_rate,
+        warmup_ratio=resolved_warmup_ratio,
+        weight_decay=resolved_weight_decay,
+        max_grad_norm=resolved_max_grad_norm,
     )
     train_result = trainer.train(
         resume_from_checkpoint=str(resolved_resume_checkpoint)
@@ -655,6 +743,7 @@ def run_real_nllb_formal_training(
         manifest_path=manifest_path,
         train_split_path=train_split_path,
         validation_split_path=validation_split_path,
+        test_split_path=test_split_path,
         source_code=config.language.source_code,
         target_code=config.language.target_code,
         target_language_token_id=int(target_language_token_id),
@@ -670,16 +759,28 @@ def run_real_nllb_formal_training(
         max_length=config.tokenization.max_length,
         total_rows=len(all_examples),
         row_limit=row_limit,
+        segments_sha256=hash_file(config.data.segments_path),
+        split_seed=config.split.seed,
+        train_ratio=config.split.train_ratio,
+        validation_ratio=config.split.validation_ratio,
+        test_ratio=config.split.test_ratio,
         train_rows=len(train_examples),
         validation_rows=len(validation_examples),
+        test_rows=len(test_examples),
         tokenized_train_rows=len(tokenized_train_examples),
         tokenized_validation_rows=len(tokenized_validation_examples),
         input_shape=input_shape,
         label_shape=label_shape,
-        max_steps=max_steps,
-        save_steps=save_steps,
-        save_total_limit=save_total_limit,
-        logging_steps=logging_steps,
+        max_steps=resolved_max_steps,
+        save_steps=resolved_save_steps,
+        eval_steps=resolved_eval_steps,
+        save_total_limit=resolved_save_total_limit,
+        logging_steps=resolved_logging_steps,
+        gradient_accumulation_steps=resolved_gradient_accumulation_steps,
+        learning_rate=resolved_learning_rate,
+        warmup_ratio=resolved_warmup_ratio,
+        weight_decay=resolved_weight_decay,
+        max_grad_norm=resolved_max_grad_norm,
         resume_checkpoint=resolved_resume_checkpoint,
         checkpoint_paths=checkpoint_paths,
         train_loss=float(train_result.training_loss)
@@ -896,6 +997,11 @@ def build_trainer(
     eval_steps: int | None = None,
     per_device_train_batch_size: int = 1,
     per_device_eval_batch_size: int = 1,
+    gradient_accumulation_steps: int = 1,
+    learning_rate: float | None = None,
+    warmup_ratio: float = 0.0,
+    weight_decay: float = 0.0,
+    max_grad_norm: float | None = None,
 ) -> Any:
     from transformers import Trainer, TrainerCallback, TrainingArguments
 
@@ -904,6 +1010,9 @@ def build_trainer(
         "max_steps": max_steps,
         "per_device_train_batch_size": per_device_train_batch_size,
         "per_device_eval_batch_size": per_device_eval_batch_size,
+        "gradient_accumulation_steps": gradient_accumulation_steps,
+        "warmup_ratio": warmup_ratio,
+        "weight_decay": weight_decay,
         "report_to": "none",
         "save_strategy": save_strategy,
         "logging_strategy": logging_strategy,
@@ -921,6 +1030,10 @@ def build_trainer(
         training_kwargs["save_total_limit"] = save_total_limit
     if logging_steps is not None:
         training_kwargs["logging_steps"] = logging_steps
+    if learning_rate is not None:
+        training_kwargs["learning_rate"] = learning_rate
+    if max_grad_norm is not None:
+        training_kwargs["max_grad_norm"] = max_grad_norm
     if eval_dataset is not None and eval_strategy != "no":
         training_kwargs["do_eval"] = True
         training_kwargs["eval_strategy"] = eval_strategy
@@ -1068,17 +1181,20 @@ def write_split_artifacts(
     output_dir: Path,
     train_examples: Sequence[TrainingExample],
     validation_examples: Sequence[TrainingExample],
+    test_examples: Sequence[TrainingExample],
     id_column: str,
     source_column: str,
     target_column: str,
-) -> tuple[Path, Path]:
+) -> tuple[Path, Path, Path]:
     split_dir = output_dir / "splits"
     split_dir.mkdir(parents=True, exist_ok=True)
     train_path = split_dir / "train.csv"
     validation_path = split_dir / "validation.csv"
+    test_path = split_dir / "test.csv"
     write_examples_csv(train_path, train_examples, id_column, source_column, target_column)
     write_examples_csv(validation_path, validation_examples, id_column, source_column, target_column)
-    return train_path, validation_path
+    write_examples_csv(test_path, test_examples, id_column, source_column, target_column)
+    return train_path, validation_path, test_path
 
 
 def write_examples_csv(
@@ -1100,6 +1216,14 @@ def write_examples_csv(
                     target_column: example.target_text,
                 }
             )
+
+
+def hash_file(path: str | Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest().upper()
 
 
 def list_checkpoint_paths(output_dir: str | Path) -> list[Path]:
@@ -1215,10 +1339,19 @@ def write_run_manifest(
         "data": {
             "total_rows": result.total_rows,
             "row_limit": result.row_limit,
+            "segments_sha256": result.segments_sha256,
+            "split_seed": result.split_seed,
+            "split_ratios": {
+                "train": result.train_ratio,
+                "validation": result.validation_ratio,
+                "test": result.test_ratio,
+            },
             "train_rows": result.train_rows,
             "validation_rows": result.validation_rows,
+            "test_rows": result.test_rows,
             "train_split_path": str(result.train_split_path),
             "validation_split_path": str(result.validation_split_path),
+            "test_split_path": str(result.test_split_path),
         },
         "model": {
             "name": result.model_name,
@@ -1242,6 +1375,8 @@ def write_run_manifest(
         "checkpoint_policy": {
             "save_strategy": "steps",
             "save_steps": result.save_steps,
+            "eval_strategy": "steps",
+            "eval_steps": result.eval_steps,
             "save_total_limit": result.save_total_limit,
             "resume_from_checkpoint": str(result.resume_checkpoint)
             if result.resume_checkpoint is not None
@@ -1251,6 +1386,11 @@ def write_run_manifest(
         "training": {
             "max_steps": result.max_steps,
             "logging_steps": result.logging_steps,
+            "gradient_accumulation_steps": result.gradient_accumulation_steps,
+            "learning_rate": result.learning_rate,
+            "warmup_ratio": result.warmup_ratio,
+            "weight_decay": result.weight_decay,
+            "max_grad_norm": result.max_grad_norm,
             "final_global_step": result.final_global_step,
             "train_loss": result.train_loss,
             "eval_loss": result.eval_loss,
@@ -1321,22 +1461,95 @@ def find_last_log_value(log_history: Sequence[dict[str, Any]], key: str) -> floa
     return None
 
 
+def resolve_required_positive_int(name: str, cli_value: int | None, config_value: int | None) -> int:
+    value = cli_value if cli_value is not None else config_value
+    if value is None:
+        raise ValueError(f"Formal training requires {name} from config or CLI")
+    return validate_positive_int(name, value)
+
+
+def resolve_positive_int(
+    name: str,
+    cli_value: int | None,
+    config_value: int | None,
+    default: int,
+) -> int:
+    value = cli_value if cli_value is not None else config_value
+    if value is None:
+        value = default
+    return validate_positive_int(name, value)
+
+
+def resolve_positive_float(
+    name: str,
+    cli_value: float | None,
+    config_value: float | None,
+) -> float | None:
+    value = cli_value if cli_value is not None else config_value
+    if value is None:
+        return None
+    if value <= 0:
+        raise ValueError(f"{name} must be a positive number")
+    return float(value)
+
+
+def resolve_non_negative_float(
+    name: str,
+    cli_value: float | None,
+    config_value: float | None,
+    default: float,
+) -> float:
+    value = cli_value if cli_value is not None else config_value
+    if value is None:
+        value = default
+    if value < 0:
+        raise ValueError(f"{name} must be a non-negative number")
+    return float(value)
+
+
+def validate_positive_int(name: str, value: int) -> int:
+    if value <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return int(value)
+
+
 def split_examples(
     examples: Sequence[TrainingExample],
+    train_ratio: float,
     validation_ratio: float,
+    test_ratio: float,
     seed: int,
-) -> tuple[list[TrainingExample], list[TrainingExample]]:
+) -> tuple[list[TrainingExample], list[TrainingExample], list[TrainingExample]]:
     shuffled = list(examples)
     random.Random(seed).shuffle(shuffled)
 
-    if not shuffled or validation_ratio == 0:
-        return shuffled, []
+    if not shuffled:
+        return [], [], []
 
-    validation_count = max(1, int(len(shuffled) * validation_ratio))
-    validation_count = min(validation_count, len(shuffled) - 1)
+    validation_count = split_count(len(shuffled), validation_ratio)
+    test_count = split_count(len(shuffled), test_ratio)
+    if len(shuffled) >= 3:
+        if validation_ratio > 0 and validation_count == 0:
+            validation_count = 1
+        if test_ratio > 0 and test_count == 0:
+            test_count = 1
+    while validation_count + test_count >= len(shuffled) and test_count > 0:
+        test_count -= 1
+    while validation_count + test_count >= len(shuffled) and validation_count > 0:
+        validation_count -= 1
+
     validation_examples = shuffled[:validation_count]
-    train_examples = shuffled[validation_count:]
-    return train_examples, validation_examples
+    test_start = validation_count
+    test_end = validation_count + test_count
+    test_examples = shuffled[test_start:test_end]
+    train_examples = shuffled[test_end:]
+    return train_examples, validation_examples, test_examples
+
+
+def split_count(total: int, ratio: float) -> int:
+    if total <= 0 or ratio <= 0:
+        return 0
+    return int(total * ratio)
 
 
 def require_columns(path: Path, fieldnames: Sequence[str] | None, columns: Sequence[str]) -> None:
@@ -1359,6 +1572,7 @@ def format_training_dry_run(plan: TrainingDryRunPlan) -> str:
         f"total_rows={plan.total_rows}",
         f"train_rows={plan.train_rows}",
         f"validation_rows={plan.validation_rows}",
+        f"test_rows={plan.test_rows}",
     ]
     for index, example in enumerate(plan.preview_examples, start=1):
         lines.append(
@@ -1498,6 +1712,7 @@ def format_formal_training_run(result: FormalTrainingRunResult) -> str:
         f"manifest={result.manifest_path}",
         f"train_split={result.train_split_path}",
         f"validation_split={result.validation_split_path}",
+        f"test_split={result.test_split_path}",
         f"language_pair={result.source_code}->{result.target_code}",
         f"target_language_token_id={result.target_language_token_id}",
         f"special_tokens_added={result.special_tokens_added}",
@@ -1511,16 +1726,26 @@ def format_formal_training_run(result: FormalTrainingRunResult) -> str:
         f"torch_dtype={result.torch_dtype}",
         f"total_rows={result.total_rows}",
         f"row_limit={result.row_limit}",
+        f"segments_sha256={result.segments_sha256}",
+        f"split_seed={result.split_seed}",
+        f"split_ratios={result.train_ratio}:{result.validation_ratio}:{result.test_ratio}",
         f"train_rows={result.train_rows}",
         f"validation_rows={result.validation_rows}",
+        f"test_rows={result.test_rows}",
         f"tokenized_train_rows={result.tokenized_train_rows}",
         f"tokenized_validation_rows={result.tokenized_validation_rows}",
         f"input_shape={result.input_shape}",
         f"label_shape={result.label_shape}",
         f"max_steps={result.max_steps}",
         f"save_steps={result.save_steps}",
+        f"eval_steps={result.eval_steps}",
         f"save_total_limit={result.save_total_limit}",
         f"logging_steps={result.logging_steps}",
+        f"gradient_accumulation_steps={result.gradient_accumulation_steps}",
+        f"learning_rate={result.learning_rate}",
+        f"warmup_ratio={result.warmup_ratio}",
+        f"weight_decay={result.weight_decay}",
+        f"max_grad_norm={result.max_grad_norm}",
         f"resume_checkpoint={result.resume_checkpoint}",
         f"checkpoint_paths={';'.join(str(path) for path in result.checkpoint_paths)}",
         f"train_loss={result.train_loss}",

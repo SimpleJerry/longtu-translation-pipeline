@@ -119,14 +119,14 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Decision:** Generation evaluation reports live under ignored `data/review/evaluation/` and record checkpoint/generation metadata, BLEU, glossary preservation, and sample review rows without implying model quality.
 - **Background:** The project needs a fixed report shape for RF-006 generation outputs before running long training or full validation.
 - **Impact Scope:** `configs/evaluation/generation_report.json`, `src/longtu_translation_pipeline/evaluation.py`, `scripts/evaluate_translation.py`, README workflow notes.
-- **Follow-up Notes:** Use this report format for pilot and future validation outputs. Full-run quality conclusions require a real training run, fixed validation split, and a selected checkpoint.
+- **Follow-up Notes:** Use this report format for pilot, validation, and future test outputs. Full-run quality conclusions require a real training run, a selected checkpoint, and a held-out test report.
 
 ## 2026-05-25: Formal Training Runs Require Split Artifacts And Manifests
 
-- **Decision:** Formal training must run through `scripts/train_model.py --train`, write fixed train/validation split CSVs, and record `run_manifest.json` inside an ignored `fine-tuned-models/.../runs/run-*` directory.
+- **Decision:** Formal training must run through `scripts/train_model.py --train`, write fixed train/validation/test split CSVs, and record `run_manifest.json` inside an ignored `fine-tuned-models/.../runs/run-*` directory.
 - **Background:** Pilot training verified checkpoints and resume, but it did not provide enough metadata or split stability for a future full run to be reproducible.
 - **Impact Scope:** `scripts/train_model.py`, `src/longtu_translation_pipeline/training.py`, local fine-tuned model directories, README workflow notes, future RF-006-P8 validation generation.
-- **Follow-up Notes:** Resume commands inherit the existing manifest row limit, explicit resume row limits must match the manifest, and checkpoint steps must be smaller than the requested `max_steps`. Validation generation should consume the fixed run split in a later RF-006 phase.
+- **Follow-up Notes:** Resume commands inherit the existing manifest row limit, explicit resume row limits must match the manifest, and checkpoint steps must be smaller than the requested `max_steps`. Validation generation consumes the validation split; final reports consume the test split.
 
 ## 2026-05-25: Validation Generation Uses Fixed Training Splits
 
@@ -135,9 +135,30 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Impact Scope:** `scripts/run_inference.py`, `src/longtu_translation_pipeline/inference.py`, local `data/review/inference/validation/` artifacts, README workflow notes.
 - **Follow-up Notes:** Generated validation CSVs keep the RF-007-compatible `segment_id,source,references,candidates` schema and remain local ignored artifacts.
 
+## 2026-05-25: Full Training Uses Explicit Profiles
+
+- **Decision:** Formal full-data training must use an explicit config profile or CLI override for `max_steps`; `--train` must not inherit small-step smoke/pilot defaults.
+- **Background:** The project is moving from engineering smoke tests to a staged 10k full-data run, where hidden defaults could waste GPU time or produce ambiguous manifests.
+- **Impact Scope:** `configs/training/full_10k.json`, `src/longtu_translation_pipeline/config.py`, `src/longtu_translation_pipeline/training.py`, `scripts/train_model.py`, README workflow notes, future full-run manifests.
+- **Follow-up Notes:** `save_steps` and `eval_steps` are separate settings. The first staged profile uses `max_steps=10000`, `save_steps=1000`, and `eval_steps=5000`; later longer runs should add new profiles rather than relying on remembered CLI parameters.
+
+## 2026-05-25: Formal Experiments Use Held-Out Test Splits
+
+- **Decision:** Formal experiments use deterministic `train/validation/test = 8:1:1` splits with seed `42`; validation is for training-time eval and checkpoint observation, and test is reserved for final performance reports.
+- **Background:** The first 10k run reported metrics on the validation split, which is not acceptable as final model performance.
+- **Impact Scope:** `configs/training/default.json`, `configs/training/full_10k.json`, `src/longtu_translation_pipeline/training.py`, `src/longtu_translation_pipeline/inference.py`, `scripts/run_inference.py`, README workflow notes, future full-run reports.
+- **Follow-up Notes:** Validation-only reports are historical engineering artifacts. Use `--generate-test` and a test report directory after selecting a checkpoint for final model-quality claims.
+
 ## 2026-05-24: Evaluation Uses BLEU and Glossary Preservation Only
 
 - **Decision:** RF-007 evaluation automates corpus BLEU and glossary preservation for the simplified `<start>...<end>` marker policy. Code-token preservation is not part of the current evaluation mainline.
 - **Background:** The old evaluation notebooks used historical `<middle>` and `<code_id>` assumptions that no longer match RF-005. The project still needs model-output checks before RF-006 moves into real training or generation.
 - **Impact Scope:** `configs/evaluation/default.json`, `src/longtu_translation_pipeline/evaluation.py`, `scripts/evaluate_translation.py`, README workflow notes, RF-007 tests.
 - **Follow-up Notes:** BLEU defaults to Korean whitespace tokenization, with character tokenization available as a config option. Glossary preservation checks Korean term presence after stripping glossary markers from candidate translations.
+
+## 2026-05-25: Evaluation Reports Empty Model Outputs Instead Of Failing
+
+- **Decision:** Empty `candidates` cells in generated translation CSVs are valid model-output failures for reporting, not schema errors. Evaluation should count them as zero-length BLEU candidates, glossary misses, and `empty_candidate_rows`.
+- **Background:** The first 10k validation generation produced a small number of empty candidates. Treating them as hard errors blocked the full-run report and hid a useful model-quality signal.
+- **Impact Scope:** `src/longtu_translation_pipeline/evaluation.py`, `tests/test_evaluation.py`, RF-007 report summaries and manifests.
+- **Follow-up Notes:** Empty `source` and `references` remain hard errors because they indicate invalid evaluation input rather than model behavior.

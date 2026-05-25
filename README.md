@@ -61,6 +61,7 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 | `configs/glossary/` | glossary 정제에 쓰는 seed, 어휘 목록, 규칙 설정입니다. |
 | `configs/segments/` | segment 정제를 위한 구조화 문자열 분리, term/entity seed, semantic 임계값 설정입니다. |
 | `configs/training/default.json` | RF-006 1단계 학습 설정이며 데이터 경로, 언어 코드, 모델명, 출력 디렉터리, 기본 학습 파라미터를 선언합니다. |
+| `configs/training/full_10k.json` | 첫 full-data 10k training profile이며 step, checkpoint, eval, optimizer 설정을 명시합니다. |
 | `configs/inference/default.json` | RF-006 1단계 추론 설정이며 모델 경로, 입력/출력 경로, 언어 코드, 생성 파라미터를 선언합니다. |
 | `configs/evaluation/default.json` | RF-007 평가 설정이며 번역 결과 CSV, glossary, BLEU 설정, 로컬 보고서 출력 위치를 선언합니다. |
 | `scripts/glossary_semantic_pipeline.py` | Stanza, jieba, kiwipiepy, wordfreq, `BAAI/bge-m3`를 사용하는 로컬 glossary semantic 정제 pipeline입니다. |
@@ -139,7 +140,7 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 이 pipeline은 먼저 `<c=...>` 같은 표현용 스타일 태그를 제거하고 대칭 외부 wrapper를 푼 뒤, Stanza, jieba, kiwipiepy, `BAAI/bge-m3`로 term/entity-like segment를 점수화합니다. Placeholder 행은 기본적으로 보존하고 mismatch만 감사합니다. 이 명령은 `data/segments.csv`를 다시 쓰지 않고 로컬 `data/review/segments/` 아래에 감사 CSV만 생성합니다. 수동 확인 후에만 `--apply`를 사용합니다.
 
-학습/추론 engineering entry point는 현재 RF-006 smoke-test/pilot/formal-run hardening 단계입니다. dry-run은 설정 읽기, 데이터 검증, train/validation 계획만 수행합니다. RF-006-P2는 로컬 tiny tokenizer smoke를 제공하고, RF-006-P3는 실제 NLLB tokenizer와 랜덤 초기화 tiny seq2seq model로 Trainer 1-step smoke를 실행합니다. RF-006-P4는 실제 NLLB model weight로 1-step smoke를 실행해 CUDA, special token resize, 데이터 tensor, Trainer 연결을 검증합니다. RF-006-P5는 실제 NLLB model로 작은 pilot training을 실행해 checkpoint 저장, resume, loss, 출력 디렉터리를 검증합니다. RF-006-P6는 checkpoint를 로드해 sample generation CSV를 만들고 RF-007 평가 입력 schema와 연결되는지 확인합니다. RF-007-P2는 이 generation CSV를 고정 report directory로 평가해 summary, glossary rows, sample review, manifest를 생성합니다. RF-006-P7은 formal `--train` 명령을 추가해 ignored `fine-tuned-models/.../runs/run-*` 아래에 고정 split artifact와 `run_manifest.json`을 작성합니다. RF-006-P8은 `data/segments.csv` 앞부분이 아니라 고정 validation split에서 translation CSV를 생성합니다. P4/P5/P6/P7/P8/P2는 full training을 명시적으로 시작하기 전까지 engineering chain 검증입니다.
+학습/추론 engineering entry point는 현재 RF-006 smoke-test/pilot/formal-run hardening 단계입니다. dry-run은 설정 읽기, 데이터 검증, 결정적인 train/validation/test 계획만 수행합니다. RF-006-P7은 ignored `fine-tuned-models/.../runs/run-*` 아래에 고정 split artifact와 `run_manifest.json`을 작성합니다. RF-006-P10은 formal experiment split을 seed `42`의 8:1:1로 수정합니다. validation은 학습 중 eval/checkpoint 관찰에만 쓰고, 최종 성능 보고는 held-out test split만 사용합니다. RF-006-P8은 고정 validation split에서 translation CSV를 만들고, `--generate-test`는 고정 test split에서 최종 평가 CSV를 만듭니다. P4/P5/P6/P7/P8/P2는 full training을 명시적으로 시작하기 전까지 engineering chain 검증입니다.
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
@@ -149,16 +150,19 @@ venv\Scripts\python.exe scripts\train_model.py --config configs\training\default
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --pilot-train --pilot-rows 64 --max-steps 4 --save-steps 2
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --train --limit-rows 128 --max-steps 4 --save-steps 2 --save-total-limit 2 --logging-steps 1
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --train --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-name --resume-from-checkpoint latest --max-steps 6 --save-steps 2 --save-total-limit 2 --logging-steps 1
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --train --run-name run-full-10k-corrected-v1
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate --model-path fine-tuned-models\nllb-200-distilled-600M\zh2ko\pilot\run-20260525-093832\checkpoint-4 --sample-rows 8
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate-validation --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-name
+venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate-test --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-full-10k-corrected-v1
 ```
 
-기존 번역 결과 CSV를 평가하려면 RF-007 평가 entry point를 사용합니다. 입력은 notebook의 기존 출력 컬럼인 `source`, `references`, `candidates`를 사용합니다. BLEU는 기본적으로 한국어 공백 단위 토큰화를 사용하며, glossary preservation은 후보 번역에서 `<start>...<end>` marker를 제거한 뒤 한국어 용어가 포함되었는지 검사합니다.
+기존 번역 결과 CSV를 평가하려면 RF-007 평가 entry point를 사용합니다. 입력은 notebook의 기존 출력 컬럼인 `source`, `references`, `candidates`를 사용합니다. BLEU는 기본적으로 한국어 공백 단위 토큰화를 사용하며, glossary preservation은 후보 번역에서 `<start>...<end>` marker를 제거한 뒤 한국어 용어가 포함되었는지 검사합니다. 모델이 빈 `candidates`를 생성한 경우 report를 중단하지 않고 `empty_candidate_rows`로 기록합니다.
 
 ```powershell
 venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\default.json --input translation_result.csv
 venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint fine-tuned-models\nllb-200-distilled-600M\zh2ko\pilot\run-20260525-093832\checkpoint-4
+venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --input data\review\inference\test\run-full-10k-corrected-v1\test_generated.csv --report-dir data\review\evaluation\test_report\run-full-10k-corrected-v1 --checkpoint fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-full-10k-corrected-v1\checkpoint-10000
 ```
 
 학습 notebook에서는 언어 컬럼을 NLLB 코드로 변환합니다.
