@@ -139,7 +139,7 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 该 pipeline 会先剥离 `<c=...>` 等表现层样式标签并解开对称外层包装，再使用 Stanza、jieba、kiwipiepy 和 `BAAI/bge-m3` 判断 term/entity-like segment；placeholder 行默认保留，只做 mismatch 审计。该命令不会改写 `data/segments.csv`，只会在本地 `data/review/segments/` 下生成审计 CSV。人工确认后再使用 `--apply` 重写最终语料。
 
-训练/推理工程入口目前处于 RF-006 的 smoke-test / pilot / 正式 run 硬化阶段：dry-run 只做配置读取、数据校验和 train/valid 计划。RF-006-P2 提供本地 tiny tokenizer smoke；RF-006-P3 使用真实 NLLB tokenizer 和随机初始化 tiny seq2seq model 跑 Trainer 1-step；RF-006-P4 使用真实 NLLB 模型权重跑 1-step smoke，用来验证 CUDA、special token resize、数据张量和 Trainer 链路；RF-006-P5 使用真实 NLLB 模型跑小步数 pilot training，用来验证 checkpoint 保存、resume、loss 和输出目录；RF-006-P6 加载 checkpoint 生成小样本翻译 CSV，并验证它能被 RF-007 评估入口读取；RF-007-P2 会把该 generation CSV 固定评估到报告目录，生成 summary、glossary rows、sample review 和 manifest。RF-006-P7 增加正式 `--train` 命令，会在 ignored 的 `fine-tuned-models/.../runs/run-*` 下写入固定 split artifact 和 `run_manifest.json`。P4/P5/P6/P7/P2 都是工程链路验证，直到显式启动 full training 之前不代表正式模型质量。
+训练/推理工程入口目前处于 RF-006 的 smoke-test / pilot / 正式 run 硬化阶段：dry-run 只做配置读取、数据校验和 train/valid 计划。RF-006-P2 提供本地 tiny tokenizer smoke；RF-006-P3 使用真实 NLLB tokenizer 和随机初始化 tiny seq2seq model 跑 Trainer 1-step；RF-006-P4 使用真实 NLLB 模型权重跑 1-step smoke，用来验证 CUDA、special token resize、数据张量和 Trainer 链路；RF-006-P5 使用真实 NLLB 模型跑小步数 pilot training，用来验证 checkpoint 保存、resume、loss 和输出目录；RF-006-P6 加载 checkpoint 生成小样本翻译 CSV，并验证它能被 RF-007 评估入口读取；RF-007-P2 会把该 generation CSV 固定评估到报告目录，生成 summary、glossary rows、sample review 和 manifest。RF-006-P7 增加正式 `--train` 命令，会在 ignored 的 `fine-tuned-models/.../runs/run-*` 下写入固定 split artifact 和 `run_manifest.json`。RF-006-P8 会基于该固定 validation split 生成翻译 CSV，而不是使用 `data/segments.csv` 前 N 行。P4/P5/P6/P7/P8/P2 都是工程链路验证，直到显式启动 full training 之前不代表正式模型质量。
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
@@ -151,6 +151,7 @@ venv\Scripts\python.exe scripts\train_model.py --config configs\training\default
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --train --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-name --resume-from-checkpoint latest --max-steps 6 --save-steps 2 --save-total-limit 2 --logging-steps 1
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate --model-path fine-tuned-models\nllb-200-distilled-600M\zh2ko\pilot\run-20260525-093832\checkpoint-4 --sample-rows 8
+venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate-validation --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-name
 ```
 
 如需评估已有翻译结果 CSV，使用 RF-007 评估入口。输入默认采用 notebook 旧输出列名：`source`、`references`、`candidates`。BLEU 默认按韩文空格词分词，glossary preservation 会去除候选译文中的 `<start>...<end>` marker 后检查韩文术语是否出现。

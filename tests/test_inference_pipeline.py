@@ -16,8 +16,17 @@ from longtu_translation_pipeline.inference import (  # noqa: E402
     GeneratedTranslationRow,
     InferenceGenerationResult,
     build_inference_dry_run,
+    default_validation_output_path,
     format_inference_generation,
+    format_validation_generation,
+    read_run_manifest,
+    read_validation_records,
+    resolve_latest_run_checkpoint,
+    resolve_manifest_path,
+    require_manifest_string,
+    ValidationGenerationResult,
     write_generation_csv,
+    write_validation_generation_manifest,
 )
 
 
@@ -169,6 +178,145 @@ class InferencePipelineTest(unittest.TestCase):
         self.assertIn("language_pair=zho_Hans->kor_Hang", formatted)
         self.assertIn("forced_bos_token_id=256098", formatted)
         self.assertIn("output_columns=segment_id,source,references,candidates", formatted)
+
+    def test_validation_split_can_be_read_from_run_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_dir = root / "fine-tuned-models" / "model" / "runs" / "run-test"
+            split_path = run_dir / "splits" / "validation.csv"
+            split_path.parent.mkdir(parents=True)
+            write_csv(
+                split_path,
+                ["segment_id", "zh-CN", "ko"],
+                [{"segment_id": "7", "zh-CN": "挑战BOSS", "ko": "보스 도전"}],
+            )
+            manifest_path = run_dir / "run_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "data": {
+                            "validation_split_path": str(split_path.relative_to(root))
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            manifest = read_run_manifest(manifest_path)
+            raw_path = require_manifest_string(manifest, ["data", "validation_split_path"], manifest_path)
+            resolved = resolve_manifest_path(raw_path, run_dir=run_dir, repo_root=root)
+            records = read_validation_records(resolved)
+
+        self.assertEqual(resolved, split_path)
+        self.assertEqual(records[0].record_id, "7")
+        self.assertEqual(records[0].text, "挑战BOSS")
+        self.assertEqual(records[0].reference, "보스 도전")
+
+    def test_latest_run_checkpoint_uses_numeric_suffix(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            (run_dir / "checkpoint-2").mkdir()
+            (run_dir / "checkpoint-final").mkdir()
+            (run_dir / "checkpoint-10").mkdir()
+
+            checkpoint = resolve_latest_run_checkpoint(run_dir)
+
+        self.assertEqual(checkpoint.name, "checkpoint-10")
+
+    def test_missing_validation_manifest_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest_path = Path(tmp) / "run_manifest.json"
+
+            with self.assertRaisesRegex(ValueError, "Run manifest"):
+                read_run_manifest(manifest_path)
+
+    def test_default_validation_output_path_contains_run_name(self) -> None:
+        root = Path("repo")
+        run_dir = Path("fine-tuned-models/model/runs/run-test")
+
+        output_path = default_validation_output_path(root, run_dir)
+
+        self.assertEqual(
+            output_path,
+            Path("repo/data/review/inference/validation/run-test/validation_generated.csv"),
+        )
+
+    def test_validation_generation_manifest_records_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            manifest_path = tmp_path / "validation_generation_manifest.json"
+            generation = build_generation_result(tmp_path / "validation_generated.csv")
+
+            write_validation_generation_manifest(
+                manifest_path,
+                generation,
+                run_dir=tmp_path / "run-test",
+                training_manifest_path=tmp_path / "run-test" / "run_manifest.json",
+                validation_split_path=tmp_path / "run-test" / "splits" / "validation.csv",
+            )
+            data = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(data["row_count"], 1)
+        self.assertEqual(Path(data["checkpoint_path"]), Path("fine-tuned-models/checkpoint-4"))
+        self.assertEqual(data["output_csv"], str(generation.output_path))
+
+    def test_validation_generation_format_reports_manifest_and_schema(self) -> None:
+        result = ValidationGenerationResult(
+            generation=build_generation_result(Path("data/review/inference/validation/run-test/validation_generated.csv")),
+            run_dir=Path("fine-tuned-models/model/runs/run-test"),
+            training_manifest_path=Path("fine-tuned-models/model/runs/run-test/run_manifest.json"),
+            validation_split_path=Path("fine-tuned-models/model/runs/run-test/splits/validation.csv"),
+            generation_manifest_path=Path("data/review/inference/validation/run-test/validation_generation_manifest.json"),
+        )
+
+        formatted = format_validation_generation(result)
+
+        self.assertIn("Validation generation result", formatted)
+        self.assertIn("validation_split=fine-tuned-models", formatted)
+        self.assertIn("generation_manifest=data", formatted)
+        self.assertIn("output_columns=segment_id,source,references,candidates", formatted)
+
+
+def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def build_generation_result(output_path: Path) -> InferenceGenerationResult:
+    return InferenceGenerationResult(
+        config_path=Path("inference.json"),
+        input_path=Path("splits/validation.csv"),
+        output_path=output_path,
+        model_path=Path("fine-tuned-models/checkpoint-4"),
+        tokenizer_name="facebook/nllb-200-distilled-600M",
+        source_code="zho_Hans",
+        target_code="kor_Hang",
+        forced_bos_token_id=256098,
+        special_tokens_added=2,
+        tokenizer_vocab_size=256206,
+        embedding_size_before=256204,
+        embedding_size_after=256206,
+        device="cuda",
+        cuda_device_name="NVIDIA Test GPU",
+        cuda_memory_summary="allocated_gb=1.00;reserved_gb=2.00",
+        batch_size=8,
+        max_length=400,
+        strip_glossary_markers=True,
+        input_rows=1,
+        generated_rows=1,
+        output_columns=["segment_id", "source", "references", "candidates"],
+        preview_rows=[
+            GeneratedTranslationRow(
+                record_id="1",
+                source="挑战BOSS",
+                reference="보스 도전",
+                candidate="보스 도전",
+            )
+        ],
+    )
 
 
 if __name__ == "__main__":

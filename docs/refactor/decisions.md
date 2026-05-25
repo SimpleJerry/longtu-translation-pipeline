@@ -128,6 +128,13 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Impact Scope:** `scripts/train_model.py`, `src/longtu_translation_pipeline/training.py`, local fine-tuned model directories, README workflow notes, future RF-006-P8 validation generation.
 - **Follow-up Notes:** Resume commands inherit the existing manifest row limit, explicit resume row limits must match the manifest, and checkpoint steps must be smaller than the requested `max_steps`. Validation generation should consume the fixed run split in a later RF-006 phase.
 
+## 2026-05-25: Validation Generation Uses Fixed Training Splits
+
+- **Decision:** Validation generation must read `splits/validation.csv` from a P7 run manifest rather than taking the first N rows from `data/segments.csv`.
+- **Background:** P6 sample generation verified checkpoint loading and generation shape, but it did not use the deterministic validation split that future model-quality reports depend on.
+- **Impact Scope:** `scripts/run_inference.py`, `src/longtu_translation_pipeline/inference.py`, local `data/review/inference/validation/` artifacts, README workflow notes.
+- **Follow-up Notes:** Generated validation CSVs keep the RF-007-compatible `segment_id,source,references,candidates` schema and remain local ignored artifacts.
+
 ## 2026-05-24: Evaluation Uses BLEU and Glossary Preservation Only
 
 - **Decision:** RF-007 evaluation automates corpus BLEU and glossary preservation for the simplified `<start>...<end>` marker policy. Code-token preservation is not part of the current evaluation mainline.

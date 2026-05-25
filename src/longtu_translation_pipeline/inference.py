@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 import csv
+import json
+from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from .config import InferenceConfig
 from .text_protection import strip_glossary_markers
-from .training import add_marker_special_tokens, cuda_device_name, cuda_memory_summary, resolve_training_device
+from .training import (
+    add_marker_special_tokens,
+    cuda_device_name,
+    cuda_memory_summary,
+    find_latest_checkpoint,
+    resolve_training_device,
+)
 
 
 @dataclass(frozen=True)
@@ -66,6 +74,15 @@ class InferenceGenerationResult:
     generated_rows: int
     output_columns: list[str]
     preview_rows: list[GeneratedTranslationRow]
+
+
+@dataclass(frozen=True)
+class ValidationGenerationResult:
+    generation: InferenceGenerationResult
+    run_dir: Path
+    training_manifest_path: Path
+    validation_split_path: Path
+    generation_manifest_path: Path
 
 
 def build_inference_dry_run(config: InferenceConfig) -> InferenceDryRunPlan:
@@ -126,7 +143,95 @@ def generate_translations(
 
     resolved_model_path = Path(model_path) if model_path is not None else config.model.path
     resolved_output_path = Path(output_path) if output_path is not None else config.output.path
+    return generate_records(
+        config,
+        records,
+        resolved_model_path,
+        resolved_output_path,
+        device=device,
+    )
 
+
+def generate_validation_translations(
+    config: InferenceConfig,
+    run_dir: str | Path,
+    model_path: str | Path | None = None,
+    output_path: str | Path | None = None,
+    validation_rows: int | None = None,
+    device: str = "auto",
+    repo_root: str | Path | None = None,
+) -> ValidationGenerationResult:
+    if validation_rows is not None and validation_rows <= 0:
+        raise ValueError("validation_rows must be a positive integer when provided")
+
+    resolved_run_dir = Path(run_dir)
+    root = Path(repo_root) if repo_root is not None else Path.cwd()
+    manifest_path = resolved_run_dir / "run_manifest.json"
+    manifest = read_run_manifest(manifest_path)
+    validation_split_path = resolve_manifest_path(
+        require_manifest_string(manifest, ["data", "validation_split_path"], manifest_path),
+        run_dir=resolved_run_dir,
+        repo_root=root,
+    )
+    if not validation_split_path.exists():
+        raise ValueError(f"Validation split does not exist: {validation_split_path}")
+
+    resolved_model_path = (
+        Path(model_path)
+        if model_path is not None
+        else resolve_latest_run_checkpoint(resolved_run_dir)
+    )
+    if not resolved_model_path.is_absolute() and not resolved_model_path.exists():
+        candidate = root / resolved_model_path
+        if candidate.exists():
+            resolved_model_path = candidate
+    if not resolved_model_path.exists() or not resolved_model_path.is_dir():
+        raise ValueError(f"Checkpoint does not exist or is not a directory: {resolved_model_path}")
+
+    records = read_validation_records(validation_split_path)
+    if validation_rows is not None:
+        records = records[:validation_rows]
+    if not records:
+        raise ValueError("No validation records selected for generation")
+
+    resolved_output_path = (
+        Path(output_path)
+        if output_path is not None
+        else default_validation_output_path(root, resolved_run_dir)
+    )
+    generation = generate_records(
+        config,
+        records,
+        resolved_model_path,
+        resolved_output_path,
+        device=device,
+        input_path=validation_split_path,
+    )
+    generation_manifest_path = resolved_output_path.with_name("validation_generation_manifest.json")
+    write_validation_generation_manifest(
+        generation_manifest_path,
+        generation,
+        run_dir=resolved_run_dir,
+        training_manifest_path=manifest_path,
+        validation_split_path=validation_split_path,
+    )
+    return ValidationGenerationResult(
+        generation=generation,
+        run_dir=resolved_run_dir,
+        training_manifest_path=manifest_path,
+        validation_split_path=validation_split_path,
+        generation_manifest_path=generation_manifest_path,
+    )
+
+
+def generate_records(
+    config: InferenceConfig,
+    records: Sequence[InferenceRecord],
+    model_path: Path,
+    output_path: Path,
+    device: str = "auto",
+    input_path: Path | None = None,
+) -> InferenceGenerationResult:
     from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(config.model.tokenizer_name)
@@ -137,7 +242,7 @@ def generate_translations(
         raise ValueError(f"Tokenizer does not know target language code: {config.language.target_code}")
 
     inference_device = resolve_training_device(device)
-    model = AutoModelForSeq2SeqLM.from_pretrained(resolved_model_path)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
     embedding_size_before = model.get_input_embeddings().num_embeddings
     if embedding_size_before != len(tokenizer):
         model.resize_token_embeddings(len(tokenizer))
@@ -148,14 +253,14 @@ def generate_translations(
     model.eval()
 
     rows = run_generation_batches(config, tokenizer, model, records, int(forced_bos_token_id))
-    resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
-    write_generation_csv(resolved_output_path, rows)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    write_generation_csv(output_path, rows)
 
     return InferenceGenerationResult(
         config_path=config.path,
-        input_path=config.input.path,
-        output_path=resolved_output_path,
-        model_path=resolved_model_path,
+        input_path=input_path if input_path is not None else config.input.path,
+        output_path=output_path,
+        model_path=model_path,
         tokenizer_name=config.model.tokenizer_name,
         source_code=config.language.source_code,
         target_code=config.language.target_code,
@@ -175,6 +280,96 @@ def generate_translations(
         output_columns=["segment_id", "source", "references", "candidates"],
         preview_rows=rows[: config.dry_run.preview_rows],
     )
+
+
+def read_validation_records(path: str | Path) -> list[InferenceRecord]:
+    validation_path = Path(path)
+    records: list[InferenceRecord] = []
+    with validation_path.open(encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        require_columns(validation_path, reader.fieldnames, ["segment_id", "zh-CN", "ko"])
+        for row_number, row in enumerate(reader, start=2):
+            record_id = row.get("segment_id", "").strip()
+            text = row.get("zh-CN", "").strip()
+            reference = row.get("ko", "").strip()
+            if not record_id or not text or not reference:
+                raise ValueError(f"Empty validation value at {validation_path}:{row_number}")
+            records.append(InferenceRecord(record_id=record_id, text=text, reference=reference))
+    if not records:
+        raise ValueError(f"No validation records found: {validation_path}")
+    return records
+
+
+def read_run_manifest(path: str | Path) -> dict[str, Any]:
+    manifest_path = Path(path)
+    if not manifest_path.exists():
+        raise ValueError(f"Run manifest does not exist: {manifest_path}")
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid run manifest JSON: {manifest_path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValueError(f"Run manifest root must be a JSON object: {manifest_path}")
+    return data
+
+
+def require_manifest_string(data: dict[str, Any], keys: Sequence[str], path: Path) -> str:
+    value: Any = data
+    for key in keys:
+        if not isinstance(value, dict) or key not in value:
+            raise ValueError(f"Run manifest is missing {'.'.join(keys)}: {path}")
+        value = value[key]
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"Run manifest field must be a non-empty string: {'.'.join(keys)}")
+    return value
+
+
+def resolve_manifest_path(value: str, run_dir: Path, repo_root: Path) -> Path:
+    path = Path(value)
+    if path.is_absolute():
+        return path
+    candidates = [repo_root / path, run_dir / path]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+def resolve_latest_run_checkpoint(run_dir: str | Path) -> Path:
+    checkpoint = find_latest_checkpoint(run_dir)
+    if checkpoint is None:
+        raise ValueError(f"No numeric checkpoint found in run directory: {run_dir}")
+    return checkpoint
+
+
+def default_validation_output_path(repo_root: Path, run_dir: Path) -> Path:
+    return repo_root / "data" / "review" / "inference" / "validation" / run_dir.name / "validation_generated.csv"
+
+
+def write_validation_generation_manifest(
+    path: Path,
+    generation: InferenceGenerationResult,
+    run_dir: Path,
+    training_manifest_path: Path,
+    validation_split_path: Path,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "run_dir": str(run_dir),
+        "training_manifest_path": str(training_manifest_path),
+        "checkpoint_path": str(generation.model_path),
+        "validation_split_path": str(validation_split_path),
+        "output_csv": str(generation.output_path),
+        "row_count": generation.generated_rows,
+        "language_pair": f"{generation.source_code}->{generation.target_code}",
+        "forced_bos_token_id": generation.forced_bos_token_id,
+        "device": generation.device,
+        "batch_size": generation.batch_size,
+        "max_length": generation.max_length,
+        "strip_glossary_markers": generation.strip_glossary_markers,
+    }
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def configure_tokenizer_language_codes(tokenizer: object, config: InferenceConfig) -> None:
@@ -300,4 +495,16 @@ def format_inference_generation(result: InferenceGenerationResult) -> str:
             f"preview_{index}={row.record_id}: "
             f"{row.source} => {row.candidate} | reference={row.reference}"
         )
+    return "\n".join(lines)
+
+
+def format_validation_generation(result: ValidationGenerationResult) -> str:
+    lines = [
+        "Validation generation result",
+        f"run_dir={result.run_dir}",
+        f"training_manifest={result.training_manifest_path}",
+        f"validation_split={result.validation_split_path}",
+        f"generation_manifest={result.generation_manifest_path}",
+    ]
+    lines.extend(format_inference_generation(result.generation).splitlines()[1:])
     return "\n".join(lines)
