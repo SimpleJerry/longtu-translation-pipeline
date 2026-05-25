@@ -181,6 +181,7 @@ venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\defa
 ```
 
 기존 번역 결과 CSV를 평가하려면 RF-007 평가 entry point를 사용합니다. 입력은 notebook의 기존 출력 컬럼인 `source`, `references`, `candidates`를 사용합니다. BLEU는 기본적으로 한국어 공백 단위 토큰화를 사용하며, glossary preservation은 후보 번역에서 `<start>...<end>` marker를 제거한 뒤 한국어 용어가 포함되었는지 검사합니다. 모델이 빈 `candidates`를 생성한 경우 report를 중단하지 않고 `empty_candidate_rows`로 기록합니다.
+Inference entry point는 이제 tokenization 전에 `data/glossary.csv` 기준으로 source에 학습과 동일한 `<start>...<end>` 용어 marker를 적용합니다. 단, 생성 CSV에는 review를 위해 원본 source를 그대로 씁니다. RF-007은 exact와 no-space glossary preservation을 함께 보고합니다. exact는 형식 일관성을 보고, no-space는 한국어 띄어쓰기 차이를 실제 용어 누락으로 오판하지 않기 위한 지표입니다.
 
 ```powershell
 venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\default.json --input translation_result.csv

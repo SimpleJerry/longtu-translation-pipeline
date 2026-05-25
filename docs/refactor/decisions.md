@@ -128,12 +128,26 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Impact Scope:** `configs/inference/default.json`, `src/longtu_translation_pipeline/inference.py`, `scripts/run_inference.py`, local inference review artifacts, README workflow notes.
 - **Follow-up Notes:** Generated inference CSVs are local artifacts under ignored `data/review/inference/`. Full validation generation and fixed split selection belong to later RF-006/RF-007 phases.
 
+## 2026-05-26: Inference Uses Source Terminology Markers
+
+- **Decision:** Inference applies source-only `<start>...<end>` glossary markers before tokenization by default, but generated CSVs keep the raw source text.
+- **Background:** The 10k validation generation exposed a train/inference mismatch: training used terminology markers while inference fed raw source text.
+- **Impact Scope:** `configs/inference/default.json`, `src/longtu_translation_pipeline/inference.py`, validation/test generation manifests.
+- **Follow-up Notes:** Candidate text is still stripped of glossary markers before report output when `strip_glossary_markers=true`.
+
 ## 2026-05-25: Generation Evaluation Reports Are Local Engineering Artifacts
 
 - **Decision:** Generation evaluation reports live under ignored `data/review/evaluation/` and record checkpoint/generation metadata, BLEU, glossary preservation, and sample review rows without implying model quality.
 - **Background:** The project needs a fixed report shape for RF-006 generation outputs before running long training or full validation.
 - **Impact Scope:** `configs/evaluation/generation_report.json`, `src/longtu_translation_pipeline/evaluation.py`, `scripts/evaluate_translation.py`, README workflow notes.
 - **Follow-up Notes:** Use this report format for pilot, validation, and future test outputs. Full-run quality conclusions require a real training run, a selected checkpoint, and a held-out test report.
+
+## 2026-05-26: Glossary Preservation Reports Exact And No-Space Metrics
+
+- **Decision:** RF-007 reports exact glossary preservation and no-space glossary preservation side by side.
+- **Background:** Strict cleaning accepts exact/no-space Korean preservation, and validation showed cases such as `추가피해` versus `추가 피해` that should not be treated as true terminology failures.
+- **Impact Scope:** `src/longtu_translation_pipeline/evaluation.py`, `scripts/evaluate_translation.py`, evaluation reports under `data/review/evaluation/`.
+- **Follow-up Notes:** `glossary_preservation_rate` remains the exact metric for compatibility; use `glossary_preservation_rate_nospace` when judging term retention across Korean spacing differences.
 
 ## 2026-05-25: Formal Training Runs Require Split Artifacts And Manifests
 

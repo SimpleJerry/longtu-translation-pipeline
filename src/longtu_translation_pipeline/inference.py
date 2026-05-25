@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from .config import InferenceConfig
-from .text_protection import strip_glossary_markers
+from .text_protection import load_glossary_terms, mark_source_glossary_terms, strip_glossary_markers
 from .training import (
     add_marker_special_tokens,
     cuda_device_name,
@@ -28,6 +28,13 @@ class InferenceRecord:
 
 
 @dataclass(frozen=True)
+class PreparedInferenceRecord:
+    record: InferenceRecord
+    generation_text: str
+    source_terms_marked: int
+
+
+@dataclass(frozen=True)
 class InferenceDryRunPlan:
     config_path: Path
     input_path: Path
@@ -37,6 +44,9 @@ class InferenceDryRunPlan:
     target_code: str
     batch_size: int
     max_length: int
+    source_terminology_markers: bool
+    marked_source_rows: int
+    source_terms_marked: int
     strip_glossary_markers: bool
     total_rows: int
     preview_records: list[InferenceRecord]
@@ -69,6 +79,9 @@ class InferenceGenerationResult:
     cuda_memory_summary: str
     batch_size: int
     max_length: int
+    source_terminology_markers: bool
+    marked_source_rows: int
+    source_terms_marked: int
     strip_glossary_markers: bool
     input_rows: int
     generated_rows: int
@@ -96,6 +109,8 @@ class TestGenerationResult:
 
 def build_inference_dry_run(config: InferenceConfig) -> InferenceDryRunPlan:
     records = read_inference_records(config)
+    prepared_records = prepare_inference_records(config, records)
+    marker_stats = source_marker_stats(prepared_records)
     return InferenceDryRunPlan(
         config_path=config.path,
         input_path=config.input.path,
@@ -105,6 +120,9 @@ def build_inference_dry_run(config: InferenceConfig) -> InferenceDryRunPlan:
         target_code=config.language.target_code,
         batch_size=config.generation.batch_size,
         max_length=config.generation.max_length,
+        source_terminology_markers=config.glossary.source_terminology_markers,
+        marked_source_rows=marker_stats[0],
+        source_terms_marked=marker_stats[1],
         strip_glossary_markers=config.output.strip_glossary_markers,
         total_rows=len(records),
         preview_records=records[: config.dry_run.preview_rows],
@@ -319,7 +337,9 @@ def generate_records(
         model = model.to("cuda")
     model.eval()
 
-    rows = run_generation_batches(config, tokenizer, model, records, int(forced_bos_token_id))
+    prepared_records = prepare_inference_records(config, records)
+    marked_source_rows, source_terms_marked = source_marker_stats(prepared_records)
+    rows = run_generation_batches(config, tokenizer, model, prepared_records, int(forced_bos_token_id))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     write_generation_csv(output_path, rows)
 
@@ -341,6 +361,9 @@ def generate_records(
         cuda_memory_summary=cuda_memory_summary(inference_device),
         batch_size=config.generation.batch_size,
         max_length=config.generation.max_length,
+        source_terminology_markers=config.glossary.source_terminology_markers,
+        marked_source_rows=marked_source_rows,
+        source_terms_marked=source_terms_marked,
         strip_glossary_markers=config.output.strip_glossary_markers,
         input_rows=len(records),
         generated_rows=len(rows),
@@ -477,6 +500,9 @@ def write_split_generation_manifest(
         "device": generation.device,
         "batch_size": generation.batch_size,
         "max_length": generation.max_length,
+        "source_terminology_markers": generation.source_terminology_markers,
+        "marked_source_rows": generation.marked_source_rows,
+        "source_terms_marked": generation.source_terms_marked,
         "strip_glossary_markers": generation.strip_glossary_markers,
     }
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -493,17 +519,47 @@ def configure_tokenizer_language_codes(tokenizer: object, config: InferenceConfi
             continue
 
 
+def prepare_inference_records(
+    config: InferenceConfig,
+    records: Sequence[InferenceRecord],
+) -> list[PreparedInferenceRecord]:
+    if not config.glossary.source_terminology_markers:
+        return [
+            PreparedInferenceRecord(record=record, generation_text=record.text, source_terms_marked=0)
+            for record in records
+        ]
+
+    terms = load_glossary_terms(config.glossary.path)
+    prepared_records: list[PreparedInferenceRecord] = []
+    for record in records:
+        marked_text, marked_count = mark_source_glossary_terms(record.text, terms)
+        prepared_records.append(
+            PreparedInferenceRecord(
+                record=record,
+                generation_text=marked_text,
+                source_terms_marked=marked_count,
+            )
+        )
+    return prepared_records
+
+
+def source_marker_stats(records: Sequence[PreparedInferenceRecord]) -> tuple[int, int]:
+    marked_source_rows = sum(1 for record in records if record.source_terms_marked > 0)
+    source_terms_marked = sum(record.source_terms_marked for record in records)
+    return marked_source_rows, source_terms_marked
+
+
 def run_generation_batches(
     config: InferenceConfig,
     tokenizer: object,
     model: object,
-    records: Sequence[InferenceRecord],
+    records: Sequence[PreparedInferenceRecord],
     forced_bos_token_id: int,
 ) -> list[GeneratedTranslationRow]:
     rows: list[GeneratedTranslationRow] = []
     for start in range(0, len(records), config.generation.batch_size):
         batch_records = records[start : start + config.generation.batch_size]
-        texts = [record.text for record in batch_records]
+        texts = [record.generation_text for record in batch_records]
         encoded = tokenizer(
             texts,
             return_tensors="pt",
@@ -519,7 +575,8 @@ def run_generation_batches(
             max_length=config.generation.max_length,
         )
         decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
-        for record, candidate in zip(batch_records, decoded):
+        for prepared_record, candidate in zip(batch_records, decoded):
+            record = prepared_record.record
             clean_candidate = candidate.strip()
             if config.output.strip_glossary_markers:
                 clean_candidate = strip_glossary_markers(clean_candidate).strip()
@@ -568,6 +625,9 @@ def format_inference_dry_run(plan: InferenceDryRunPlan) -> str:
         f"language_pair={plan.source_code}->{plan.target_code}",
         f"batch_size={plan.batch_size}",
         f"max_length={plan.max_length}",
+        f"source_terminology_markers={plan.source_terminology_markers}",
+        f"marked_source_rows={plan.marked_source_rows}",
+        f"source_terms_marked={plan.source_terms_marked}",
         f"strip_glossary_markers={plan.strip_glossary_markers}",
         f"total_rows={plan.total_rows}",
     ]
@@ -595,6 +655,9 @@ def format_inference_generation(result: InferenceGenerationResult) -> str:
         f"cuda_memory_summary={result.cuda_memory_summary}",
         f"batch_size={result.batch_size}",
         f"max_length={result.max_length}",
+        f"source_terminology_markers={result.source_terminology_markers}",
+        f"marked_source_rows={result.marked_source_rows}",
+        f"source_terms_marked={result.source_terms_marked}",
         f"strip_glossary_markers={result.strip_glossary_markers}",
         f"input_rows={result.input_rows}",
         f"generated_rows={result.generated_rows}",

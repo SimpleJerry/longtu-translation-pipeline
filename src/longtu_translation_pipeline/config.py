@@ -101,6 +101,12 @@ class InferenceModelConfig:
 
 
 @dataclass(frozen=True)
+class InferenceGlossaryConfig:
+    path: Path
+    source_terminology_markers: bool
+
+
+@dataclass(frozen=True)
 class InferenceOutputConfig:
     path: Path
     strip_glossary_markers: bool
@@ -118,6 +124,7 @@ class InferenceConfig:
     input: InferenceInputConfig
     language: LanguageConfig
     model: InferenceModelConfig
+    glossary: InferenceGlossaryConfig
     output: InferenceOutputConfig
     generation: GenerationConfig
     dry_run: DryRunConfig
@@ -228,6 +235,7 @@ def load_inference_config(path: str | Path, base_dir: str | Path | None = None) 
     input_section = require_mapping(data, "input", config_path)
     language_section = require_mapping(data, "language", config_path)
     model_section = require_mapping(data, "model", config_path)
+    glossary_section = require_mapping(data, "glossary", config_path)
     output_section = require_mapping(data, "output", config_path)
     generation_section = require_mapping(data, "generation", config_path)
     dry_run_section = require_mapping(data, "dry_run", config_path)
@@ -244,6 +252,14 @@ def load_inference_config(path: str | Path, base_dir: str | Path | None = None) 
         model=InferenceModelConfig(
             path=resolve_config_path(require_str(model_section, "path", config_path), path_base),
             tokenizer_name=require_str(model_section, "tokenizer_name", config_path),
+        ),
+        glossary=InferenceGlossaryConfig(
+            path=resolve_config_path(require_str(glossary_section, "path", config_path), path_base),
+            source_terminology_markers=require_bool(
+                glossary_section,
+                "source_terminology_markers",
+                config_path,
+            ),
         ),
         output=InferenceOutputConfig(
             path=resolve_config_path(require_str(output_section, "path", config_path), path_base),

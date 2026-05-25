@@ -98,6 +98,27 @@ def protect_glossary_terms(
     )
 
 
+def mark_source_glossary_terms(
+    source_text: str,
+    terms: Sequence[GlossaryTerm],
+) -> tuple[str, int]:
+    source_occupied = occupied_ranges(source_text)
+    source_replacements: list[tuple[int, int, str]] = []
+    applied_terms = 0
+
+    for term in terms:
+        source_hits = available_occurrences(source_text, term.zh_cn, source_occupied)
+        if not source_hits:
+            continue
+
+        applied_terms += len(source_hits)
+        for start, end in source_hits:
+            source_occupied.append((start, end))
+            source_replacements.append((start, end, f"<start>{term.zh_cn}<end>"))
+
+    return apply_replacements(source_text, source_replacements), applied_terms
+
+
 def strip_glossary_markers(text: str) -> str:
     return GLOSSARY_MARKER_RE.sub(r"\1", text)
 

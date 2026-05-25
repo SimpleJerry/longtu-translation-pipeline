@@ -64,6 +64,31 @@ class EvaluationTest(unittest.TestCase):
         self.assertEqual(result.rows_not_matched, 1)
         self.assertEqual(result.rows_without_terms, 1)
         self.assertAlmostEqual(result.preservation_rate, 0.6)
+        self.assertAlmostEqual(result.preservation_rate_exact, 0.6)
+
+    def test_glossary_preservation_reports_nospace_matches_separately(self) -> None:
+        rows = [
+            TranslationRow(
+                1,
+                "201",
+                "追加伤害提升",
+                "추가피해 증가",
+                "추가 피해 증가",
+            )
+        ]
+        terms = [GlossaryTerm("追加伤害", "추가피해")]
+
+        result = compute_glossary_preservation(rows, terms)
+        row = result.row_results[0]
+
+        self.assertEqual(result.matched_terms_exact, 0)
+        self.assertEqual(result.matched_terms_nospace, 1)
+        self.assertAlmostEqual(result.preservation_rate_exact, 0.0)
+        self.assertAlmostEqual(result.preservation_rate_nospace, 1.0)
+        self.assertEqual(row.status_exact, "not_matched")
+        self.assertEqual(row.status_nospace, "all_matched")
+        self.assertEqual(row.missing_terms_exact, ["추가피해"])
+        self.assertEqual(row.missing_terms_nospace, [])
 
     def test_evaluate_translation_reads_config_and_fixture(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -158,9 +183,12 @@ class EvaluationTest(unittest.TestCase):
         self.assertEqual(summary_rows[0]["metric"], "input")
         self.assertEqual(review_rows[0]["segment_id"], "10")
         self.assertEqual(review_rows[0]["glossary_status"], "not_matched")
+        self.assertIn("glossary_status_nospace", review_rows[0])
+        self.assertIn("glossary_preservation_rate_nospace", {row["metric"] for row in summary_rows})
         self.assertEqual(Path(manifest["checkpoint_path"]), Path("fine-tuned-models/checkpoint-4"))
         self.assertEqual(manifest["row_count"], 2)
         self.assertEqual(manifest["generation_csv"], str(input_path))
+        self.assertIn("glossary_preservation_rate_nospace", manifest)
 
     def test_missing_translation_column_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

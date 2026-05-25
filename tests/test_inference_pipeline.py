@@ -25,6 +25,8 @@ from longtu_translation_pipeline.inference import (  # noqa: E402
     read_run_manifest,
     read_test_records,
     read_validation_records,
+    InferenceRecord,
+    prepare_inference_records,
     resolve_latest_run_checkpoint,
     resolve_manifest_path,
     require_manifest_string,
@@ -40,6 +42,7 @@ class InferencePipelineTest(unittest.TestCase):
             tmp_path = Path(tmp)
             input_path = tmp_path / "segments.csv"
             output_path = tmp_path / "translation_result.csv"
+            glossary_path = tmp_path / "glossary.csv"
             config_path = tmp_path / "inference.json"
 
             with input_path.open("w", encoding="utf-8-sig", newline="") as f:
@@ -47,6 +50,11 @@ class InferencePipelineTest(unittest.TestCase):
                 writer.writeheader()
                 writer.writerow({"segment_id": "1", "zh-CN": "勇士竞技", "ko": "용맹의 결투장"})
                 writer.writerow({"segment_id": "2", "zh-CN": "挑战次数:{0}", "ko": "도전 횟수: {0}"})
+            write_csv(
+                glossary_path,
+                ["term_id", "zh-CN", "ko"],
+                [{"term_id": "1", "zh-CN": "勇士竞技", "ko": "용맹의 결투장"}],
+            )
 
             config_path.write_text(
                 json.dumps(
@@ -62,6 +70,10 @@ class InferencePipelineTest(unittest.TestCase):
                         "path": "fine-tuned-models/test",
                         "tokenizer_name": "facebook/nllb-200-distilled-600M",
                     },
+                        "glossary": {
+                            "path": str(glossary_path),
+                            "source_terminology_markers": True,
+                        },
                         "output": {"path": str(output_path), "strip_glossary_markers": True},
                         "generation": {"batch_size": 4, "max_length": 64},
                         "dry_run": {"preview_rows": 1},
@@ -76,6 +88,9 @@ class InferencePipelineTest(unittest.TestCase):
         self.assertEqual(plan.total_rows, 2)
         self.assertEqual(plan.output_path, output_path)
         self.assertEqual(plan.batch_size, 4)
+        self.assertTrue(plan.source_terminology_markers)
+        self.assertEqual(plan.marked_source_rows, 1)
+        self.assertEqual(plan.source_terms_marked, 1)
         self.assertEqual(plan.preview_records[0].record_id, "1")
         self.assertEqual(plan.preview_records[0].text, "勇士竞技")
         self.assertEqual(plan.preview_records[0].reference, "용맹의 결투장")
@@ -84,11 +99,13 @@ class InferencePipelineTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             input_path = tmp_path / "segments.csv"
+            glossary_path = tmp_path / "glossary.csv"
             config_path = tmp_path / "inference.json"
 
             with input_path.open("w", encoding="utf-8-sig", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=["segment_id", "zh-CN", "ko"])
                 writer.writeheader()
+            write_csv(glossary_path, ["term_id", "zh-CN", "ko"], [])
 
             config_path.write_text(
                 json.dumps(
@@ -104,6 +121,10 @@ class InferencePipelineTest(unittest.TestCase):
                         "path": "fine-tuned-models/test",
                         "tokenizer_name": "facebook/nllb-200-distilled-600M",
                     },
+                        "glossary": {
+                            "path": str(glossary_path),
+                            "source_terminology_markers": True,
+                        },
                         "output": {"path": "translation_result.csv", "strip_glossary_markers": True},
                         "generation": {"batch_size": 4, "max_length": 64},
                         "dry_run": {"preview_rows": 1},
@@ -141,6 +162,66 @@ class InferencePipelineTest(unittest.TestCase):
         self.assertEqual(rows[0]["references"], "보스 도전")
         self.assertEqual(rows[0]["candidates"], "보스 도전")
 
+    def test_prepare_records_marks_source_but_keeps_raw_output_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_path = tmp_path / "segments.csv"
+            output_path = tmp_path / "generated.csv"
+            glossary_path = tmp_path / "glossary.csv"
+            config_path = tmp_path / "inference.json"
+            write_csv(input_path, ["segment_id", "zh-CN", "ko"], [])
+            write_csv(
+                glossary_path,
+                ["term_id", "zh-CN", "ko"],
+                [{"term_id": "1", "zh-CN": "BOSS", "ko": "보스"}],
+            )
+            write_inference_config(config_path, input_path, output_path, glossary_path, True)
+
+            config = load_inference_config(config_path)
+            prepared = prepare_inference_records(
+                config,
+                [InferenceRecord(record_id="1", text="挑战BOSS", reference="보스 도전")],
+            )
+            write_generation_csv(
+                output_path,
+                [
+                    GeneratedTranslationRow(
+                        record_id=prepared[0].record.record_id,
+                        source=prepared[0].record.text,
+                        reference=prepared[0].record.reference,
+                        candidate="보스 도전",
+                    )
+                ],
+            )
+            rows = read_csv(output_path)
+
+        self.assertEqual(prepared[0].generation_text, "挑战<start>BOSS<end>")
+        self.assertEqual(prepared[0].source_terms_marked, 1)
+        self.assertEqual(rows[0]["source"], "挑战BOSS")
+
+    def test_prepare_records_can_disable_source_markers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_path = tmp_path / "segments.csv"
+            output_path = tmp_path / "generated.csv"
+            glossary_path = tmp_path / "glossary.csv"
+            config_path = tmp_path / "inference.json"
+            write_csv(input_path, ["segment_id", "zh-CN", "ko"], [])
+            write_csv(
+                glossary_path,
+                ["term_id", "zh-CN", "ko"],
+                [{"term_id": "1", "zh-CN": "BOSS", "ko": "보스"}],
+            )
+            write_inference_config(config_path, input_path, output_path, glossary_path, False)
+
+            prepared = prepare_inference_records(
+                load_inference_config(config_path),
+                [InferenceRecord(record_id="1", text="挑战BOSS", reference="보스 도전")],
+            )
+
+        self.assertEqual(prepared[0].generation_text, "挑战BOSS")
+        self.assertEqual(prepared[0].source_terms_marked, 0)
+
     def test_generation_result_format_reports_model_and_schema(self) -> None:
         result = InferenceGenerationResult(
             config_path=Path("inference.json"),
@@ -160,6 +241,9 @@ class InferencePipelineTest(unittest.TestCase):
             cuda_memory_summary="allocated_gb=1.00;reserved_gb=2.00",
             batch_size=8,
             max_length=400,
+            source_terminology_markers=True,
+            marked_source_rows=1,
+            source_terms_marked=1,
             strip_glossary_markers=True,
             input_rows=1,
             generated_rows=1,
@@ -181,6 +265,8 @@ class InferencePipelineTest(unittest.TestCase):
         self.assertIn("tokenizer_name=facebook/nllb-200-distilled-600M", formatted)
         self.assertIn("language_pair=zho_Hans->kor_Hang", formatted)
         self.assertIn("forced_bos_token_id=256098", formatted)
+        self.assertIn("source_terminology_markers=True", formatted)
+        self.assertIn("marked_source_rows=1", formatted)
         self.assertIn("output_columns=segment_id,source,references,candidates", formatted)
 
     def test_validation_split_can_be_read_from_run_manifest(self) -> None:
@@ -346,6 +432,46 @@ def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> 
         writer.writerows(rows)
 
 
+def read_csv(path: Path) -> list[dict[str, str]]:
+    with path.open(encoding="utf-8-sig", newline="") as f:
+        return list(csv.DictReader(f))
+
+
+def write_inference_config(
+    path: Path,
+    input_path: Path,
+    output_path: Path,
+    glossary_path: Path,
+    source_terminology_markers: bool,
+) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "input": {
+                    "path": str(input_path),
+                    "text_column": "zh-CN",
+                    "reference_column": "ko",
+                    "id_column": "segment_id",
+                },
+                "language": {"source_code": "zho_Hans", "target_code": "kor_Hang"},
+                "model": {
+                    "path": "fine-tuned-models/test",
+                    "tokenizer_name": "facebook/nllb-200-distilled-600M",
+                },
+                "glossary": {
+                    "path": str(glossary_path),
+                    "source_terminology_markers": source_terminology_markers,
+                },
+                "output": {"path": str(output_path), "strip_glossary_markers": True},
+                "generation": {"batch_size": 4, "max_length": 64},
+                "dry_run": {"preview_rows": 1},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+
 def build_generation_result(output_path: Path) -> InferenceGenerationResult:
     return InferenceGenerationResult(
         config_path=Path("inference.json"),
@@ -365,6 +491,9 @@ def build_generation_result(output_path: Path) -> InferenceGenerationResult:
         cuda_memory_summary="allocated_gb=1.00;reserved_gb=2.00",
         batch_size=8,
         max_length=400,
+        source_terminology_markers=True,
+        marked_source_rows=1,
+        source_terms_marked=1,
         strip_glossary_markers=True,
         input_rows=1,
         generated_rows=1,

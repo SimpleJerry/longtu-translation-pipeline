@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from longtu_translation_pipeline.text_protection import (  # noqa: E402
     GlossaryTerm,
     load_glossary_terms,
+    mark_source_glossary_terms,
     protect_training_pair,
     strip_glossary_markers,
 )
@@ -75,6 +76,15 @@ class TextProtectionTest(unittest.TestCase):
 
         self.assertEqual(result.source_text, "挑战次数:{0}/{1}")
         self.assertEqual(result.target_text, "도전 횟수: {0}/{1}")
+
+    def test_source_only_marker_does_not_require_target_text(self) -> None:
+        marked, count = mark_source_glossary_terms(
+            "挑战BOSS和BOSS层",
+            [GlossaryTerm("BOSS层", "BOSS층"), GlossaryTerm("BOSS", "보스")],
+        )
+
+        self.assertEqual(marked, "挑战<start>BOSS<end>和<start>BOSS层<end>")
+        self.assertEqual(count, 2)
 
     def test_tags_are_not_replaced_with_code_tokens(self) -> None:
         result = protect_training_pair("<c=green>2%</c>", "<c=green>2%</c>", [])

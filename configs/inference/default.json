@@ -13,6 +13,10 @@
     "path": "fine-tuned-models/nllb-200-distilled-600M/zh2ko",
     "tokenizer_name": "facebook/nllb-200-distilled-600M"
   },
+  "glossary": {
+    "path": "data/glossary.csv",
+    "source_terminology_markers": true
+  },
   "output": {
     "path": "data/review/inference/generated_samples.csv",
     "strip_glossary_markers": true

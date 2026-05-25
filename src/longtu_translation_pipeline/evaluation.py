@@ -55,6 +55,12 @@ class GlossaryRowResult:
     matched_count: int
     missing_terms: list[str]
     status: str
+    matched_count_exact: int
+    missing_terms_exact: list[str]
+    status_exact: str
+    matched_count_nospace: int
+    missing_terms_nospace: list[str]
+    status_nospace: str
 
 
 @dataclass(frozen=True)
@@ -67,6 +73,16 @@ class GlossaryPreservationResult:
     rows_partially_matched: int
     rows_not_matched: int
     rows_without_terms: int
+    matched_terms_exact: int
+    preservation_rate_exact: float
+    rows_all_matched_exact: int
+    rows_partially_matched_exact: int
+    rows_not_matched_exact: int
+    matched_terms_nospace: int
+    preservation_rate_nospace: float
+    rows_all_matched_nospace: int
+    rows_partially_matched_nospace: int
+    rows_not_matched_nospace: int
     row_results: list[GlossaryRowResult]
 
 
@@ -249,45 +265,74 @@ def compute_glossary_preservation(
     terms: Sequence[GlossaryTerm],
 ) -> GlossaryPreservationResult:
     total_terms = 0
-    matched_terms = 0
+    matched_terms_exact = 0
+    matched_terms_nospace = 0
     row_results: list[GlossaryRowResult] = []
 
     for index, row in enumerate(rows, start=1):
         row_terms = terms_in_source(row.source, terms)
         candidate = strip_glossary_markers(row.candidate)
-        missing_terms = [term.target for term in row_terms if term.target not in candidate]
-        row_matched = len(row_terms) - len(missing_terms)
+        normalized_candidate = normalize_no_space(candidate)
+        missing_terms_exact = [term.target for term in row_terms if term.target not in candidate]
+        missing_terms_nospace = [
+            term.target
+            for term in row_terms
+            if normalize_no_space(term.target) not in normalized_candidate
+        ]
+        row_matched_exact = len(row_terms) - len(missing_terms_exact)
+        row_matched_nospace = len(row_terms) - len(missing_terms_nospace)
 
         total_terms += len(row_terms)
-        matched_terms += row_matched
+        matched_terms_exact += row_matched_exact
+        matched_terms_nospace += row_matched_nospace
         row_results.append(
             GlossaryRowResult(
                 row_number=index,
                 source=row.source,
                 candidate=row.candidate,
                 term_count=len(row_terms),
-                matched_count=row_matched,
-                missing_terms=missing_terms,
-                status=glossary_status(len(row_terms), row_matched),
+                matched_count=row_matched_exact,
+                missing_terms=missing_terms_exact,
+                status=glossary_status(len(row_terms), row_matched_exact),
+                matched_count_exact=row_matched_exact,
+                missing_terms_exact=missing_terms_exact,
+                status_exact=glossary_status(len(row_terms), row_matched_exact),
+                matched_count_nospace=row_matched_nospace,
+                missing_terms_nospace=missing_terms_nospace,
+                status_nospace=glossary_status(len(row_terms), row_matched_nospace),
             )
         )
 
     rows_with_terms = sum(1 for row in row_results if row.term_count > 0)
-    rows_all_matched = sum(1 for row in row_results if row.status == "all_matched")
-    rows_partially_matched = sum(1 for row in row_results if row.status == "partially_matched")
-    rows_not_matched = sum(1 for row in row_results if row.status == "not_matched")
+    rows_all_matched_exact = sum(1 for row in row_results if row.status_exact == "all_matched")
+    rows_partially_matched_exact = sum(1 for row in row_results if row.status_exact == "partially_matched")
+    rows_not_matched_exact = sum(1 for row in row_results if row.status_exact == "not_matched")
+    rows_all_matched_nospace = sum(1 for row in row_results if row.status_nospace == "all_matched")
+    rows_partially_matched_nospace = sum(1 for row in row_results if row.status_nospace == "partially_matched")
+    rows_not_matched_nospace = sum(1 for row in row_results if row.status_nospace == "not_matched")
     rows_without_terms = sum(1 for row in row_results if row.status == "no_terms")
-    preservation_rate = matched_terms / total_terms if total_terms else 1.0
+    preservation_rate_exact = matched_terms_exact / total_terms if total_terms else 1.0
+    preservation_rate_nospace = matched_terms_nospace / total_terms if total_terms else 1.0
 
     return GlossaryPreservationResult(
         total_terms=total_terms,
-        matched_terms=matched_terms,
-        preservation_rate=preservation_rate,
+        matched_terms=matched_terms_exact,
+        preservation_rate=preservation_rate_exact,
         rows_with_terms=rows_with_terms,
-        rows_all_matched=rows_all_matched,
-        rows_partially_matched=rows_partially_matched,
-        rows_not_matched=rows_not_matched,
+        rows_all_matched=rows_all_matched_exact,
+        rows_partially_matched=rows_partially_matched_exact,
+        rows_not_matched=rows_not_matched_exact,
         rows_without_terms=rows_without_terms,
+        matched_terms_exact=matched_terms_exact,
+        preservation_rate_exact=preservation_rate_exact,
+        rows_all_matched_exact=rows_all_matched_exact,
+        rows_partially_matched_exact=rows_partially_matched_exact,
+        rows_not_matched_exact=rows_not_matched_exact,
+        matched_terms_nospace=matched_terms_nospace,
+        preservation_rate_nospace=preservation_rate_nospace,
+        rows_all_matched_nospace=rows_all_matched_nospace,
+        rows_partially_matched_nospace=rows_partially_matched_nospace,
+        rows_not_matched_nospace=rows_not_matched_nospace,
         row_results=row_results,
     )
 
@@ -317,6 +362,10 @@ def glossary_status(term_count: int, matched_count: int) -> str:
     return "partially_matched"
 
 
+def normalize_no_space(text: str) -> str:
+    return "".join(char for char in text if not char.isspace())
+
+
 def require_columns(path: Path, fieldnames: Sequence[str] | None, columns: Iterable[str]) -> None:
     missing = [column for column in columns if column not in (fieldnames or [])]
     if missing:
@@ -336,12 +385,19 @@ def format_evaluation_summary(result: EvaluationResult) -> str:
             f"bleu_tokenization={bleu.tokenization}",
             f"bleu_brevity_penalty={bleu.brevity_penalty:.6f}",
             f"glossary_preservation_rate={glossary.preservation_rate:.6f}",
+            f"glossary_preservation_rate_exact={glossary.preservation_rate_exact:.6f}",
+            f"glossary_preservation_rate_nospace={glossary.preservation_rate_nospace:.6f}",
             f"glossary_terms={glossary.total_terms}",
             f"glossary_terms_matched={glossary.matched_terms}",
+            f"glossary_terms_matched_exact={glossary.matched_terms_exact}",
+            f"glossary_terms_matched_nospace={glossary.matched_terms_nospace}",
             f"rows_with_glossary_terms={glossary.rows_with_terms}",
             f"rows_all_terms_matched={glossary.rows_all_matched}",
             f"rows_partially_matched={glossary.rows_partially_matched}",
             f"rows_not_matched={glossary.rows_not_matched}",
+            f"rows_all_terms_matched_nospace={glossary.rows_all_matched_nospace}",
+            f"rows_partially_matched_nospace={glossary.rows_partially_matched_nospace}",
+            f"rows_not_matched_nospace={glossary.rows_not_matched_nospace}",
             f"rows_without_glossary_terms={glossary.rows_without_terms}",
         ]
     )
@@ -372,6 +428,12 @@ def write_evaluation_reports(
                 "term_count",
                 "matched_count",
                 "missing_terms",
+                "status_exact",
+                "matched_count_exact",
+                "missing_terms_exact",
+                "status_nospace",
+                "matched_count_nospace",
+                "missing_terms_nospace",
                 "source",
                 "candidate",
             ],
@@ -385,6 +447,12 @@ def write_evaluation_reports(
                     "term_count": row.term_count,
                     "matched_count": row.matched_count,
                     "missing_terms": ";".join(row.missing_terms),
+                    "status_exact": row.status_exact,
+                    "matched_count_exact": row.matched_count_exact,
+                    "missing_terms_exact": ";".join(row.missing_terms_exact),
+                    "status_nospace": row.status_nospace,
+                    "matched_count_nospace": row.matched_count_nospace,
+                    "missing_terms_nospace": ";".join(row.missing_terms_nospace),
                     "source": row.source,
                     "candidate": row.candidate,
                 }
@@ -429,6 +497,9 @@ def write_sample_review(
                 "term_count",
                 "matched_count",
                 "missing_terms",
+                "glossary_status_nospace",
+                "matched_count_nospace",
+                "missing_terms_nospace",
             ],
         )
         writer.writeheader()
@@ -446,6 +517,9 @@ def write_sample_review(
                     "term_count": glossary_row.term_count,
                     "matched_count": glossary_row.matched_count,
                     "missing_terms": ";".join(glossary_row.missing_terms),
+                    "glossary_status_nospace": glossary_row.status_nospace,
+                    "matched_count_nospace": glossary_row.matched_count_nospace,
+                    "missing_terms_nospace": ";".join(glossary_row.missing_terms_nospace),
                 }
             )
 
@@ -497,6 +571,8 @@ def write_report_manifest(
         "empty_candidate_rows": result.empty_candidate_rows,
         "bleu": f"{result.bleu.score:.6f}",
         "glossary_preservation_rate": f"{result.glossary.preservation_rate:.6f}",
+        "glossary_preservation_rate_exact": f"{result.glossary.preservation_rate_exact:.6f}",
+        "glossary_preservation_rate_nospace": f"{result.glossary.preservation_rate_nospace:.6f}",
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
     with Path(path).open("w", encoding="utf-8") as f:
@@ -516,11 +592,21 @@ def summary_rows(result: EvaluationResult) -> list[tuple[str, str]]:
         ("bleu_candidate_length", str(bleu.candidate_length)),
         ("bleu_brevity_penalty", f"{bleu.brevity_penalty:.6f}"),
         ("glossary_preservation_rate", f"{glossary.preservation_rate:.6f}"),
+        ("glossary_preservation_rate_exact", f"{glossary.preservation_rate_exact:.6f}"),
+        ("glossary_preservation_rate_nospace", f"{glossary.preservation_rate_nospace:.6f}"),
         ("glossary_terms", str(glossary.total_terms)),
         ("glossary_terms_matched", str(glossary.matched_terms)),
+        ("glossary_terms_matched_exact", str(glossary.matched_terms_exact)),
+        ("glossary_terms_matched_nospace", str(glossary.matched_terms_nospace)),
         ("rows_with_glossary_terms", str(glossary.rows_with_terms)),
         ("rows_all_terms_matched", str(glossary.rows_all_matched)),
         ("rows_partially_matched", str(glossary.rows_partially_matched)),
         ("rows_not_matched", str(glossary.rows_not_matched)),
+        ("rows_all_terms_matched_exact", str(glossary.rows_all_matched_exact)),
+        ("rows_partially_matched_exact", str(glossary.rows_partially_matched_exact)),
+        ("rows_not_matched_exact", str(glossary.rows_not_matched_exact)),
+        ("rows_all_terms_matched_nospace", str(glossary.rows_all_matched_nospace)),
+        ("rows_partially_matched_nospace", str(glossary.rows_partially_matched_nospace)),
+        ("rows_not_matched_nospace", str(glossary.rows_not_matched_nospace)),
         ("rows_without_glossary_terms", str(glossary.rows_without_terms)),
     ]

@@ -55,6 +55,7 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(config.input.reference_column, "ko")
         self.assertEqual(config.language.target_code, "kor_Hang")
         self.assertEqual(config.model.tokenizer_name, "facebook/nllb-200-distilled-600M")
+        self.assertTrue(config.glossary.source_terminology_markers)
         self.assertTrue(config.output.strip_glossary_markers)
 
     def test_training_paths_can_resolve_against_base_dir(self) -> None:
@@ -120,6 +121,10 @@ class ConfigTest(unittest.TestCase):
                         "path": "fine-tuned-models/test",
                         "tokenizer_name": "facebook/nllb-200-distilled-600M",
                     },
+                    "glossary": {
+                        "path": "data/glossary.csv",
+                        "source_terminology_markers": True,
+                    },
                     "output": {"path": "translation_result.csv", "strip_glossary_markers": True},
                     "generation": {"batch_size": 4, "max_length": 64},
                     "dry_run": {"preview_rows": 1},
@@ -135,6 +140,7 @@ class ConfigTest(unittest.TestCase):
 
         self.assertEqual(config.input.path, ROOT / "data" / "segments.csv")
         self.assertEqual(config.model.path, ROOT / "fine-tuned-models" / "test")
+        self.assertEqual(config.glossary.path, ROOT / "data" / "glossary.csv")
         self.assertEqual(config.output.path, ROOT / "translation_result.csv")
 
     def test_missing_required_training_section_is_reported(self) -> None:
