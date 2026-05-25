@@ -14,11 +14,13 @@ sys.path.insert(0, str(ROOT / "src"))
 from longtu_translation_pipeline.config import load_training_config  # noqa: E402
 from longtu_translation_pipeline.training import (  # noqa: E402
     NllbTrainerSmokeResult,
+    RealModelSmokeResult,
     TorchTrainingDataset,
     TokenizedTrainingExample,
     build_training_dry_run,
     build_training_smoke_test,
     format_nllb_trainer_smoke_test,
+    format_real_model_smoke_test,
     format_training_dry_run,
     format_training_smoke_test,
     prepare_training_examples,
@@ -306,6 +308,44 @@ class TrainingPipelineTest(unittest.TestCase):
         self.assertIn("language_pair=zho_Hans->kor_Hang", formatted)
         self.assertIn("input_shape=2 x 32", formatted)
         self.assertIn("trainer_max_steps=1", formatted)
+
+    def test_real_model_smoke_result_format(self) -> None:
+        result = RealModelSmokeResult(
+            config_path=Path("training.json"),
+            segments_path=Path("segments.csv"),
+            glossary_path=Path("glossary.csv"),
+            model_name="facebook/nllb-200-distilled-600M",
+            output_dir=Path("data/review/training_smoke/real_model"),
+            source_code="zho_Hans",
+            target_code="kor_Hang",
+            target_language_token_id=256098,
+            special_tokens_added=2,
+            tokenizer_vocab_size=256206,
+            embedding_size_before=256204,
+            embedding_size_after=256206,
+            parameter_count=615000000,
+            device="cuda",
+            cuda_device_name="NVIDIA Test GPU",
+            cuda_memory_summary="allocated_gb=1.00;reserved_gb=2.00",
+            torch_dtype="float16",
+            max_length=400,
+            prepared_rows=2,
+            tokenized_rows=2,
+            input_shape="2 x 400",
+            label_shape="2 x 400",
+            trainer_max_steps=1,
+            train_loss=2.34,
+        )
+
+        formatted = format_real_model_smoke_test(result)
+
+        self.assertIn("Real NLLB model Trainer smoke-test result", formatted)
+        self.assertIn("model=facebook/nllb-200-distilled-600M", formatted)
+        self.assertIn("embedding_size_before=256204", formatted)
+        self.assertIn("embedding_size_after=256206", formatted)
+        self.assertIn("device=cuda", formatted)
+        self.assertIn("cuda_device_name=NVIDIA Test GPU", formatted)
+        self.assertIn("torch_dtype=float16", formatted)
 
 
 def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:

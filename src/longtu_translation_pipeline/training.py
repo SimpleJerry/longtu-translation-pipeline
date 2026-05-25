@@ -85,6 +85,34 @@ class NllbTrainerSmokeResult:
     train_loss: float | None
 
 
+@dataclass(frozen=True)
+class RealModelSmokeResult:
+    config_path: Path
+    segments_path: Path
+    glossary_path: Path
+    model_name: str
+    output_dir: Path
+    source_code: str
+    target_code: str
+    target_language_token_id: int
+    special_tokens_added: int
+    tokenizer_vocab_size: int
+    embedding_size_before: int
+    embedding_size_after: int
+    parameter_count: int
+    device: str
+    cuda_device_name: str
+    cuda_memory_summary: str
+    torch_dtype: str
+    max_length: int
+    prepared_rows: int
+    tokenized_rows: int
+    input_shape: str
+    label_shape: str
+    trainer_max_steps: int
+    train_loss: float | None
+
+
 def build_training_dry_run(config: TrainingConfig) -> TrainingDryRunPlan:
     examples = read_training_examples(config)
     train_examples, validation_examples = split_examples(
@@ -168,7 +196,7 @@ def run_nllb_trainer_smoke_test(
     tokenized_examples = tokenize_training_examples(config, tokenizer, prepared_examples)
     dataset = TorchTrainingDataset(tokenized_examples)
 
-    from transformers import M2M100Config, M2M100ForConditionalGeneration, Trainer, TrainingArguments
+    from transformers import M2M100Config, M2M100ForConditionalGeneration
 
     model_config = M2M100Config(
         vocab_size=len(tokenizer),
@@ -189,20 +217,14 @@ def run_nllb_trainer_smoke_test(
     model.resize_token_embeddings(len(tokenizer))
 
     smoke_output_dir = Path(output_dir)
-    training_args = TrainingArguments(
-        output_dir=str(smoke_output_dir),
+    trainer = build_trainer(
+        model=model,
+        dataset=dataset,
+        output_dir=smoke_output_dir,
         max_steps=max_steps,
-        per_device_train_batch_size=1,
-        report_to="none",
-        save_strategy="no",
-        logging_strategy="no",
-        disable_tqdm=True,
-        do_train=True,
-        optim="adamw_torch",
         use_cpu=True,
-        remove_unused_columns=False,
+        fp16=False,
     )
-    trainer = Trainer(model=model, args=training_args, train_dataset=dataset)
     train_result = trainer.train()
     train_loss = train_result.training_loss
 
@@ -219,6 +241,83 @@ def run_nllb_trainer_smoke_test(
         target_language_token_id=int(target_language_token_id),
         special_tokens_added=special_tokens_added,
         tokenizer_vocab_size=len(tokenizer),
+        max_length=config.tokenization.max_length,
+        prepared_rows=len(prepared_examples),
+        tokenized_rows=len(tokenized_examples),
+        input_shape=input_shape,
+        label_shape=label_shape,
+        trainer_max_steps=max_steps,
+        train_loss=float(train_loss) if train_loss is not None else None,
+    )
+
+
+def run_real_nllb_model_smoke_test(
+    config: TrainingConfig,
+    output_dir: str | Path,
+    sample_rows: int = 2,
+    max_steps: int = 1,
+    device: str = "auto",
+) -> RealModelSmokeResult:
+    if sample_rows <= 0:
+        raise ValueError("sample_rows must be a positive integer")
+    if max_steps <= 0:
+        raise ValueError("max_steps must be a positive integer")
+
+    tokenizer = load_nllb_tokenizer(config)
+    special_tokens_added = add_marker_special_tokens(tokenizer)
+    target_language_token_id = tokenizer.convert_tokens_to_ids(config.language.target_code)
+    if target_language_token_id is None or target_language_token_id < 0:
+        raise ValueError(f"Tokenizer does not know target language code: {config.language.target_code}")
+
+    prepared_examples = prepare_training_examples(config, limit=sample_rows)
+    tokenized_examples = tokenize_training_examples(config, tokenizer, prepared_examples)
+    dataset = TorchTrainingDataset(tokenized_examples)
+
+    from transformers import AutoModelForSeq2SeqLM
+
+    smoke_device = resolve_training_device(device)
+    torch_dtype = "float32"
+    if smoke_device == "cuda":
+        torch_dtype = "float32+fp16_trainer"
+
+    model = AutoModelForSeq2SeqLM.from_pretrained(config.model.base_model)
+    embedding_size_before = model.get_input_embeddings().num_embeddings
+    model.resize_token_embeddings(len(tokenizer))
+    embedding_size_after = model.get_input_embeddings().num_embeddings
+    parameter_count = sum(parameter.numel() for parameter in model.parameters())
+
+    smoke_output_dir = Path(output_dir)
+    trainer = build_trainer(
+        model=model,
+        dataset=dataset,
+        output_dir=smoke_output_dir,
+        max_steps=max_steps,
+        use_cpu=smoke_device == "cpu",
+        fp16=smoke_device == "cuda",
+    )
+    train_result = trainer.train()
+    train_loss = train_result.training_loss
+
+    input_shape = shape_text([example.input_ids for example in tokenized_examples])
+    label_shape = shape_text([example.labels for example in tokenized_examples])
+    return RealModelSmokeResult(
+        config_path=config.path,
+        segments_path=config.data.segments_path,
+        glossary_path=config.data.glossary_path,
+        model_name=config.model.base_model,
+        output_dir=smoke_output_dir,
+        source_code=config.language.source_code,
+        target_code=config.language.target_code,
+        target_language_token_id=int(target_language_token_id),
+        special_tokens_added=special_tokens_added,
+        tokenizer_vocab_size=len(tokenizer),
+        embedding_size_before=embedding_size_before,
+        embedding_size_after=embedding_size_after,
+        parameter_count=parameter_count,
+        device=smoke_device,
+        cuda_device_name=cuda_device_name(smoke_device),
+        cuda_memory_summary=cuda_memory_summary(smoke_device),
+        torch_dtype=torch_dtype,
         max_length=config.tokenization.max_length,
         prepared_rows=len(prepared_examples),
         tokenized_rows=len(tokenized_examples),
@@ -410,6 +509,67 @@ def batch_list(batch: Any, field: str) -> list[list[int]]:
     return [list(item) for item in value]
 
 
+def build_trainer(
+    model: Any,
+    dataset: Any,
+    output_dir: Path,
+    max_steps: int,
+    use_cpu: bool,
+    fp16: bool,
+) -> Any:
+    from transformers import Trainer, TrainingArguments
+
+    training_args = TrainingArguments(
+        output_dir=str(output_dir),
+        max_steps=max_steps,
+        per_device_train_batch_size=1,
+        report_to="none",
+        save_strategy="no",
+        logging_strategy="no",
+        disable_tqdm=True,
+        do_train=True,
+        optim="adamw_torch",
+        use_cpu=use_cpu,
+        fp16=fp16,
+        remove_unused_columns=False,
+    )
+    return Trainer(model=model, args=training_args, train_dataset=dataset)
+
+
+def resolve_training_device(device: str) -> str:
+    if device not in {"auto", "cuda", "cpu"}:
+        raise ValueError("device must be one of: auto, cuda, cpu")
+
+    import torch
+
+    cuda_available = torch.cuda.is_available()
+    if device == "auto":
+        return "cuda" if cuda_available else "cpu"
+    if device == "cuda" and not cuda_available:
+        raise RuntimeError("CUDA was requested but torch.cuda.is_available() is False")
+    return device
+
+
+def cuda_device_name(device: str) -> str:
+    if device != "cuda":
+        return "none"
+
+    import torch
+
+    return torch.cuda.get_device_name(0)
+
+
+def cuda_memory_summary(device: str) -> str:
+    if device != "cuda":
+        return "none"
+
+    import torch
+
+    allocated = torch.cuda.memory_allocated(0) / (1024**3)
+    reserved = torch.cuda.memory_reserved(0) / (1024**3)
+    return f"allocated_gb={allocated:.2f};reserved_gb={reserved:.2f}"
+
+
 class TorchTrainingDataset:
     def __init__(self, examples: Sequence[TokenizedTrainingExample]) -> None:
         if not examples:
@@ -525,6 +685,36 @@ def format_nllb_trainer_smoke_test(result: NllbTrainerSmokeResult) -> str:
         f"target_language_token_id={result.target_language_token_id}",
         f"special_tokens_added={result.special_tokens_added}",
         f"tokenizer_vocab_size={result.tokenizer_vocab_size}",
+        f"max_length={result.max_length}",
+        f"prepared_rows={result.prepared_rows}",
+        f"tokenized_rows={result.tokenized_rows}",
+        f"input_shape={result.input_shape}",
+        f"label_shape={result.label_shape}",
+        f"trainer_max_steps={result.trainer_max_steps}",
+        f"train_loss={result.train_loss}",
+    ]
+    return "\n".join(lines)
+
+
+def format_real_model_smoke_test(result: RealModelSmokeResult) -> str:
+    lines = [
+        "Real NLLB model Trainer smoke-test result",
+        f"config={result.config_path}",
+        f"segments={result.segments_path}",
+        f"glossary={result.glossary_path}",
+        f"model={result.model_name}",
+        f"output_dir={result.output_dir}",
+        f"language_pair={result.source_code}->{result.target_code}",
+        f"target_language_token_id={result.target_language_token_id}",
+        f"special_tokens_added={result.special_tokens_added}",
+        f"tokenizer_vocab_size={result.tokenizer_vocab_size}",
+        f"embedding_size_before={result.embedding_size_before}",
+        f"embedding_size_after={result.embedding_size_after}",
+        f"parameter_count={result.parameter_count}",
+        f"device={result.device}",
+        f"cuda_device_name={result.cuda_device_name}",
+        f"cuda_memory_summary={result.cuda_memory_summary}",
+        f"torch_dtype={result.torch_dtype}",
         f"max_length={result.max_length}",
         f"prepared_rows={result.prepared_rows}",
         f"tokenized_rows={result.tokenized_rows}",

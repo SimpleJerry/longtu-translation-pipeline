@@ -93,6 +93,13 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Impact Scope:** `scripts/train_model.py`, `src/longtu_translation_pipeline/training.py`, `requirements-training.txt`, README workflow notes.
 - **Follow-up Notes:** Treat `--nllb-smoke-test` as an engineering-chain check only. Full model loading, checkpoint policy, and quality evaluation require a later RF-006 training phase.
 
+## 2026-05-25: Real Model Smoke Downloads Weights But Is Not Training
+
+- **Decision:** RF-006 real model smoke may download and load `facebook/nllb-200-distilled-600M` weights, resize token embeddings for `<start>/<end>`, and run one Trainer step, but it is still an engineering smoke test rather than a training run.
+- **Background:** After tokenizer and tiny-model smoke tests passed, the remaining infrastructure risk was real model weight loading, CUDA execution, and special-token resize compatibility.
+- **Impact Scope:** `scripts/train_model.py`, `src/longtu_translation_pipeline/training.py`, local Hugging Face cache, README workflow notes.
+- **Follow-up Notes:** Do not retain checkpoints from smoke tests. Keep outputs under ignored `data/review/`. Quality evaluation, checkpoint naming, and actual training duration belong to a later RF-006 phase.
+
 ## 2026-05-24: Evaluation Uses BLEU and Glossary Preservation Only
 
 - **Decision:** RF-007 evaluation automates corpus BLEU and glossary preservation for the simplified `<start>...<end>` marker policy. Code-token preservation is not part of the current evaluation mainline.

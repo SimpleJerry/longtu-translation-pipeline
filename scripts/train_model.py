@@ -15,6 +15,8 @@ from longtu_translation_pipeline.training import (  # noqa: E402
     format_training_dry_run,
     format_training_smoke_test,
     format_nllb_trainer_smoke_test,
+    format_real_model_smoke_test,
+    run_real_nllb_model_smoke_test,
     run_nllb_trainer_smoke_test,
 )
 
@@ -34,6 +36,17 @@ def parse_args() -> argparse.Namespace:
         help="Run a real NLLB tokenizer plus tiny Trainer one-step smoke test.",
     )
     parser.add_argument(
+        "--real-model-smoke-test",
+        action="store_true",
+        help="Run a real NLLB model one-step Trainer smoke test.",
+    )
+    parser.add_argument(
+        "--device",
+        choices=["auto", "cuda", "cpu"],
+        default="auto",
+        help="Device for --real-model-smoke-test.",
+    )
+    parser.add_argument(
         "--smoke-rows",
         type=int,
         default=3,
@@ -47,10 +60,11 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8")
 
     args = parse_args()
-    if not args.dry_run and not args.smoke_test and not args.nllb_smoke_test:
+    if not args.dry_run and not args.smoke_test and not args.nllb_smoke_test and not args.real_model_smoke_test:
         print(
             "Actual model training is deferred to a later RF-006 phase. "
-            "Re-run with --dry-run, --smoke-test, or --nllb-smoke-test."
+            "Re-run with --dry-run, --smoke-test, --nllb-smoke-test, "
+            "or --real-model-smoke-test."
         )
         return 2
 
@@ -74,6 +88,14 @@ def main() -> int:
             sample_rows=args.smoke_rows,
         )
         outputs.append(format_nllb_trainer_smoke_test(result))
+    if args.real_model_smoke_test:
+        result = run_real_nllb_model_smoke_test(
+            config,
+            output_dir=ROOT / "data" / "review" / "training_smoke" / "real_model",
+            sample_rows=args.smoke_rows,
+            device=args.device,
+        )
+        outputs.append(format_real_model_smoke_test(result))
 
     print("\n\n".join(outputs))
     return 0

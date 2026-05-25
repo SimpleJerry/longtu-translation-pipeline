@@ -66,7 +66,7 @@ This README documents the repository as it exists today. The project is still cl
 | `scripts/glossary_semantic_pipeline.py` | Local glossary semantic cleanup pipeline using Stanza, jieba, kiwipiepy, wordfreq, and `BAAI/bge-m3`. |
 | `scripts/evaluate_translation.py` | Translation evaluation CLI for BLEU and glossary preservation; it does not load models. |
 | `scripts/segments_cleaning_pipeline.py` | Local semantic segment cleanup pipeline; dry-run review output by default. |
-| `scripts/train_model.py` | Training CLI for config dry-run, local tiny-tokenizer smoke, and real NLLB tokenizer + tiny Trainer smoke. |
+| `scripts/train_model.py` | Training CLI for config dry-run, local tiny-tokenizer smoke, real tokenizer + tiny Trainer smoke, and real NLLB model one-step smoke. |
 | `scripts/run_inference.py` | Inference dry-run CLI; currently validates config, reads inputs, and shows the output plan without loading a model. |
 | `src/longtu_translation_pipeline/text_protection.py` | Testable pure-function module for terminology marker protection. |
 | `src/longtu_translation_pipeline/config.py` | Dataclass parsing and validation for training/inference JSON configs. |
@@ -77,11 +77,11 @@ This README documents the repository as it exists today. The project is still cl
 | `notebooks/analysis/` | Auxiliary analysis notebooks, such as train/eval loss visualization. |
 | `notebooks/archive/2023-legacy/` | Archived 2023 legacy experiments; not deleted in the first pass. |
 | `docs/notebooks/inventory.md` | Notebook timeline, purpose, dependency status, and keep/archive/delete guidance. |
-| `requirements-training.txt` | Training smoke-test and future training-chain dependencies confirmed by RF-006-P2/P3. |
+| `requirements-training.txt` | RF-006 training smoke-test and future training-chain dependencies. |
 
 ## Environment
 
-A Python virtual environment on Windows or Linux is recommended. `requirements.txt` currently records dependencies that are already used by local semantic-cleaning workflows plus CUDA 13.2 PyTorch. Base CLIs, dry runs, tests, and RF-007 evaluation are mostly standard-library and do not imply that every workflow needs the full dependency set. `requirements-training.txt` records the RF-006-P2/P3 training smoke-test and future training-chain dependencies that are now confirmed, including `transformers`, `tokenizers`, `accelerate`, `sentencepiece`, and their direct runtime dependencies; `datasets` is not part of the current minimal chain yet.
+A Python virtual environment on Windows or Linux is recommended. `requirements.txt` currently records dependencies that are already used by local semantic-cleaning workflows plus CUDA 13.2 PyTorch. Base CLIs, dry runs, tests, and RF-007 evaluation are mostly standard-library and do not imply that every workflow needs the full dependency set. `requirements-training.txt` records the RF-006 training smoke-test and future training-chain dependencies, including `transformers`, `tokenizers`, `accelerate`, `sentencepiece`, and their direct runtime dependencies; `datasets` is not part of the current minimal chain yet.
 
 ```powershell
 python -m venv .venv
@@ -139,12 +139,13 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 This pipeline first strips presentation tags such as `<c=...>` and unwraps symmetric outer wrappers, then uses Stanza, jieba, kiwipiepy, and `BAAI/bge-m3` to score term/entity-like segments. Placeholder rows are kept by default and only audited for mismatch. The command does not rewrite `data/segments.csv`; it only writes local audit CSVs under `data/review/segments/`. Use `--apply` only after manual review.
 
-The training/inference engineering entry points are currently in the lightweight RF-006 engineering phase. Dry-run reads config, validates data, and plans train/validation counts. RF-006-P2 adds a local tiny-tokenizer smoke test; RF-006-P3 uses the real NLLB tokenizer and a randomly initialized tiny seq2seq model for a one-step Trainer smoke test. This validates tokenizer, language-code, dataset-shape, collator, and Trainer wiring without downloading real NLLB model weights or implying model quality.
+The training/inference engineering entry points are currently in the RF-006 smoke-test engineering phase. Dry-run reads config, validates data, and plans train/validation counts. RF-006-P2 adds a local tiny-tokenizer smoke test; RF-006-P3 uses the real NLLB tokenizer and a randomly initialized tiny seq2seq model for a one-step Trainer smoke test; RF-006-P4 uses real NLLB model weights for a one-step smoke test to validate CUDA, special-token resize, data tensors, and Trainer wiring. P4 downloads real NLLB weights to the local Hugging Face cache, but it still does not imply model quality.
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --smoke-test
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --nllb-smoke-test --smoke-rows 2
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --real-model-smoke-test --smoke-rows 2
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
 ```
 
