@@ -65,6 +65,20 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Impact Scope:** `scripts/segments_cleaning_pipeline.py`, `configs/segments/`, `data/segments.csv`, local `data/review/segments/` outputs.
 - **Follow-up Notes:** Term/entity-like deletion is based on local semantic signals rather than fixed text length thresholds. Presentation tags such as `<c=...>` are stripped while preserving wrapped text, symmetric outer wrappers are unwrapped, and valid machine placeholders are audited rather than deleted. Structured tuple-like strings should be split when safely aligned and removed only when parsing/alignment fails.
 
+## 2026-05-25: Cross Cleaning Deletes Strong Conflicts, Not Translations
+
+- **Decision:** Glossary/segments cross-consistency cleanup may delete high-confidence glossary noise and segment rows that miss strong glossary terms, but it must not auto-rewrite Korean segment translations.
+- **Background:** Exact glossary mismatch can mean either a noisy glossary entry or a segment translation that is too free for training. Automatic replacement would risk ungrammatical Korean, so deletion plus local review is safer.
+- **Impact Scope:** `scripts/segments_glossary_cross_cleaning_pipeline.py`, `configs/cross_cleaning/`, `data/glossary.csv`, `data/segments.csv`, future full-run training splits.
+- **Follow-up Notes:** Training runs after cross-cleaning must regenerate train/validation/test split artifacts from the cleaned `data/segments.csv`. Weak glossary rules should stay conservative: shortness alone is not enough to delete a glossary term.
+
+## 2026-05-25: Full Training Requires Strict Glossary Consistency Check
+
+- **Decision:** Before full training or final held-out evaluation, `data/segments.csv` must pass a strict glossary consistency check: every retained glossary term found in a segment source must have its Korean glossary form in the segment target.
+- **Background:** Glossary/segment conflicts contaminate all downstream train, validation, and test splits if they remain in the final corpus.
+- **Impact Scope:** `scripts/segments_glossary_cross_cleaning_pipeline.py`, `data/glossary.csv`, `data/segments.csv`, RF-006 full-run workflow.
+- **Follow-up Notes:** `--strict-check` is the training gate. Strict cleanup uses the real segment translations to select an enforceable glossary first; terms with natural phrase variation or unstable Korean forms are removed from glossary instead of deleting good sentence data. `--strict-apply` may then remove remaining mismatching segment rows, but it still must not auto-rewrite Korean translations.
+
 ## 2026-05-24: Notebook Deletion Requires Inventory First
 
 - **Decision:** Historical notebooks are classified and archived before any deletion. Main workflow notebooks live under `notebooks/main/`, auxiliary analysis notebooks under `notebooks/analysis/`, and old experiments under `notebooks/archive/2023-legacy/`.

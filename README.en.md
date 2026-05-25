@@ -29,6 +29,7 @@ This README documents the repository as it exists today. The project is still cl
 │   ├── segments.csv
 │   └── review/                # generated locally, ignored by Git
 ├── configs/
+│   ├── cross_cleaning/
 │   ├── glossary/
 │   ├── evaluation/
 │   ├── inference/
@@ -38,6 +39,7 @@ This README documents the repository as it exists today. The project is still cl
 │   ├── glossary_semantic_pipeline.py
 │   ├── evaluate_translation.py
 │   ├── segments_cleaning_pipeline.py
+│   ├── segments_glossary_cross_cleaning_pipeline.py
 │   ├── run_inference.py
 │   └── train_model.py
 ├── src/
@@ -60,6 +62,7 @@ This README documents the repository as it exists today. The project is still cl
 | `data/review/` | Local data-cleaning audit CSVs and review artifacts; not committed by default. |
 | `configs/glossary/` | Seeds, lexicons, and rules for glossary cleanup. |
 | `configs/segments/` | Structured-string splitting, term/entity seeds, and semantic thresholds for segment cleanup. |
+| `configs/cross_cleaning/` | Thresholds for glossary/segments cross-consistency cleanup. |
 | `configs/training/default.json` | RF-006 phase 1 training config for data paths, language codes, model name, output directory, and basic training parameters. |
 | `configs/training/full_10k.json` | First full-data 10k training profile with explicit step, checkpoint, eval, and optimizer settings. |
 | `configs/inference/default.json` | RF-006 phase 1 inference config for model path, input/output paths, language codes, and generation parameters. |
@@ -67,6 +70,7 @@ This README documents the repository as it exists today. The project is still cl
 | `scripts/glossary_semantic_pipeline.py` | Local glossary semantic cleanup pipeline using Stanza, jieba, kiwipiepy, wordfreq, and `BAAI/bge-m3`. |
 | `scripts/evaluate_translation.py` | Translation evaluation CLI for BLEU and glossary preservation; it does not load models. |
 | `scripts/segments_cleaning_pipeline.py` | Local semantic segment cleanup pipeline; dry-run review output by default. |
+| `scripts/segments_glossary_cross_cleaning_pipeline.py` | Glossary/segments cross-cleaning CLI for high-confidence terminology conflicts with local review output. |
 | `scripts/train_model.py` | Training CLI for config dry-run, local tiny-tokenizer smoke, real tokenizer + tiny Trainer smoke, real NLLB model one-step smoke, pilot training, and formal run-directory training. |
 | `scripts/run_inference.py` | Inference CLI for config dry-run and real checkpoint-based sample generation. |
 | `src/longtu_translation_pipeline/text_protection.py` | Testable pure-function module for terminology marker protection. |
@@ -139,6 +143,25 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 ```
 
 This pipeline first strips presentation tags such as `<c=...>` and unwraps symmetric outer wrappers, then uses Stanza, jieba, kiwipiepy, and `BAAI/bge-m3` to score term/entity-like segments. Placeholder rows are kept by default and only audited for mismatch. The command does not rewrite `data/segments.csv`; it only writes local audit CSVs under `data/review/segments/`. Use `--apply` only after manual review.
+
+To check glossary/segment terminology consistency, run a dry run first and apply only after review:
+
+```powershell
+venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --dry-run
+venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --apply
+```
+
+The cross-cleaning pass only removes high-confidence glossary noise or segment rows that conflict with strong glossary terms. It does not rewrite Korean translations; removed rows are exported under local `data/review/segments_glossary_cross/`.
+Its basic flow is: scan `segments.csv` with longest-first, non-overlapping Chinese glossary matches; check whether the Korean side preserves the glossary translation with exact and no-space exact matching; aggregate preserved/missing evidence per term using thresholds from `configs/cross_cleaning/rules.json`; classify terms as glossary noise, strong glossary terms, or review items; then remove only high-confidence glossary noise and segment rows that miss strong retained terms.
+Before training, use the stricter gate when every remaining glossary term must be preserved in every matching segment:
+
+```powershell
+venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --strict-dry-run
+venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --strict-check
+```
+
+Strict mode first selects the enforceable glossary from the real `segments.csv` translations: terms with no missing evidence are retained, strong game-domain terms need enough preserved evidence and a bounded missing rate, and empirically stable terms need high preserved count/rate. Terms that are not enforceable and still have mismatches are removed from the glossary. After that, segment rows are removed only if they still match an enforceable glossary term but do not preserve its Korean form. `--strict-check` only validates the current data and exits with failure on any missing term. Use `--strict-apply` only after reviewing the local strict outputs.
+Before full training or final test reporting, `--strict-check` must pass.
 
 The training/inference engineering entry points are currently in the RF-006 smoke-test/pilot/formal-run hardening phase. Dry-run reads config, validates data, and plans deterministic train/validation/test counts. RF-006-P7 writes fixed split artifacts and `run_manifest.json` under ignored `fine-tuned-models/.../runs/run-*`; RF-006-P10 corrects formal experiments to an 8:1:1 split with seed `42`. Validation is used for training-time eval and checkpoint observation only. Final performance reports must use the held-out test split. RF-006-P8 generates translation CSVs from the fixed validation split, and `--generate-test` generates final-evaluation CSVs from the fixed test split. P4/P5/P6/P7/P8/P2 are engineering-chain checks until a full training run is explicitly started.
 

@@ -29,6 +29,7 @@
 │   ├── segments.csv
 │   └── review/                # 本地生成，Git 忽略
 ├── configs/
+│   ├── cross_cleaning/
 │   ├── glossary/
 │   ├── evaluation/
 │   ├── inference/
@@ -38,6 +39,7 @@
 │   ├── glossary_semantic_pipeline.py
 │   ├── evaluate_translation.py
 │   ├── segments_cleaning_pipeline.py
+│   ├── segments_glossary_cross_cleaning_pipeline.py
 │   ├── run_inference.py
 │   └── train_model.py
 ├── src/
@@ -60,6 +62,7 @@
 | `data/review/` | 本地数据清洗审计和人工核对 CSV，默认不提交。 |
 | `configs/glossary/` | glossary 清洗的 seed、词表和规则配置。 |
 | `configs/segments/` | segments 清洗的结构化字符串拆分、term/entity seed 和语义阈值配置。 |
+| `configs/cross_cleaning/` | glossary 与 segments 交叉一致性清洗的阈值配置。 |
 | `configs/training/default.json` | RF-006 第一阶段训练配置，声明数据路径、语言码、模型名、输出目录和基础训练参数。 |
 | `configs/training/full_10k.json` | 首轮 full-data 10k 训练 profile，显式声明步数、checkpoint、eval 和优化器参数。 |
 | `configs/inference/default.json` | RF-006 第一阶段推理配置，声明模型路径、输入/输出路径、语言码和生成参数。 |
@@ -67,6 +70,7 @@
 | `scripts/glossary_semantic_pipeline.py` | 本地 glossary semantic 清洗 pipeline，使用 Stanza、jieba、kiwipiepy、wordfreq 与 `BAAI/bge-m3`。 |
 | `scripts/evaluate_translation.py` | 翻译结果评估 CLI，计算 BLEU 与 glossary preservation，不加载模型。 |
 | `scripts/segments_cleaning_pipeline.py` | 本地 segments 语义清洗 pipeline，默认 dry-run 生成 review CSV。 |
+| `scripts/segments_glossary_cross_cleaning_pipeline.py` | glossary/segments 交叉清洗 CLI，删除高置信术语冲突训练行并输出本地 review。 |
 | `scripts/train_model.py` | 训练 CLI；支持配置 dry-run、本地 tiny tokenizer smoke、真实 tokenizer + tiny Trainer smoke、真实 NLLB 模型 1-step smoke、pilot training 和正式 run 目录训练。 |
 | `scripts/run_inference.py` | 推理 CLI；支持配置 dry-run 和基于真实 checkpoint 的小样本 generation。 |
 | `src/longtu_translation_pipeline/text_protection.py` | 可测试的术语 marker 保护纯函数模块。 |
@@ -139,6 +143,25 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 ```
 
 该 pipeline 会先剥离 `<c=...>` 等表现层样式标签并解开对称外层包装，再使用 Stanza、jieba、kiwipiepy 和 `BAAI/bge-m3` 判断 term/entity-like segment；placeholder 行默认保留，只做 mismatch 审计。该命令不会改写 `data/segments.csv`，只会在本地 `data/review/segments/` 下生成审计 CSV。人工确认后再使用 `--apply` 重写最终语料。
+
+如需检查 glossary 与 segments 的术语一致性，先 dry-run，再在确认后 apply：
+
+```powershell
+venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --dry-run
+venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --apply
+```
+
+交叉清洗只自动删除高置信 glossary 噪声或强术语冲突 segment，不自动改写韩文译文；删除内容会写入本地 `data/review/segments_glossary_cross/`。
+它的基本步骤是：先用最长优先、非重叠的中文术语匹配扫描 `segments.csv`；再用 exact 和 no-space exact 检查韩文是否保留术语表译法；然后按 `configs/cross_cleaning/rules.json` 中的阈值统计每个 term 的 preserved/missing 证据，将 term 分为 glossary 噪声、强术语或待复核；最后只删除高置信 glossary 噪声和命中强术语但未按表翻译的 segment 行。
+训练前可使用更严格的门禁模式，要求所有 remaining glossary 术语在所有 segment 中都按表保留：
+
+```powershell
+venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --strict-dry-run
+venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --strict-check
+```
+
+严格模式会先根据真实 `segments.csv` 翻译选择可强制执行的 glossary：无缺失的 term 直接保留，强游戏域 term 需要足够 preserved evidence 且 missing rate 低于阈值，经验稳定 term 需要高 preserved count/rate；不满足条件且存在 mismatch 的 term 会从 glossary 移除。随后，仍命中可强制执行 glossary 但韩文未按表保留的 segment 会被删除。`--strict-check` 只检查当前数据，发现任意缺失即返回失败；确认 review 后再使用 `--strict-apply`。
+full training 或最终 test report 前，`--strict-check` 必须通过。
 
 训练/推理工程入口目前处于 RF-006 的 smoke-test / pilot / 正式 run 硬化阶段：dry-run 只做配置读取、数据校验和确定性的 train/validation/test 计划。RF-006-P7 会在 ignored 的 `fine-tuned-models/.../runs/run-*` 下写入固定 split artifact 和 `run_manifest.json`；RF-006-P10 将正式实验修正为 seed `42` 的 8:1:1 划分。validation 只用于训练期间 eval 和 checkpoint 观察，最终性能报告必须使用独立 test split。RF-006-P8 基于固定 validation split 生成翻译 CSV，`--generate-test` 基于固定 test split 生成最终评估 CSV。P4/P5/P6/P7/P8/P2 都是工程链路验证，直到显式启动 full training 之前不代表正式模型质量。
 

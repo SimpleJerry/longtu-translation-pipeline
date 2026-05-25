@@ -29,6 +29,7 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 │   ├── segments.csv
 │   └── review/                # 로컬 생성, Git 제외
 ├── configs/
+│   ├── cross_cleaning/
 │   ├── glossary/
 │   ├── evaluation/
 │   ├── inference/
@@ -38,6 +39,7 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 │   ├── glossary_semantic_pipeline.py
 │   ├── evaluate_translation.py
 │   ├── segments_cleaning_pipeline.py
+│   ├── segments_glossary_cross_cleaning_pipeline.py
 │   ├── run_inference.py
 │   └── train_model.py
 ├── src/
@@ -60,6 +62,7 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 | `data/review/` | 로컬 데이터 정제 감사 CSV와 검토용 산출물이며 기본적으로 커밋하지 않습니다. |
 | `configs/glossary/` | glossary 정제에 쓰는 seed, 어휘 목록, 규칙 설정입니다. |
 | `configs/segments/` | segment 정제를 위한 구조화 문자열 분리, term/entity seed, semantic 임계값 설정입니다. |
+| `configs/cross_cleaning/` | glossary/segments 교차 일관성 정제 임계값 설정입니다. |
 | `configs/training/default.json` | RF-006 1단계 학습 설정이며 데이터 경로, 언어 코드, 모델명, 출력 디렉터리, 기본 학습 파라미터를 선언합니다. |
 | `configs/training/full_10k.json` | 첫 full-data 10k training profile이며 step, checkpoint, eval, optimizer 설정을 명시합니다. |
 | `configs/inference/default.json` | RF-006 1단계 추론 설정이며 모델 경로, 입력/출력 경로, 언어 코드, 생성 파라미터를 선언합니다. |
@@ -67,6 +70,7 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 | `scripts/glossary_semantic_pipeline.py` | Stanza, jieba, kiwipiepy, wordfreq, `BAAI/bge-m3`를 사용하는 로컬 glossary semantic 정제 pipeline입니다. |
 | `scripts/evaluate_translation.py` | BLEU와 glossary preservation을 계산하는 번역 결과 평가 CLI이며 모델을 로드하지 않습니다. |
 | `scripts/segments_cleaning_pipeline.py` | 로컬 segments semantic 정제 pipeline이며 기본적으로 dry-run review를 생성합니다. |
+| `scripts/segments_glossary_cross_cleaning_pipeline.py` | glossary/segments 교차 정제 CLI이며 고신뢰 용어 충돌 행을 제거하고 로컬 review를 생성합니다. |
 | `scripts/train_model.py` | 설정 dry-run, 로컬 tiny tokenizer smoke, 실제 tokenizer + tiny Trainer smoke, 실제 NLLB model 1-step smoke, pilot training, formal run-directory training을 지원하는 학습 CLI입니다. |
 | `scripts/run_inference.py` | 추론 CLI입니다. 설정 dry-run과 실제 checkpoint 기반 sample generation을 지원합니다. |
 | `src/longtu_translation_pipeline/text_protection.py` | 테스트 가능한 용어 marker 보호 pure-function 모듈입니다. |
@@ -139,6 +143,25 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 ```
 
 이 pipeline은 먼저 `<c=...>` 같은 표현용 스타일 태그를 제거하고 대칭 외부 wrapper를 푼 뒤, Stanza, jieba, kiwipiepy, `BAAI/bge-m3`로 term/entity-like segment를 점수화합니다. Placeholder 행은 기본적으로 보존하고 mismatch만 감사합니다. 이 명령은 `data/segments.csv`를 다시 쓰지 않고 로컬 `data/review/segments/` 아래에 감사 CSV만 생성합니다. 수동 확인 후에만 `--apply`를 사용합니다.
+
+glossary와 segments의 용어 일관성을 확인하려면 먼저 dry-run을 실행하고 검토 후 apply합니다.
+
+```powershell
+venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --dry-run
+venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --apply
+```
+
+교차 정제는 고신뢰 glossary noise 또는 강한 용어집 항목과 충돌하는 segment 행만 자동 삭제합니다. 한국어 번역문을 자동 치환하지 않으며, 삭제 내용은 로컬 `data/review/segments_glossary_cross/` 아래에 기록합니다.
+기본 흐름은 다음과 같습니다. `segments.csv`를 longest-first, non-overlap 중국어 용어 매칭으로 스캔하고, 한국어 쪽이 glossary 번역을 exact 및 no-space exact로 보존하는지 확인합니다. 그 다음 `configs/cross_cleaning/rules.json`의 임계값으로 term별 preserved/missing 근거를 집계해 glossary noise, strong glossary term, review 항목으로 분류합니다. 마지막으로 고신뢰 glossary noise와 strong term을 누락한 segment 행만 삭제합니다.
+학습 전에는 더 엄격한 gate를 사용할 수 있습니다. 이 모드는 남은 glossary 용어가 모든 matching segment 안에서 반드시 보존되어야 한다고 검사합니다.
+
+```powershell
+venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --strict-dry-run
+venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --strict-check
+```
+
+Strict mode는 먼저 실제 `segments.csv` 번역을 기준으로 enforceable glossary를 고릅니다. 누락이 없는 term은 보존하고, 강한 게임 도메인 term은 충분한 preserved evidence와 제한된 missing rate가 필요하며, 경험적으로 안정적인 term은 높은 preserved count/rate가 필요합니다. 이 조건을 만족하지 못하고 mismatch가 있는 term은 glossary에서 제거합니다. 그 다음 enforceable glossary term을 포함하지만 한국어가 해당 번역을 보존하지 않는 segment 행만 삭제합니다. `--strict-check`는 현재 데이터를 검사만 하며 누락 용어가 있으면 실패합니다. 로컬 strict review를 확인한 뒤에만 `--strict-apply`를 사용합니다.
+Full training 또는 최종 test report 전에 `--strict-check`는 반드시 통과해야 합니다.
 
 학습/추론 engineering entry point는 현재 RF-006 smoke-test/pilot/formal-run hardening 단계입니다. dry-run은 설정 읽기, 데이터 검증, 결정적인 train/validation/test 계획만 수행합니다. RF-006-P7은 ignored `fine-tuned-models/.../runs/run-*` 아래에 고정 split artifact와 `run_manifest.json`을 작성합니다. RF-006-P10은 formal experiment split을 seed `42`의 8:1:1로 수정합니다. validation은 학습 중 eval/checkpoint 관찰에만 쓰고, 최종 성능 보고는 held-out test split만 사용합니다. RF-006-P8은 고정 validation split에서 translation CSV를 만들고, `--generate-test`는 고정 test split에서 최종 평가 CSV를 만듭니다. P4/P5/P6/P7/P8/P2는 full training을 명시적으로 시작하기 전까지 engineering chain 검증입니다.
 
