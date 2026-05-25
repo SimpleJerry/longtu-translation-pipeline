@@ -66,7 +66,7 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 | `scripts/glossary_semantic_pipeline.py` | Stanza, jieba, kiwipiepy, wordfreq, `BAAI/bge-m3`를 사용하는 로컬 glossary semantic 정제 pipeline입니다. |
 | `scripts/evaluate_translation.py` | BLEU와 glossary preservation을 계산하는 번역 결과 평가 CLI이며 모델을 로드하지 않습니다. |
 | `scripts/segments_cleaning_pipeline.py` | 로컬 segments semantic 정제 pipeline이며 기본적으로 dry-run review를 생성합니다. |
-| `scripts/train_model.py` | 학습 dry-run CLI입니다. 현재는 설정 검증, 데이터 읽기, train/validation 분할만 수행하고 모델을 로드하지 않습니다. |
+| `scripts/train_model.py` | 설정 dry-run, 로컬 tiny tokenizer smoke, 실제 NLLB tokenizer + tiny Trainer smoke를 지원하는 학습 CLI입니다. |
 | `scripts/run_inference.py` | 추론 dry-run CLI입니다. 현재는 설정 검증, 입력 읽기, 출력 계획만 보여 주고 모델을 로드하지 않습니다. |
 | `src/longtu_translation_pipeline/text_protection.py` | 테스트 가능한 용어 marker 보호 pure-function 모듈입니다. |
 | `src/longtu_translation_pipeline/config.py` | 학습/추론 JSON 설정을 dataclass로 파싱하고 검증합니다. |
@@ -77,11 +77,11 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 | `notebooks/analysis/` | train/eval loss 시각화 같은 보조 분석 notebook입니다. |
 | `notebooks/archive/2023-legacy/` | 2023년 legacy 실험 archive이며 첫 번째 정리 단계에서는 삭제하지 않습니다. |
 | `docs/notebooks/inventory.md` | Notebook의 시간순 흐름, 목적, 의존성 상태, 보존/archive/삭제 제안입니다. |
-| `requirements-training.txt` | RF-006-P2에서 확인된 학습 smoke test 및 이후 학습 chain 의존성입니다. |
+| `requirements-training.txt` | RF-006-P2/P3에서 확인된 학습 smoke test 및 이후 학습 chain 의존성입니다. |
 
 ## 실행 환경
 
-권장 환경은 Windows 또는 Linux의 Python 가상환경입니다. `requirements.txt`에는 실제로 사용 중인 로컬 semantic cleaning 의존성과 CUDA 13.2 계열 PyTorch가 기록되어 있습니다. 기본 CLI, dry-run, 테스트, RF-007 evaluation은 대부분 표준 라이브러리만 사용하므로 모든 workflow가 전체 의존성을 필요로 한다는 뜻은 아닙니다. `requirements-training.txt`에는 RF-006-P2에서 확인된 학습 smoke test 및 이후 학습 chain 의존성을 기록하며, 현재는 `transformers` / `tokenizers`와 직접 실행 의존성을 포함합니다. `datasets`, `sentencepiece`, `accelerate`는 아직 현재 최소 chain에 포함하지 않습니다.
+권장 환경은 Windows 또는 Linux의 Python 가상환경입니다. `requirements.txt`에는 실제로 사용 중인 로컬 semantic cleaning 의존성과 CUDA 13.2 계열 PyTorch가 기록되어 있습니다. 기본 CLI, dry-run, 테스트, RF-007 evaluation은 대부분 표준 라이브러리만 사용하므로 모든 workflow가 전체 의존성을 필요로 한다는 뜻은 아닙니다. `requirements-training.txt`에는 RF-006-P2/P3에서 확인된 학습 smoke test 및 이후 학습 chain 의존성을 기록하며, 현재는 `transformers`, `tokenizers`, `accelerate`, `sentencepiece`와 직접 실행 의존성을 포함합니다. `datasets`는 아직 현재 최소 chain에 포함하지 않습니다.
 
 ```powershell
 python -m venv .venv
@@ -139,11 +139,12 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 이 pipeline은 먼저 `<c=...>` 같은 표현용 스타일 태그를 제거하고 대칭 외부 wrapper를 푼 뒤, Stanza, jieba, kiwipiepy, `BAAI/bge-m3`로 term/entity-like segment를 점수화합니다. Placeholder 행은 기본적으로 보존하고 mismatch만 감사합니다. 이 명령은 `data/segments.csv`를 다시 쓰지 않고 로컬 `data/review/segments/` 아래에 감사 CSV만 생성합니다. 수동 확인 후에만 `--apply`를 사용합니다.
 
-학습/추론 engineering entry point는 현재 RF-006의 가벼운 engineering 단계입니다. dry-run은 설정 읽기, 데이터 검증, train/validation 계획만 수행하며 NLLB 모델을 로드하거나 실제 학습을 시작하지 않습니다. RF-006-P2는 tiny tokenizer로 `transformers` / `tokenizers` 인터페이스를 통과하는 로컬 tokenizer/dataset smoke test를 추가해, 전체 prepared examples에 `<start>...<end>` 용어 marker를 적용하고 tokenization에 넘길 수 있음을 확인합니다. 실제 NLLB tokenizer, Trainer 연결, 긴 GPU 학습은 이후 단계로 미룹니다.
+학습/추론 engineering entry point는 현재 RF-006의 가벼운 engineering 단계입니다. dry-run은 설정 읽기, 데이터 검증, train/validation 계획만 수행합니다. RF-006-P2는 로컬 tiny tokenizer smoke를 제공하고, RF-006-P3는 실제 NLLB tokenizer와 랜덤 초기화 tiny seq2seq model로 Trainer 1-step smoke를 실행합니다. 이 smoke는 tokenizer, language code, dataset shape, collator, Trainer 연결을 검증하지만 실제 NLLB model weight를 다운로드하지 않으며 모델 품질을 의미하지 않습니다.
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --smoke-test
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --nllb-smoke-test --smoke-rows 2
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
 ```
 

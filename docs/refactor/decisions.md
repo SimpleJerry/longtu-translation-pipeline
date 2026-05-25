@@ -86,6 +86,13 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Impact Scope:** `configs/training/default.json`, `configs/inference/default.json`, `src/longtu_translation_pipeline/config.py`, `src/longtu_translation_pipeline/training.py`, `src/longtu_translation_pipeline/inference.py`, `scripts/train_model.py`, `scripts/run_inference.py`, README workflow notes.
 - **Follow-up Notes:** Actual model loading, `transformers` Trainer wiring, dataset tokenization, GPU training, and generation output writing should be added in later phases. Importable modules and dry-run commands should remain safe to execute without downloading NLLB models.
 
+## 2026-05-25: Trainer Smoke Uses Real Tokenizer, Not Real NLLB Weights
+
+- **Decision:** RF-006 trainer smoke tests use the real NLLB tokenizer but a tiny randomly initialized seq2seq model, not the real `facebook/nllb-200-distilled-600M` weights.
+- **Background:** The project needs to validate language-code handling, marker tokens, tensor shapes, and Trainer wiring before paying the cost of large model downloads or long GPU runs.
+- **Impact Scope:** `scripts/train_model.py`, `src/longtu_translation_pipeline/training.py`, `requirements-training.txt`, README workflow notes.
+- **Follow-up Notes:** Treat `--nllb-smoke-test` as an engineering-chain check only. Full model loading, checkpoint policy, and quality evaluation require a later RF-006 training phase.
+
 ## 2026-05-24: Evaluation Uses BLEU and Glossary Preservation Only
 
 - **Decision:** RF-007 evaluation automates corpus BLEU and glossary preservation for the simplified `<start>...<end>` marker policy. Code-token preservation is not part of the current evaluation mainline.

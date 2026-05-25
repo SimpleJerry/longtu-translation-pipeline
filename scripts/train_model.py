@@ -14,6 +14,8 @@ from longtu_translation_pipeline.training import (  # noqa: E402
     build_training_smoke_test,
     format_training_dry_run,
     format_training_smoke_test,
+    format_nllb_trainer_smoke_test,
+    run_nllb_trainer_smoke_test,
 )
 
 
@@ -25,6 +27,11 @@ def parse_args() -> argparse.Namespace:
         "--smoke-test",
         action="store_true",
         help="Run a local tokenizer/dataset smoke test without loading NLLB.",
+    )
+    parser.add_argument(
+        "--nllb-smoke-test",
+        action="store_true",
+        help="Run a real NLLB tokenizer plus tiny Trainer one-step smoke test.",
     )
     parser.add_argument(
         "--smoke-rows",
@@ -40,10 +47,10 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8")
 
     args = parse_args()
-    if not args.dry_run and not args.smoke_test:
+    if not args.dry_run and not args.smoke_test and not args.nllb_smoke_test:
         print(
             "Actual model training is deferred to a later RF-006 phase. "
-            "Re-run with --dry-run or --smoke-test."
+            "Re-run with --dry-run, --smoke-test, or --nllb-smoke-test."
         )
         return 2
 
@@ -60,6 +67,13 @@ def main() -> int:
             sample_rows=args.smoke_rows,
         )
         outputs.append(format_training_smoke_test(plan))
+    if args.nllb_smoke_test:
+        result = run_nllb_trainer_smoke_test(
+            config,
+            output_dir=ROOT / "data" / "review" / "training_smoke",
+            sample_rows=args.smoke_rows,
+        )
+        outputs.append(format_nllb_trainer_smoke_test(result))
 
     print("\n\n".join(outputs))
     return 0

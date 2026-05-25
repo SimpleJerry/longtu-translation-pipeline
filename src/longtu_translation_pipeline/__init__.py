@@ -31,6 +31,7 @@ from .text_protection import (
     strip_glossary_markers,
 )
 from .training import (
+    NllbTrainerSmokeResult,
     TokenizedTrainingExample,
     TrainingDryRunPlan,
     TrainingExample,
@@ -39,7 +40,9 @@ from .training import (
     build_training_smoke_test,
     format_training_dry_run,
     format_training_smoke_test,
+    format_nllb_trainer_smoke_test,
     prepare_training_examples,
+    run_nllb_trainer_smoke_test,
     tokenize_training_examples,
 )
 
@@ -58,6 +61,7 @@ __all__ = [
     "TrainingExample",
     "TrainingSmokeTestPlan",
     "TokenizedTrainingExample",
+    "NllbTrainerSmokeResult",
     "compute_corpus_bleu",
     "compute_glossary_preservation",
     "build_inference_dry_run",
@@ -68,12 +72,14 @@ __all__ = [
     "format_inference_dry_run",
     "format_training_dry_run",
     "format_training_smoke_test",
+    "format_nllb_trainer_smoke_test",
     "load_evaluation_config",
     "load_inference_config",
     "load_glossary_terms",
     "load_training_config",
     "prepare_training_examples",
     "protect_training_pair",
+    "run_nllb_trainer_smoke_test",
     "strip_glossary_markers",
     "tokenize_training_examples",
 ]

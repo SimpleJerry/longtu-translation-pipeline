@@ -64,6 +64,27 @@ class TrainingSmokeTestPlan:
     tokenized_examples: list[TokenizedTrainingExample]
 
 
+@dataclass(frozen=True)
+class NllbTrainerSmokeResult:
+    config_path: Path
+    segments_path: Path
+    glossary_path: Path
+    tokenizer_name: str
+    output_dir: Path
+    source_code: str
+    target_code: str
+    target_language_token_id: int
+    special_tokens_added: int
+    tokenizer_vocab_size: int
+    max_length: int
+    prepared_rows: int
+    tokenized_rows: int
+    input_shape: str
+    label_shape: str
+    trainer_max_steps: int
+    train_loss: float | None
+
+
 def build_training_dry_run(config: TrainingConfig) -> TrainingDryRunPlan:
     examples = read_training_examples(config)
     train_examples, validation_examples = split_examples(
@@ -123,6 +144,88 @@ def build_training_smoke_test(
         language_code_assignments=language_assignments,
         preview_examples=prepared_examples[: config.dry_run.preview_rows],
         tokenized_examples=tokenized_examples[: config.dry_run.preview_rows],
+    )
+
+
+def run_nllb_trainer_smoke_test(
+    config: TrainingConfig,
+    output_dir: str | Path,
+    sample_rows: int = 2,
+    max_steps: int = 1,
+) -> NllbTrainerSmokeResult:
+    if sample_rows <= 0:
+        raise ValueError("sample_rows must be a positive integer")
+    if max_steps <= 0:
+        raise ValueError("max_steps must be a positive integer")
+
+    tokenizer = load_nllb_tokenizer(config)
+    special_tokens_added = add_marker_special_tokens(tokenizer)
+    target_language_token_id = tokenizer.convert_tokens_to_ids(config.language.target_code)
+    if target_language_token_id is None or target_language_token_id < 0:
+        raise ValueError(f"Tokenizer does not know target language code: {config.language.target_code}")
+
+    prepared_examples = prepare_training_examples(config, limit=sample_rows)
+    tokenized_examples = tokenize_training_examples(config, tokenizer, prepared_examples)
+    dataset = TorchTrainingDataset(tokenized_examples)
+
+    from transformers import M2M100Config, M2M100ForConditionalGeneration, Trainer, TrainingArguments
+
+    model_config = M2M100Config(
+        vocab_size=len(tokenizer),
+        decoder_start_token_id=target_language_token_id,
+        bos_token_id=tokenizer.bos_token_id,
+        eos_token_id=tokenizer.eos_token_id,
+        pad_token_id=tokenizer.pad_token_id,
+        d_model=32,
+        encoder_layers=1,
+        decoder_layers=1,
+        encoder_attention_heads=1,
+        decoder_attention_heads=1,
+        encoder_ffn_dim=64,
+        decoder_ffn_dim=64,
+        max_position_embeddings=max(config.tokenization.max_length, 32),
+    )
+    model = M2M100ForConditionalGeneration(model_config)
+    model.resize_token_embeddings(len(tokenizer))
+
+    smoke_output_dir = Path(output_dir)
+    training_args = TrainingArguments(
+        output_dir=str(smoke_output_dir),
+        max_steps=max_steps,
+        per_device_train_batch_size=1,
+        report_to="none",
+        save_strategy="no",
+        logging_strategy="no",
+        disable_tqdm=True,
+        do_train=True,
+        optim="adamw_torch",
+        use_cpu=True,
+        remove_unused_columns=False,
+    )
+    trainer = Trainer(model=model, args=training_args, train_dataset=dataset)
+    train_result = trainer.train()
+    train_loss = train_result.training_loss
+
+    input_shape = shape_text([example.input_ids for example in tokenized_examples])
+    label_shape = shape_text([example.labels for example in tokenized_examples])
+    return NllbTrainerSmokeResult(
+        config_path=config.path,
+        segments_path=config.data.segments_path,
+        glossary_path=config.data.glossary_path,
+        tokenizer_name=config.model.base_model,
+        output_dir=smoke_output_dir,
+        source_code=config.language.source_code,
+        target_code=config.language.target_code,
+        target_language_token_id=int(target_language_token_id),
+        special_tokens_added=special_tokens_added,
+        tokenizer_vocab_size=len(tokenizer),
+        max_length=config.tokenization.max_length,
+        prepared_rows=len(prepared_examples),
+        tokenized_rows=len(tokenized_examples),
+        input_shape=input_shape,
+        label_shape=label_shape,
+        trainer_max_steps=max_steps,
+        train_loss=float(train_loss) if train_loss is not None else None,
     )
 
 
@@ -208,6 +311,28 @@ def configure_tokenizer_language_codes(tokenizer: Any, config: TrainingConfig) -
     return assignments
 
 
+def load_nllb_tokenizer(config: TrainingConfig) -> Any:
+    from transformers import AutoTokenizer
+
+    tokenizer = AutoTokenizer.from_pretrained(config.model.base_model)
+    configure_tokenizer_language_codes(tokenizer, config)
+    return tokenizer
+
+
+def add_marker_special_tokens(tokenizer: Any) -> int:
+    marker_tokens = {"additional_special_tokens": ["<start>", "<end>"]}
+    try:
+        return tokenizer.add_special_tokens(
+            marker_tokens,
+            replace_additional_special_tokens=False,
+        )
+    except TypeError:
+        return tokenizer.add_special_tokens(
+            marker_tokens,
+            replace_extra_special_tokens=False,
+        )
+
+
 def tokenize_training_examples(
     config: TrainingConfig,
     tokenizer: Any,
@@ -216,20 +341,21 @@ def tokenize_training_examples(
     if not examples:
         raise ValueError("No training examples to tokenize")
 
-    source_batch = tokenize_texts(
+    source_texts = [example.source_text for example in examples]
+    target_texts = [example.target_text for example in examples]
+    source_batch = tokenize_source_target_texts(
         tokenizer,
-        [example.source_text for example in examples],
+        source_texts,
+        target_texts,
         config,
     )
-    target_batch = tokenize_texts(
-        tokenizer,
-        [example.target_text for example in examples],
-        config,
-    )
-
     input_ids = batch_list(source_batch, "input_ids")
     attention_mask = batch_list(source_batch, "attention_mask")
-    labels = batch_list(target_batch, "input_ids")
+    if "labels" in source_batch:
+        labels = batch_list(source_batch, "labels")
+    else:
+        target_batch = tokenize_texts(tokenizer, target_texts, config)
+        labels = batch_list(target_batch, "input_ids")
     if not (len(input_ids) == len(attention_mask) == len(labels) == len(examples)):
         raise ValueError("Tokenizer returned inconsistent batch sizes")
 
@@ -255,6 +381,24 @@ def tokenize_texts(tokenizer: Any, texts: Sequence[str], config: TrainingConfig)
     )
 
 
+def tokenize_source_target_texts(
+    tokenizer: Any,
+    source_texts: Sequence[str],
+    target_texts: Sequence[str],
+    config: TrainingConfig,
+) -> Any:
+    try:
+        return tokenizer(
+            list(source_texts),
+            text_target=list(target_texts),
+            max_length=config.tokenization.max_length,
+            padding=config.tokenization.padding,
+            truncation=config.tokenization.truncation,
+        )
+    except TypeError:
+        return tokenize_texts(tokenizer, source_texts, config)
+
+
 def batch_list(batch: Any, field: str) -> list[list[int]]:
     if field not in batch:
         raise ValueError(f"Tokenizer output is missing '{field}'")
@@ -264,6 +408,32 @@ def batch_list(batch: Any, field: str) -> list[list[int]]:
     if not isinstance(value, list):
         raise ValueError(f"Tokenizer output field '{field}' must be a list")
     return [list(item) for item in value]
+
+
+class TorchTrainingDataset:
+    def __init__(self, examples: Sequence[TokenizedTrainingExample]) -> None:
+        if not examples:
+            raise ValueError("TorchTrainingDataset requires at least one example")
+        self.examples = list(examples)
+
+    def __len__(self) -> int:
+        return len(self.examples)
+
+    def __getitem__(self, index: int) -> dict[str, Any]:
+        import torch
+
+        example = self.examples[index]
+        return {
+            "input_ids": torch.tensor(example.input_ids, dtype=torch.long),
+            "attention_mask": torch.tensor(example.attention_mask, dtype=torch.long),
+            "labels": torch.tensor(example.labels, dtype=torch.long),
+        }
+
+
+def shape_text(batch: Sequence[Sequence[int]]) -> str:
+    if not batch:
+        return "0 x 0"
+    return f"{len(batch)} x {len(batch[0])}"
 
 
 def split_examples(
@@ -340,4 +510,27 @@ def format_training_smoke_test(plan: TrainingSmokeTestPlan) -> str:
             f"tokenized_preview_{index}={example.segment_id}: "
             f"input_ids={len(example.input_ids)} labels={len(example.labels)}"
         )
+    return "\n".join(lines)
+
+
+def format_nllb_trainer_smoke_test(result: NllbTrainerSmokeResult) -> str:
+    lines = [
+        "NLLB tokenizer / Trainer smoke-test result",
+        f"config={result.config_path}",
+        f"segments={result.segments_path}",
+        f"glossary={result.glossary_path}",
+        f"tokenizer={result.tokenizer_name}",
+        f"output_dir={result.output_dir}",
+        f"language_pair={result.source_code}->{result.target_code}",
+        f"target_language_token_id={result.target_language_token_id}",
+        f"special_tokens_added={result.special_tokens_added}",
+        f"tokenizer_vocab_size={result.tokenizer_vocab_size}",
+        f"max_length={result.max_length}",
+        f"prepared_rows={result.prepared_rows}",
+        f"tokenized_rows={result.tokenized_rows}",
+        f"input_shape={result.input_shape}",
+        f"label_shape={result.label_shape}",
+        f"trainer_max_steps={result.trainer_max_steps}",
+        f"train_loss={result.train_loss}",
+    ]
     return "\n".join(lines)

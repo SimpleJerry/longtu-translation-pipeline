@@ -13,11 +13,16 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from longtu_translation_pipeline.config import load_training_config  # noqa: E402
 from longtu_translation_pipeline.training import (  # noqa: E402
+    NllbTrainerSmokeResult,
+    TorchTrainingDataset,
+    TokenizedTrainingExample,
     build_training_dry_run,
     build_training_smoke_test,
+    format_nllb_trainer_smoke_test,
     format_training_dry_run,
     format_training_smoke_test,
     prepare_training_examples,
+    shape_text,
     tokenize_training_examples,
 )
 
@@ -179,6 +184,37 @@ class TrainingPipelineTest(unittest.TestCase):
         self.assertIn("<start>神秘宝箱<end>", tokenizer.calls[0]["texts"][0])
         self.assertIn("<start>신비한 보물상자<end>", tokenizer.calls[1]["texts"][0])
 
+    def test_tokenization_prefers_text_target_labels_when_supported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            segments_path = tmp_path / "segments.csv"
+            glossary_path = tmp_path / "glossary.csv"
+            config_path = tmp_path / "training.json"
+
+            write_csv(
+                segments_path,
+                ["segment_id", "zh-CN", "ko"],
+                [{"segment_id": "1", "zh-CN": "领取奖励", "ko": "보상 수령"}],
+            )
+            write_csv(glossary_path, ["term_id", "zh-CN", "ko"], [])
+            config_path.write_text(
+                json.dumps(build_training_config(segments_path, glossary_path), ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            tokenizer = TextTargetTokenizer()
+            examples = prepare_training_examples(load_training_config(config_path))
+            tokenized = tokenize_training_examples(
+                load_training_config(config_path),
+                tokenizer,
+                examples,
+            )
+
+        self.assertEqual(tokenized[0].input_ids, [101, 0])
+        self.assertEqual(tokenized[0].labels, [202, 0])
+        self.assertEqual(tokenizer.source_texts, ["领取奖励"])
+        self.assertEqual(tokenizer.target_texts, ["보상 수령"])
+
     def test_smoke_test_plan_records_language_codes_and_token_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -221,6 +257,55 @@ class TrainingPipelineTest(unittest.TestCase):
         self.assertIn("tokenizer=recording-tokenizer", formatted)
         self.assertIn("language_pair=zho_Hans->kor_Hang", formatted)
         self.assertIn("language_code_assignments=src_lang=zho_Hans;tgt_lang=kor_Hang", formatted)
+
+    def test_torch_training_dataset_returns_tensor_batch(self) -> None:
+        dataset = TorchTrainingDataset(
+            [
+                TokenizedTrainingExample(
+                    segment_id="1",
+                    input_ids=[1, 2, 0],
+                    attention_mask=[1, 1, 0],
+                    labels=[3, 4, 0],
+                )
+            ]
+        )
+
+        item = dataset[0]
+
+        self.assertEqual(len(dataset), 1)
+        self.assertEqual(item["input_ids"].tolist(), [1, 2, 0])
+        self.assertEqual(item["attention_mask"].tolist(), [1, 1, 0])
+        self.assertEqual(item["labels"].tolist(), [3, 4, 0])
+        self.assertEqual(shape_text([[1, 2, 3], [4, 5, 6]]), "2 x 3")
+
+    def test_nllb_trainer_smoke_result_format(self) -> None:
+        result = NllbTrainerSmokeResult(
+            config_path=Path("training.json"),
+            segments_path=Path("segments.csv"),
+            glossary_path=Path("glossary.csv"),
+            tokenizer_name="facebook/nllb-200-distilled-600M",
+            output_dir=Path("data/review/training_smoke"),
+            source_code="zho_Hans",
+            target_code="kor_Hang",
+            target_language_token_id=256001,
+            special_tokens_added=2,
+            tokenizer_vocab_size=256204,
+            max_length=32,
+            prepared_rows=2,
+            tokenized_rows=2,
+            input_shape="2 x 32",
+            label_shape="2 x 32",
+            trainer_max_steps=1,
+            train_loss=1.23,
+        )
+
+        formatted = format_nllb_trainer_smoke_test(result)
+
+        self.assertIn("NLLB tokenizer / Trainer smoke-test result", formatted)
+        self.assertIn("tokenizer=facebook/nllb-200-distilled-600M", formatted)
+        self.assertIn("language_pair=zho_Hans->kor_Hang", formatted)
+        self.assertIn("input_shape=2 x 32", formatted)
+        self.assertIn("trainer_max_steps=1", formatted)
 
 
 def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:
@@ -279,6 +364,28 @@ class RecordingTokenizer:
         return {
             "input_ids": [[len(text), 0, 0] for text in texts],
             "attention_mask": [[1, 0, 0] for _ in texts],
+        }
+
+
+class TextTargetTokenizer:
+    def __init__(self) -> None:
+        self.source_texts: list[str] = []
+        self.target_texts: list[str] = []
+
+    def __call__(
+        self,
+        texts: list[str],
+        text_target: list[str],
+        max_length: int,
+        padding: str,
+        truncation: bool,
+    ) -> dict[str, list[list[int]]]:
+        self.source_texts = texts
+        self.target_texts = text_target
+        return {
+            "input_ids": [[101, 0] for _ in texts],
+            "attention_mask": [[1, 0] for _ in texts],
+            "labels": [[202, 0] for _ in text_target],
         }
 
 

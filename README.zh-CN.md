@@ -66,7 +66,7 @@
 | `scripts/glossary_semantic_pipeline.py` | 本地 glossary semantic 清洗 pipeline，使用 Stanza、jieba、kiwipiepy、wordfreq 与 `BAAI/bge-m3`。 |
 | `scripts/evaluate_translation.py` | 翻译结果评估 CLI，计算 BLEU 与 glossary preservation，不加载模型。 |
 | `scripts/segments_cleaning_pipeline.py` | 本地 segments 语义清洗 pipeline，默认 dry-run 生成 review CSV。 |
-| `scripts/train_model.py` | 训练 dry-run CLI；当前只校验配置、读取数据、拆分 train/valid，不加载模型。 |
+| `scripts/train_model.py` | 训练 CLI；支持配置 dry-run、本地 tiny tokenizer smoke，以及真实 NLLB tokenizer + tiny Trainer smoke。 |
 | `scripts/run_inference.py` | 推理 dry-run CLI；当前只校验配置、读取输入、展示输出计划，不加载模型。 |
 | `src/longtu_translation_pipeline/text_protection.py` | 可测试的术语 marker 保护纯函数模块。 |
 | `src/longtu_translation_pipeline/config.py` | 训练/推理 JSON 配置的 dataclass 解析和校验。 |
@@ -77,11 +77,11 @@
 | `notebooks/analysis/` | 辅助分析 notebook，例如训练 loss 可视化。 |
 | `notebooks/archive/2023-legacy/` | 2023 年旧实验归档，第一轮不直接删除。 |
 | `docs/notebooks/inventory.md` | Notebook 时间线、用途、依赖状态和保留/归档/删除建议。 |
-| `requirements-training.txt` | RF-006-P2 确认的训练 smoke / 后续训练链路依赖。 |
+| `requirements-training.txt` | RF-006-P2/P3 确认的训练 smoke / 后续训练链路依赖。 |
 
 ## 运行环境
 
-建议使用 Windows 或 Linux 的 Python 虚拟环境。`requirements.txt` 当前记录已经实际落地使用的本地 semantic cleaning 依赖与 CUDA 13.2 版本 PyTorch；基础 CLI、dry-run、测试和 RF-007 evaluation 主要使用标准库，不代表所有场景都必须安装完整依赖。`requirements-training.txt` 记录 RF-006-P2 已确认的训练 smoke / 后续训练链路依赖，目前包含 `transformers` / `tokenizers` 及其直接运行依赖；`datasets`、`sentencepiece`、`accelerate` 尚未进入当前最小链路。
+建议使用 Windows 或 Linux 的 Python 虚拟环境。`requirements.txt` 当前记录已经实际落地使用的本地 semantic cleaning 依赖与 CUDA 13.2 版本 PyTorch；基础 CLI、dry-run、测试和 RF-007 evaluation 主要使用标准库，不代表所有场景都必须安装完整依赖。`requirements-training.txt` 记录 RF-006-P2/P3 已确认的训练 smoke / 后续训练链路依赖，目前包含 `transformers`、`tokenizers`、`accelerate`、`sentencepiece` 及其直接运行依赖；`datasets` 尚未进入当前最小链路。
 
 ```powershell
 python -m venv .venv
@@ -139,11 +139,12 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 该 pipeline 会先剥离 `<c=...>` 等表现层样式标签并解开对称外层包装，再使用 Stanza、jieba、kiwipiepy 和 `BAAI/bge-m3` 判断 term/entity-like segment；placeholder 行默认保留，只做 mismatch 审计。该命令不会改写 `data/segments.csv`，只会在本地 `data/review/segments/` 下生成审计 CSV。人工确认后再使用 `--apply` 重写最终语料。
 
-训练/推理工程入口目前处于 RF-006 的轻量工程化阶段：dry-run 只做配置读取、数据校验和 train/valid 计划，不加载 NLLB 模型、不启动训练。RF-006-P2 额外提供本地 tokenizer/dataset smoke test，用 tiny tokenizer 走 `transformers` / `tokenizers` 接口，验证全量 prepared examples 可以应用 `<start>...<end>` 术语 marker 并进入 tokenization；真实 NLLB tokenizer、Trainer 和长时间 GPU 训练仍留到后续阶段。
+训练/推理工程入口目前处于 RF-006 的轻量工程化阶段：dry-run 只做配置读取、数据校验和 train/valid 计划。RF-006-P2 提供本地 tiny tokenizer smoke；RF-006-P3 使用真实 NLLB tokenizer 和随机初始化 tiny seq2seq model 跑 Trainer 1-step，用来验证 tokenizer、language code、dataset shape、collator 和 Trainer 链路。该 smoke 不下载真实 NLLB 模型权重，不代表正式训练质量。
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --smoke-test
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --nllb-smoke-test --smoke-rows 2
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
 ```
 

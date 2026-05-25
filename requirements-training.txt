@@ -5,3 +5,5 @@ transformers==5.9.0
 tokenizers==0.22.2
 huggingface-hub==1.15.0
 safetensors==0.7.0
+accelerate==1.13.0
+sentencepiece==0.2.1
