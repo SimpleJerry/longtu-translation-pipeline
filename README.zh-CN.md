@@ -161,7 +161,7 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 该 pipeline 会先剥离 `<c=...>` 等表现层样式标签并解开对称外层包装，再删除高置信非句段碎片和 ko 侧目标语言污染，然后使用 Stanza、jieba、kiwipiepy 和 `BAAI/bge-m3` 判断 term/entity-like segment；placeholder 行默认保留，只做 mismatch 审计，除非目标侧已经触发强污染规则。该命令不会改写 `data/segments.csv`，只会在本地 `data/review/segments/` 下生成审计 CSV。人工确认后再使用 `--apply` 重写最终语料。各类清洗的例子见 `docs/data-cleaning.md`。
 
-如果需要让 LLM 全量复核 `segments.csv`，可使用云端 segments 清洗入口。该流程允许 LLM 建议删除行或改写 `ko`，但只有通过本地校验的韩文改写才会写入主语料；校验包括非空、有韩文、无中文污染、placeholder 保留、glossary term exact/no-space 保留、长度比例和重复输出检查。审计文件写入本地 `data/review/llm_segments_cleanup/`，不提交到 Git。
+如果需要让 LLM 全量复核 `segments.csv`，可使用云端 segments 清洗入口。LLM 只看到原始中韩文本、placeholder 和命中的 glossary term；target contamination、结构化字符串、长度比例等本地预判只在模型返回后用于校验和审计，不作为提示喂给模型。该流程允许 LLM 建议删除行或改写 `ko`，但只有通过本地校验的韩文改写才会写入主语料；校验包括非空、有韩文、无中文污染、placeholder 保留、glossary term exact/no-space 保留、长度比例和重复输出检查。审计文件写入本地 `data/review/llm_segments_cleanup/`，不提交到 Git。
 
 ```powershell
 $env:OPENAI_API_KEY="<your-key>"

@@ -70,7 +70,7 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Decision:** Optional cloud LLM segment cleanup may delete segment rows and may rewrite only the Korean target, but rewrites are applied only after local validation. The model must not change Chinese source text, add rows, split rows, merge rows, or edit glossary.
 - **Background:** The user chose full-corpus LLM review and allowed Korean rewrite because remaining segment noise may be too semantic for deterministic rules. Unvalidated synthetic translations would be risky, so local guards remain mandatory.
 - **Impact Scope:** `scripts/segments_llm_cleanup_pipeline.py`, `data/segments.csv`, local `data/review/llm_segments_cleanup/` artifacts, README/data-cleaning workflow notes.
-- **Follow-up Notes:** Rewrite validation must check Hangul presence, no Chinese target contamination, placeholder preservation, glossary preservation, length ratio, and repetition/explanation-like output. Any full LLM segment cleanup invalidates existing split artifacts, checkpoints, and reports.
+- **Follow-up Notes:** The LLM prompt should receive only raw row text, placeholders, and matched glossary constraints; local pre-judgment flags such as target contamination, structured-string hints, length ratio, and repeated-output checks stay in post-response validation and audit. Rewrite validation must check Hangul presence, no Chinese target contamination, placeholder preservation, glossary preservation, length ratio, and repetition/explanation-like output. Any full LLM segment cleanup invalidates existing split artifacts, checkpoints, and reports.
 
 ## 2026-05-24: Segment Cleanup Is Review-First
 

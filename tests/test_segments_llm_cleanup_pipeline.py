@@ -16,6 +16,22 @@ import segments_llm_cleanup_pipeline as segments_llm  # noqa: E402
 
 
 class SegmentsLlmCleanupTest(unittest.TestCase):
+    def test_payload_excludes_local_prejudgment_fields(self) -> None:
+        payload = segments_llm.build_request_payload(
+            model="test-model",
+            batch=[segments_llm.SegmentRow("1", "六壬秘境85级", "六壬秘境85级")],
+            glossary_sorted=[segments_llm.GlossaryTerm("1", "秘境", "비경")],
+            temperature=0.0,
+        )
+        user_payload = json.loads(payload["messages"][1]["content"])
+        row = user_payload["rows"][0]
+
+        self.assertEqual(row["segment_id"], "1")
+        self.assertIn("placeholder_tokens", row)
+        self.assertIn("glossary_terms", row)
+        self.assertNotIn("target_contamination", row)
+        self.assertNotIn("structured_hint", row)
+
     def test_apply_removes_rewrites_and_keeps_continuous_ids(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = make_project(tmp)
@@ -206,6 +222,68 @@ class SegmentsLlmCleanupTest(unittest.TestCase):
         self.assertEqual(client.calls, 2)
         self.assertEqual(result.kept_rows, 2)
 
+    def test_repeated_reason_writes_warning_metrics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = make_project(tmp)
+            write_segments(
+                paths["segments"],
+                [(str(index), f"测试文本{index}", f"테스트 문장 {index}") for index in range(1, 6)],
+            )
+            write_glossary(paths["glossary"], [("1", "测试", "테스트")])
+            client = StaticClient(
+                {
+                    str(index): ("KEEP_SEGMENT", "valid training pair", "")
+                    for index in range(1, 6)
+                }
+            )
+
+            segments_llm.run_cleanup(
+                segments_path=paths["segments"],
+                glossary_path=paths["glossary"],
+                review_dir=paths["review"],
+                apply_changes=False,
+                batch_size=5,
+                env=valid_env(),
+                client=client,
+            )
+            summary = read_metric_csv(paths["review"] / "segments_llm_summary.csv")
+            warnings = read_csv(paths["review"] / "segments_llm_warnings.csv")
+
+        self.assertEqual(summary["reason_repetition_warning_batches"], "1")
+        self.assertEqual(summary["max_reason_repetition_count"], "5")
+        self.assertEqual(warnings[0]["warning_type"], "batch_reason_repetition_warning")
+
+    def test_review_uncertain_keeps_original_and_writes_sample(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = make_project(tmp)
+            write_segments(paths["segments"], [("1", "帮派红包", "길드 보상")])
+            write_glossary(paths["glossary"], [("1", "帮派", "길드")])
+            client = StaticClient(
+                {
+                    "1": (
+                        "REVIEW_UNCERTAIN",
+                        "Korean may be too free for this source",
+                        "",
+                    )
+                }
+            )
+
+            result = segments_llm.run_cleanup(
+                segments_path=paths["segments"],
+                glossary_path=paths["glossary"],
+                review_dir=paths["review"],
+                apply_changes=True,
+                env=valid_env(),
+                client=client,
+            )
+            output = read_csv(paths["segments"])
+            sample = read_csv(paths["review"] / "segments_llm_sample_review.csv")
+
+        self.assertEqual(result.review_rows, 1)
+        self.assertEqual(output[0]["ko"], "길드 보상")
+        self.assertEqual(sample[0]["final_action"], "REVIEW")
+        self.assertEqual(sample[0]["original_segment_id"], "1")
+
 
 class StaticClient:
     def __init__(self, actions: dict[str, tuple[str, str, str]]) -> None:
@@ -297,6 +375,10 @@ def write_glossary(path: Path, rows: list[tuple[str, str, str]]) -> None:
 def read_csv(path: Path) -> list[dict[str, str]]:
     with path.open(encoding="utf-8-sig", newline="") as f:
         return list(csv.DictReader(f))
+
+
+def read_metric_csv(path: Path) -> dict[str, str]:
+    return {row["metric"]: row["value"] for row in read_csv(path)}
 
 
 if __name__ == "__main__":

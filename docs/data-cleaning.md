@@ -155,11 +155,14 @@ REWRITE zh-CN: 技能升级
 
 Cleanup behavior:
 
-- Send `segment_id`, `zh-CN`, `ko`, detected placeholders, matched glossary terms, target-contamination flags, and structured-string hints to an OpenAI-compatible Chat Completions API.
+- Send only `segment_id`, `zh-CN`, `ko`, detected placeholders, and matched glossary terms to an OpenAI-compatible Chat Completions API.
+- Do not send local pre-judgment fields such as target-contamination flags, structured-string hints, length-ratio flags, or repeated-output flags to the model; those checks run only after the model responds.
+- Ask the model to review each row independently by semantic fit, with a row-specific reason rather than a bulk rule label.
 - Allow the model to choose keep, remove, review, or Korean rewrite actions.
 - Never allow the model to change Chinese source text, add rows, split rows, merge rows, or edit glossary.
 - Apply a Korean rewrite only if it is non-empty, contains Hangul, contains no Chinese CJK, preserves placeholders, preserves matched glossary terms by exact or no-space matching, and passes basic length/repetition checks.
 - If a rewrite fails validation, keep the original row for review unless the original Korean target is already contaminated; contaminated rows are removed.
+- Record action distribution, repeated-reason warnings, surface-feature action warnings, rewrite accept/reject rates, and a balanced sample review under `data/review/llm_segments_cleanup/`.
 
 Command:
 
@@ -170,3 +173,5 @@ venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --dry-run
 ```
 
 Use `--apply` only after reviewing `data/review/llm_segments_cleanup/`. A full segment LLM cleanup invalidates existing train/validation/test split artifacts and model reports.
+
+Do not use the ChatGPT web UI as the authoritative full-file cleanup path. It may use file-analysis tools and code-like preprocessing, which makes it hard to prove that every row received semantic review. If the web UI is useful, use it only for small manual samples of about 50-100 pasted rows and ask it not to use tools; still treat the result as review evidence rather than a file that can directly overwrite the corpus.

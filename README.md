@@ -161,7 +161,7 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 
 이 pipeline은 먼저 `<c=...>` 같은 표현용 스타일 태그를 제거하고 대칭 외부 wrapper를 푼 뒤, 고신뢰 non-segment fragment와 한국어 target-language contamination을 삭제합니다. 그 다음 Stanza, jieba, kiwipiepy, `BAAI/bge-m3`로 term/entity-like segment를 점수화합니다. Placeholder 행은 기본적으로 보존하고 mismatch만 감사하지만, target 쪽이 강한 오염 규칙에 걸리면 삭제됩니다. 이 명령은 `data/segments.csv`를 다시 쓰지 않고 로컬 `data/review/segments/` 아래에 감사 CSV만 생성합니다. 수동 확인 후에만 `--apply`를 사용합니다. 각 정제 유형의 예시는 `docs/data-cleaning.md`를 참고하세요.
 
-`segments.csv` 전체를 LLM으로 다시 검사하려면 cloud segment cleanup entry point를 사용합니다. LLM은 행 삭제 또는 한국어 rewrite를 제안할 수 있지만, 로컬 검증을 통과한 한국어 rewrite만 corpus에 적용합니다. 검증은 비어 있지 않은 Hangul 출력, 중국어 오염 없음, placeholder 보존, exact/no-space glossary 보존, 길이 비율, 반복 출력 패턴을 확인합니다. 감사 파일은 로컬 `data/review/llm_segments_cleanup/` 아래에 기록되며 Git에 커밋하지 않습니다.
+`segments.csv` 전체를 LLM으로 다시 검사하려면 cloud segment cleanup entry point를 사용합니다. LLM에는 원문 중한 텍스트, placeholder, 매칭된 glossary term만 전달하고 target contamination, structured-string, 길이 비율 같은 로컬 선판단 신호는 응답 이후 검증과 감사에만 사용합니다. LLM은 행 삭제 또는 한국어 rewrite를 제안할 수 있지만, 로컬 검증을 통과한 한국어 rewrite만 corpus에 적용합니다. 검증은 비어 있지 않은 Hangul 출력, 중국어 오염 없음, placeholder 보존, exact/no-space glossary 보존, 길이 비율, 반복 출력 패턴을 확인합니다. 감사 파일은 로컬 `data/review/llm_segments_cleanup/` 아래에 기록되며 Git에 커밋하지 않습니다.
 
 ```powershell
 $env:OPENAI_API_KEY="<your-key>"

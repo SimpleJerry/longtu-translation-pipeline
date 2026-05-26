@@ -96,6 +96,24 @@ REWRITE_FAILED_FIELDS = [
     "glossary_terms",
 ]
 SUMMARY_FIELDS = ["metric", "value"]
+WARNING_FIELDS = ["warning_type", "scope", "value", "count", "rate", "details"]
+SAMPLE_REVIEW_FIELDS = [
+    "sample_id",
+    "original_segment_id",
+    "final_action",
+    "llm_action",
+    "validation_status",
+    "reason",
+    "validation_errors",
+    "zh-CN",
+    "original_ko",
+    "corrected_ko",
+    "final_ko",
+]
+
+REASON_REPETITION_WARNING_RATE = 0.60
+REASON_REPETITION_MIN_BATCH_ROWS = 5
+SURFACE_FEATURE_WARNING_MIN_ROWS = 5
 
 HANGUL_RE = re.compile(r"[\uac00-\ud7a3]")
 CJK_RE = re.compile(r"[\u3400-\u9fff]")
@@ -106,10 +124,13 @@ STRUCTURED_RE = re.compile(r"^\s*[\{\[]\s*['\"].*['\"]\s*[\}\]]\s*$")
 EXPLANATION_RE = re.compile(r"(translation|corrected|번역|수정|설명|理由|原因|改写)")
 
 SYSTEM_PROMPT = (
-    "You are cleaning Chinese-to-Korean game localization training segments. "
-    "Classify each row for seq2seq training quality. You may keep, remove, mark "
-    "uncertain, or rewrite only the Korean target. Never change Chinese source, "
-    "never add rows, never split rows, and never explain outside JSON."
+    "You are a Chinese-to-Korean game localization segment reviewer. Review each "
+    "row independently by its own meaning, not by applying a bulk rule to the "
+    "whole batch. You may keep, remove, mark uncertain, or rewrite only the "
+    "Korean target. The reason for every row must cite that row's own semantic "
+    "problem or why it is usable. Do not return code, pseudocode, rules, batch "
+    "summaries, or explanations outside the required JSON. Never change Chinese "
+    "source, add rows, split rows, merge rows, or edit glossary terms."
 )
 
 
@@ -141,6 +162,7 @@ class Decision:
     action: str
     reason: str
     corrected_ko: str
+    batch_no: int = 0
 
 
 @dataclass(frozen=True)
@@ -186,6 +208,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--batch-size", type=int, default=25)
     parser.add_argument("--max-retries", type=int, default=3)
+    parser.add_argument(
+        "--sample-review-rows",
+        type=int,
+        default=50,
+        help="Number of balanced sample-review rows to write under the review directory.",
+    )
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--base-url", default=None)
@@ -207,6 +235,7 @@ def main() -> int:
             apply_changes=args.apply,
             batch_size=args.batch_size,
             max_retries=args.max_retries,
+            sample_review_rows=args.sample_review_rows,
             temperature=args.temperature,
             timeout=args.timeout,
             base_url=args.base_url,
@@ -226,6 +255,7 @@ def run_cleanup(
     apply_changes: bool,
     batch_size: int = 25,
     max_retries: int = 3,
+    sample_review_rows: int = 50,
     temperature: float = 0.0,
     timeout: int = 180,
     base_url: str | None = None,
@@ -236,6 +266,7 @@ def run_cleanup(
     validate_positive_int("batch-size", batch_size)
     validate_positive_int("max-retries", max_retries)
     validate_positive_int("timeout", timeout)
+    validate_nonnegative_int("sample-review-rows", sample_review_rows)
     client_config = resolve_client_config(env or os.environ, base_url, model)
 
     segments = read_segments(segments_path)
@@ -270,7 +301,14 @@ def run_cleanup(
             outcome = build_outcome(row, decisions_by_id[row.segment_id], features)
             outcomes.append(outcome)
 
-    write_review_files(review_dir, outcomes, total_usage, client_config, apply_changes)
+    write_review_files(
+        review_dir,
+        outcomes,
+        total_usage,
+        client_config,
+        apply_changes,
+        sample_review_rows,
+    )
     if apply_changes:
         write_segments(segments_path, outcomes)
 
@@ -301,6 +339,11 @@ def run_cleanup(
 def validate_positive_int(name: str, value: int) -> None:
     if value < 1:
         raise RuntimeError(f"{name} must be >= 1.")
+
+
+def validate_nonnegative_int(name: str, value: int) -> None:
+    if value < 0:
+        raise RuntimeError(f"{name} must be >= 0.")
 
 
 def read_segments(path: Path) -> list[SegmentRow]:
@@ -361,6 +404,16 @@ def classify_batch(
             response = client(request_payload, client_config, temperature, timeout)
             write_raw_batch(raw_dir, batch_no, attempt, request_payload, response, None)
             decisions = parse_and_validate_response(response, batch)
+            decisions = [
+                Decision(
+                    segment_id=decision.segment_id,
+                    action=decision.action,
+                    reason=decision.reason,
+                    corrected_ko=decision.corrected_ko,
+                    batch_no=batch_no,
+                )
+                for decision in decisions
+            ]
             return response, decisions
         except RuntimeError as exc:
             last_error = str(exc)
@@ -389,19 +442,22 @@ def build_request_payload(
                     {"term_id": term.term_id, "zh-CN": term.zh, "ko": term.ko}
                     for term in features.glossary_terms
                 ],
-                "target_contamination": features.target_contamination,
-                "structured_hint": features.structured_hint,
             }
         )
 
     user_payload = {
-        "task": "Classify every segment row and optionally rewrite only Korean.",
+        "task": "Review every segment row independently and optionally rewrite only Korean.",
         "allowed_actions": sorted(VALID_ACTIONS),
         "policy": [
-            "Keep good sentence/phrase training pairs.",
-            "Remove non-segment fragments, bad pairs, and target contamination.",
-            "Use REWRITE_KO only when Korean is fixable from the Chinese source.",
-            "Do not change zh-CN, add rows, split rows, or output explanations outside JSON.",
+            "Judge each row by its own Chinese and Korean meaning; do not bulk-apply a surface rule across the batch.",
+            "Use the glossary_terms only as required terminology constraints for this row.",
+            "Use placeholder_tokens only to preserve machine placeholders; do not treat placeholders alone as a removal reason.",
+            "Keep usable seq2seq sentence or phrase pairs, even if they are short UI text.",
+            "Remove only when this row is not a trainable segment, is a bad semantic pair, or has unusable target-language content.",
+            "Use REWRITE_KO only when a natural Korean target is clearly derivable from zh-CN and the glossary constraints.",
+            "If uncertain, choose REVIEW_UNCERTAIN rather than guessing.",
+            "The reason must mention this row's own semantic issue or why it is usable; do not return generic rule labels.",
+            "Do not change zh-CN, add rows, split rows, merge rows, or output explanations outside JSON.",
         ],
         "output_schema": {
             "results": [
@@ -635,6 +691,7 @@ def write_review_files(
     total_usage: dict[str, int],
     client_config: ClientConfig,
     apply_changes: bool,
+    sample_review_rows: int,
 ) -> None:
     audit_rows = [audit_row(outcome) for outcome in outcomes]
     removed = [outcome for outcome in outcomes if outcome.final_action == "REMOVE"]
@@ -642,6 +699,7 @@ def write_review_files(
     rewrite_failed = [
         outcome for outcome in outcomes if outcome.validation_status.startswith("REWRITE_REJECTED")
     ]
+    warnings = warning_rows(outcomes)
     write_csv(review_dir / "segments_llm_audit.csv", AUDIT_FIELDS, audit_rows)
     write_csv(review_dir / "removed_segments_llm.csv", REMOVED_FIELDS, removed_rows(removed))
     write_csv(review_dir / "rewritten_segments_llm.csv", REWRITTEN_FIELDS, rewritten_rows(rewritten))
@@ -651,9 +709,15 @@ def write_review_files(
         rewrite_failed_rows(rewrite_failed),
     )
     write_csv(
+        review_dir / "segments_llm_sample_review.csv",
+        SAMPLE_REVIEW_FIELDS,
+        sample_review(outcomes, sample_review_rows),
+    )
+    write_csv(review_dir / "segments_llm_warnings.csv", WARNING_FIELDS, warnings)
+    write_csv(
         review_dir / "segments_llm_summary.csv",
         SUMMARY_FIELDS,
-        summary_rows(outcomes, total_usage, client_config, apply_changes),
+        summary_rows(outcomes, total_usage, client_config, apply_changes, warnings),
     )
 
 
@@ -725,15 +789,158 @@ def rewrite_failed_rows(outcomes: list[RowOutcome]) -> list[dict[str, str]]:
     ]
 
 
+def sample_review(outcomes: list[RowOutcome], limit: int) -> list[dict[str, str]]:
+    if limit == 0:
+        return []
+    grouped: dict[str, list[RowOutcome]] = {
+        "REMOVE": [],
+        "REWRITE": [],
+        "REVIEW": [],
+        "KEEP": [],
+    }
+    for outcome in outcomes:
+        grouped.setdefault(outcome.final_action, []).append(outcome)
+
+    selected: list[RowOutcome] = []
+    indexes = {action: 0 for action in grouped}
+    order = ["REMOVE", "REWRITE", "REVIEW", "KEEP"]
+    while len(selected) < limit:
+        added = False
+        for action in order:
+            index = indexes[action]
+            if index < len(grouped[action]):
+                selected.append(grouped[action][index])
+                indexes[action] += 1
+                added = True
+                if len(selected) >= limit:
+                    break
+        if not added:
+            break
+
+    rows: list[dict[str, str]] = []
+    for sample_id, outcome in enumerate(selected, 1):
+        rows.append(
+            {
+                "sample_id": str(sample_id),
+                "original_segment_id": outcome.row.segment_id,
+                "final_action": outcome.final_action,
+                "llm_action": outcome.decision.action,
+                "validation_status": outcome.validation_status,
+                "reason": outcome.decision.reason,
+                "validation_errors": ";".join(outcome.validation_errors),
+                "zh-CN": outcome.row.zh,
+                "original_ko": outcome.row.ko,
+                "corrected_ko": outcome.decision.corrected_ko,
+                "final_ko": outcome.final_ko,
+            }
+        )
+    return rows
+
+
+def warning_rows(outcomes: list[RowOutcome]) -> list[dict[str, str]]:
+    return reason_repetition_warnings(outcomes) + surface_feature_action_warnings(outcomes)
+
+
+def reason_repetition_warnings(outcomes: list[RowOutcome]) -> list[dict[str, str]]:
+    by_batch: dict[int, list[RowOutcome]] = {}
+    for outcome in outcomes:
+        by_batch.setdefault(outcome.decision.batch_no, []).append(outcome)
+
+    rows: list[dict[str, str]] = []
+    for batch_no, batch_outcomes in sorted(by_batch.items()):
+        if len(batch_outcomes) < REASON_REPETITION_MIN_BATCH_ROWS:
+            continue
+        counts: dict[str, int] = {}
+        examples: dict[str, str] = {}
+        for outcome in batch_outcomes:
+            normalized = normalize_reason(outcome.decision.reason)
+            counts[normalized] = counts.get(normalized, 0) + 1
+            examples.setdefault(normalized, outcome.decision.reason)
+        reason, count = max(counts.items(), key=lambda item: item[1])
+        rate = count / len(batch_outcomes)
+        if rate >= REASON_REPETITION_WARNING_RATE:
+            rows.append(
+                {
+                    "warning_type": "batch_reason_repetition_warning",
+                    "scope": f"batch-{batch_no}",
+                    "value": examples[reason],
+                    "count": str(count),
+                    "rate": format_rate(rate),
+                    "details": f"{count}/{len(batch_outcomes)} rows share the same normalized reason",
+                }
+            )
+    return rows
+
+
+def surface_feature_action_warnings(outcomes: list[RowOutcome]) -> list[dict[str, str]]:
+    feature_groups: list[tuple[str, list[RowOutcome]]] = [
+        (
+            "target_contamination",
+            [outcome for outcome in outcomes if outcome.features.target_contamination],
+        ),
+        ("structured_hint", [outcome for outcome in outcomes if outcome.features.structured_hint]),
+        ("has_placeholders", [outcome for outcome in outcomes if outcome.features.placeholders]),
+        ("has_glossary_terms", [outcome for outcome in outcomes if outcome.features.glossary_terms]),
+    ]
+    rows: list[dict[str, str]] = []
+    for feature_name, group in feature_groups:
+        if len(group) < SURFACE_FEATURE_WARNING_MIN_ROWS:
+            continue
+        final_actions = {outcome.final_action for outcome in group}
+        if len(final_actions) == 1:
+            action = next(iter(final_actions))
+            rows.append(
+                {
+                    "warning_type": "surface_feature_single_final_action_warning",
+                    "scope": feature_name,
+                    "value": action,
+                    "count": str(len(group)),
+                    "rate": "1.000000",
+                    "details": f"All rows with local feature {feature_name}=YES ended as {action}",
+                }
+            )
+        llm_actions = {outcome.decision.action for outcome in group}
+        if len(llm_actions) == 1:
+            action = next(iter(llm_actions))
+            rows.append(
+                {
+                    "warning_type": "surface_feature_single_llm_action_warning",
+                    "scope": feature_name,
+                    "value": action,
+                    "count": str(len(group)),
+                    "rate": "1.000000",
+                    "details": f"All rows with local feature {feature_name}=YES received {action}",
+                }
+            )
+    return rows
+
+
+def normalize_reason(reason: str) -> str:
+    return re.sub(r"\s+", " ", reason.strip().casefold())
+
+
+def format_rate(value: float) -> str:
+    return f"{value:.6f}"
+
+
 def summary_rows(
     outcomes: list[RowOutcome],
     total_usage: dict[str, int],
     client_config: ClientConfig,
     apply_changes: bool,
+    warnings: list[dict[str, str]],
 ) -> list[dict[str, str]]:
     counts: dict[str, int] = {}
+    llm_counts: dict[str, int] = {}
     for outcome in outcomes:
         counts[outcome.final_action] = counts.get(outcome.final_action, 0) + 1
+        llm_counts[outcome.decision.action] = llm_counts.get(outcome.decision.action, 0) + 1
+    rewrite_requested = llm_counts.get(REWRITE_ACTION, 0)
+    rewrite_accepted = counts.get("REWRITE", 0)
+    rewrite_rejected = sum(
+        1 for outcome in outcomes if outcome.validation_status.startswith("REWRITE_REJECTED")
+    )
+    max_reason_count, max_reason_rate = global_reason_repetition(outcomes)
     rows = [
         {"metric": "mode", "value": "apply" if apply_changes else "dry-run"},
         {"metric": "model", "value": client_config.model},
@@ -743,9 +950,33 @@ def summary_rows(
         {"metric": "removed_rows", "value": str(counts.get("REMOVE", 0))},
         {"metric": "rewritten_rows", "value": str(counts.get("REWRITE", 0))},
         {"metric": "review_rows", "value": str(counts.get("REVIEW", 0))},
+        {"metric": "rewrite_requested_rows", "value": str(rewrite_requested)},
+        {"metric": "rewrite_accepted_rows", "value": str(rewrite_accepted)},
+        {"metric": "rewrite_rejected_rows", "value": str(rewrite_rejected)},
+        {"metric": "rewrite_accept_rate", "value": format_rate(rewrite_accepted / rewrite_requested) if rewrite_requested else "0.000000"},
+        {"metric": "rewrite_reject_rate", "value": format_rate(rewrite_rejected / rewrite_requested) if rewrite_requested else "0.000000"},
+        {"metric": "rewrite_failed_rows", "value": str(rewrite_rejected)},
+        {"metric": "max_reason_repetition_count", "value": str(max_reason_count)},
+        {"metric": "max_reason_repetition_rate", "value": format_rate(max_reason_rate)},
         {
-            "metric": "rewrite_failed_rows",
-            "value": str(sum(1 for outcome in outcomes if outcome.validation_status.startswith("REWRITE_REJECTED"))),
+            "metric": "reason_repetition_warning_batches",
+            "value": str(
+                sum(
+                    1
+                    for warning in warnings
+                    if warning["warning_type"] == "batch_reason_repetition_warning"
+                )
+            ),
+        },
+        {
+            "metric": "surface_feature_warning_rows",
+            "value": str(
+                sum(
+                    1
+                    for warning in warnings
+                    if warning["warning_type"].startswith("surface_feature_")
+                )
+            ),
         },
         {"metric": "prompt_tokens", "value": str(total_usage.get("prompt_tokens", 0))},
         {"metric": "completion_tokens", "value": str(total_usage.get("completion_tokens", 0))},
@@ -753,7 +984,20 @@ def summary_rows(
     ]
     for action in sorted(counts):
         rows.append({"metric": f"final_action.{action}", "value": str(counts[action])})
+    for action in sorted(llm_counts):
+        rows.append({"metric": f"llm_action.{action}", "value": str(llm_counts[action])})
     return rows
+
+
+def global_reason_repetition(outcomes: list[RowOutcome]) -> tuple[int, float]:
+    if not outcomes:
+        return 0, 0.0
+    counts: dict[str, int] = {}
+    for outcome in outcomes:
+        normalized = normalize_reason(outcome.decision.reason)
+        counts[normalized] = counts.get(normalized, 0) + 1
+    max_count = max(counts.values(), default=0)
+    return max_count, max_count / len(outcomes)
 
 
 def format_terms(terms: list[GlossaryTerm]) -> str:
