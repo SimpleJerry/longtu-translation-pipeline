@@ -14,18 +14,17 @@ import csv
 import json
 import locale
 import os
-import re
 import time
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
 try:
     from cleanup_common import ensure_csv_columns
+    from llm_common import ClientConfig, call_chat_completion, parse_json_content, resolve_client_config
 except ModuleNotFoundError:  # pragma: no cover - import fallback for tests
     from scripts.cleanup_common import ensure_csv_columns
+    from scripts.llm_common import ClientConfig, call_chat_completion, parse_json_content, resolve_client_config
 
 
 GLOSSARY_SCHEMA = ["term_id", "zh-CN", "ko"]
@@ -74,13 +73,6 @@ class GlossaryRow:
     term_id: str
     zh: str
     ko: str
-
-
-@dataclass(frozen=True)
-class ClientConfig:
-    api_key: str
-    base_url: str
-    model: str
 
 
 @dataclass(frozen=True)
@@ -234,30 +226,6 @@ def run_cleanup(
     )
 
 
-def resolve_client_config(
-    env: Mapping[str, str],
-    base_url_override: str | None = None,
-    model_override: str | None = None,
-) -> ClientConfig:
-    api_key = env.get("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is required before any LLM cleanup run.")
-
-    model = (model_override or env.get("LLM_MODEL", "")).strip()
-    if not model:
-        raise RuntimeError("LLM_MODEL is required; the repository does not hard-code it.")
-
-    base_url = (
-        base_url_override
-        or env.get("OPENAI_BASE_URL", "")
-        or "https://api.openai.com/v1"
-    ).strip()
-    if not base_url:
-        raise RuntimeError("OPENAI_BASE_URL resolved to an empty value.")
-
-    return ClientConfig(api_key=api_key, base_url=base_url.rstrip("/"), model=model)
-
-
 def read_glossary(path: Path) -> list[GlossaryRow]:
     with path.open(encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
@@ -349,41 +317,6 @@ def build_request_payload(
     }
 
 
-def call_chat_completion(
-    payload: dict[str, Any],
-    client_config: ClientConfig,
-    temperature: float,
-    timeout: int,
-) -> dict[str, Any]:
-    del temperature
-    url = f"{client_config.base_url}/chat/completions"
-    request = urllib.request.Request(
-        url=url,
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {client_config.api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            data = response.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"HTTP {exc.code} from LLM API: {body}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"Could not reach LLM API: {exc}") from exc
-
-    try:
-        parsed = json.loads(data)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"LLM API returned invalid JSON envelope: {exc}") from exc
-    if not isinstance(parsed, dict):
-        raise RuntimeError("LLM API response envelope must be a JSON object.")
-    return parsed
-
-
 def parse_and_validate_response(
     response: dict[str, Any], batch: list[GlossaryRow]
 ) -> list[Decision]:
@@ -431,22 +364,6 @@ def extract_message_content(response: dict[str, Any]) -> str:
     if not isinstance(content, str) or not content.strip():
         raise RuntimeError("LLM response message content is empty.")
     return content.strip()
-
-
-def parse_json_content(content: str) -> dict[str, Any]:
-    try:
-        parsed = json.loads(content)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", content, flags=re.DOTALL)
-        if not match:
-            raise RuntimeError("LLM response content is not JSON.")
-        try:
-            parsed = json.loads(match.group(0))
-        except json.JSONDecodeError as exc:
-            raise RuntimeError(f"LLM response JSON could not be parsed: {exc}") from exc
-    if not isinstance(parsed, dict):
-        raise RuntimeError("LLM response content must be a JSON object.")
-    return parsed
 
 
 def build_audit_rows(

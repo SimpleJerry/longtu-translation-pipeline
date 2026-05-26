@@ -21,7 +21,7 @@ from typing import Any, Callable, Mapping
 
 try:
     from cleanup_common import ensure_csv_columns
-    from glossary_llm_cleanup_pipeline import (
+    from llm_common import (
         ClientConfig,
         call_chat_completion,
         parse_json_content,
@@ -29,7 +29,7 @@ try:
     )
 except ModuleNotFoundError:  # pragma: no cover - import fallback for tests
     from scripts.cleanup_common import ensure_csv_columns
-    from scripts.glossary_llm_cleanup_pipeline import (
+    from scripts.llm_common import (
         ClientConfig,
         call_chat_completion,
         parse_json_content,

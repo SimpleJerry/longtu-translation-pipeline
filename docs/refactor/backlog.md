@@ -404,15 +404,21 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-017: Extract scripts/llm_common.py
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `scripts/llm_common.py` (new), `scripts/glossary_llm_cleanup_pipeline.py`, `scripts/segments_llm_cleanup_pipeline.py`, `tests/test_llm_common.py` (new), related test imports
 - **Background / Why:** Audit 2026-05-26 §P1-1: `scripts/segments_llm_cleanup_pipeline.py:24` reverse-imports `ClientConfig`, `resolve_client_config`, `call_chat_completion`, `parse_json_content` from `scripts/glossary_llm_cleanup_pipeline.py`. CLI scripts importing CLI scripts violates AGENTS.md "Keep pure transformation logic in importable modules and keep CLI scripts thin."
 - **Concrete Scope:** Lift the four shared symbols into `scripts/llm_common.py`. Update both LLM scripts and their tests to import from the new module. Add minimal `tests/test_llm_common.py` covering missing credentials, JSON parsing, and the basic HTTP wrapper interface (mocked).
 - **Out of Scope:** Changing LLM payload contracts; redesigning retry behavior; moving the module into `src/longtu_translation_pipeline/` (deferred to avoid colliding with RF-020).
-- **Risks:** Test mock targets may need updating if they patched `glossary_llm_cleanup_pipeline.call_chat_completion`.
+- **Risks:** Test mock targets may need updating if they patched `glossary_llm_cleanup_pipeline.call_chat_completion`. (Neither test used patch; both used injected StaticClient — no mock target changes required.)
 - **Acceptance Criteria:** No reverse import remains; `tests/test_llm_common.py` passes; `unittest discover` count goes up; `git grep "from glossary_llm_cleanup_pipeline" scripts tests` returns no results.
 - **Recommended Test Commands:** `venv\Scripts\python.exe -m py_compile scripts\llm_common.py scripts\glossary_llm_cleanup_pipeline.py scripts\segments_llm_cleanup_pipeline.py`; `venv\Scripts\python.exe -m unittest tests.test_llm_common tests.test_glossary_llm_cleanup_pipeline tests.test_segments_llm_cleanup_pipeline`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
-- **Notes:** Owned by [T-B1](task-briefs/T-B1.md). Recommended before RF-015 final LLM run.
+- **Validation (2026-05-27):**
+  - `py_compile` on all three scripts: OK
+  - `rg "from glossary_llm_cleanup_pipeline" scripts tests`: no matches
+  - `unittest tests.test_llm_common`: 16/16 passed
+  - `unittest tests.test_glossary_llm_cleanup_pipeline tests.test_segments_llm_cleanup_pipeline`: 19/19 passed
+  - `unittest discover -s tests`: 108/108 passed (up from 92; +16 new tests in test_llm_common.py)
+- **Notes:** Owned by [T-B1](task-briefs/T-B1.md). Placed in `scripts/llm_common.py` (option A) to avoid colliding with T-D1 touching `src/`.
 
 ## RF-018: Consolidate torch Pinning in requirements-training.txt
 
