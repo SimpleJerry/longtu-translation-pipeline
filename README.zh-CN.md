@@ -37,8 +37,10 @@
 │   └── training/
 ├── scripts/
 │   ├── glossary_semantic_pipeline.py
+│   ├── glossary_llm_cleanup_pipeline.py
 │   ├── evaluate_translation.py
 │   ├── segments_cleaning_pipeline.py
+│   ├── segments_llm_cleanup_pipeline.py
 │   ├── segments_glossary_cross_cleaning_pipeline.py
 │   ├── run_inference.py
 │   └── train_model.py
@@ -69,8 +71,10 @@
 | `configs/inference/default.json` | RF-006 第一阶段推理配置，声明模型路径、输入/输出路径、语言码和生成参数。 |
 | `configs/evaluation/default.json` | RF-007 评估配置，声明翻译结果 CSV、glossary、BLEU 口径和本地报告目录。 |
 | `scripts/glossary_semantic_pipeline.py` | 本地 glossary semantic 清洗 pipeline，使用 Stanza、jieba、kiwipiepy、wordfreq 与 `BAAI/bge-m3`。 |
+| `scripts/glossary_llm_cleanup_pipeline.py` | 云端 OpenAI-compatible glossary 激进清洗入口，只允许删除术语并写本地 ignored review。 |
 | `scripts/evaluate_translation.py` | 翻译结果评估 CLI，计算 BLEU 与 glossary preservation，不加载模型。 |
 | `scripts/segments_cleaning_pipeline.py` | 本地 segments 语义清洗 pipeline，默认 dry-run 生成 review CSV。 |
+| `scripts/segments_llm_cleanup_pipeline.py` | 云端 OpenAI-compatible segments 全量清洗入口，允许经本地校验的韩文改写。 |
 | `scripts/segments_glossary_cross_cleaning_pipeline.py` | glossary/segments 交叉清洗 CLI，删除高置信术语冲突训练行并输出本地 review。 |
 | `scripts/train_model.py` | 训练 CLI；支持配置 dry-run、本地 tiny tokenizer smoke、真实 tokenizer + tiny Trainer smoke、真实 NLLB 模型 1-step smoke、pilot training 和正式 run 目录训练。 |
 | `scripts/run_inference.py` | 推理 CLI；支持配置 dry-run 和基于真实 checkpoint 的小样本 generation。 |
@@ -138,6 +142,17 @@ venv\Scripts\python.exe scripts\glossary_semantic_pipeline.py
 
 默认规则目录是 `configs/glossary/`，其中包含 seed、词表和 `rules.json`；可用 `--config-dir`、`--game-seeds` 与 `--common-noun-seeds` 指定替代文件。
 
+如果本地规则已经难以继续区分普通词和公司游戏术语，可以使用云端 LLM 进行 delete-only 激进清洗。该流程会把当前 `data/glossary.csv` 的术语对发送到 OpenAI-compatible Chat Completions API；LLM 只能判断保留或删除，不允许改写韩文、不新增、不合并。审计文件写入本地 `data/review/llm_glossary_cleanup/`，不提交到 Git。
+
+```powershell
+$env:OPENAI_API_KEY="<your-key>"
+$env:LLM_MODEL="<your-model>"
+# 可选：$env:OPENAI_BASE_URL="https://api.openai.com/v1"
+venv\Scripts\python.exe scripts\glossary_llm_cleanup_pipeline.py --apply
+```
+
+LLM 清洗后仍需重新运行 strict gate 和训练 dry-run，确认术语表删除没有破坏训练前门禁。
+
 如需检查或迭代正文语料清洗，先运行 dry-run：
 
 ```powershell
@@ -145,6 +160,16 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 ```
 
 该 pipeline 会先剥离 `<c=...>` 等表现层样式标签并解开对称外层包装，再删除高置信非句段碎片和 ko 侧目标语言污染，然后使用 Stanza、jieba、kiwipiepy 和 `BAAI/bge-m3` 判断 term/entity-like segment；placeholder 行默认保留，只做 mismatch 审计，除非目标侧已经触发强污染规则。该命令不会改写 `data/segments.csv`，只会在本地 `data/review/segments/` 下生成审计 CSV。人工确认后再使用 `--apply` 重写最终语料。各类清洗的例子见 `docs/data-cleaning.md`。
+
+如果需要让 LLM 全量复核 `segments.csv`，可使用云端 segments 清洗入口。该流程允许 LLM 建议删除行或改写 `ko`，但只有通过本地校验的韩文改写才会写入主语料；校验包括非空、有韩文、无中文污染、placeholder 保留、glossary term exact/no-space 保留、长度比例和重复输出检查。审计文件写入本地 `data/review/llm_segments_cleanup/`，不提交到 Git。
+
+```powershell
+$env:OPENAI_API_KEY="<your-key>"
+$env:LLM_MODEL="<your-model>"
+venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --dry-run
+```
+
+确认 review 后才使用 `--apply`。全量 LLM 清洗会让旧训练 run、split 和 report 全部作废，必须重新执行 strict-check 和 training dry-run。
 
 如需检查 glossary 与 segments 的术语一致性，先 dry-run，再在确认后 apply：
 

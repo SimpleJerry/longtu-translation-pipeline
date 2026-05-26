@@ -37,8 +37,10 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 │   └── training/
 ├── scripts/
 │   ├── glossary_semantic_pipeline.py
+│   ├── glossary_llm_cleanup_pipeline.py
 │   ├── evaluate_translation.py
 │   ├── segments_cleaning_pipeline.py
+│   ├── segments_llm_cleanup_pipeline.py
 │   ├── segments_glossary_cross_cleaning_pipeline.py
 │   ├── run_inference.py
 │   └── train_model.py
@@ -69,8 +71,10 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 | `configs/inference/default.json` | RF-006 1단계 추론 설정이며 모델 경로, 입력/출력 경로, 언어 코드, 생성 파라미터를 선언합니다. |
 | `configs/evaluation/default.json` | RF-007 평가 설정이며 번역 결과 CSV, glossary, BLEU 설정, 로컬 보고서 출력 위치를 선언합니다. |
 | `scripts/glossary_semantic_pipeline.py` | Stanza, jieba, kiwipiepy, wordfreq, `BAAI/bge-m3`를 사용하는 로컬 glossary semantic 정제 pipeline입니다. |
+| `scripts/glossary_llm_cleanup_pipeline.py` | Cloud OpenAI-compatible glossary aggressive cleanup entry point입니다. 용어 삭제만 허용하고 로컬 ignored review를 작성합니다. |
 | `scripts/evaluate_translation.py` | BLEU와 glossary preservation을 계산하는 번역 결과 평가 CLI이며 모델을 로드하지 않습니다. |
 | `scripts/segments_cleaning_pipeline.py` | 로컬 segments semantic 정제 pipeline이며 기본적으로 dry-run review를 생성합니다. |
+| `scripts/segments_llm_cleanup_pipeline.py` | Cloud OpenAI-compatible segments 전체 정제 entry point입니다. 한국어 rewrite는 로컬 검증을 통과한 경우에만 적용합니다. |
 | `scripts/segments_glossary_cross_cleaning_pipeline.py` | glossary/segments 교차 정제 CLI이며 고신뢰 용어 충돌 행을 제거하고 로컬 review를 생성합니다. |
 | `scripts/train_model.py` | 설정 dry-run, 로컬 tiny tokenizer smoke, 실제 tokenizer + tiny Trainer smoke, 실제 NLLB model 1-step smoke, pilot training, formal run-directory training을 지원하는 학습 CLI입니다. |
 | `scripts/run_inference.py` | 추론 CLI입니다. 설정 dry-run과 실제 checkpoint 기반 sample generation을 지원합니다. |
@@ -138,6 +142,17 @@ venv\Scripts\python.exe scripts\glossary_semantic_pipeline.py
 
 기본 규칙 디렉터리는 `configs/glossary/`이며 seed 파일, 어휘 목록, `rules.json`을 포함합니다. `--config-dir`, `--game-seeds`, `--common-noun-seeds`로 다른 파일을 지정할 수 있습니다.
 
+로컬 규칙만으로 일반 단어와 회사 게임 용어를 더 이상 충분히 구분하기 어렵다면 cloud LLM delete-only cleanup을 사용할 수 있습니다. 이 단계는 현재 `data/glossary.csv`의 용어쌍을 OpenAI-compatible Chat Completions API로 보내며, 모델은 keep/delete만 판단합니다. 한국어 번역을 고치거나, 새 용어를 추가하거나, 용어를 병합하지 않습니다. 감사 산출물은 로컬 `data/review/llm_glossary_cleanup/` 아래에 기록되며 Git에 커밋하지 않습니다.
+
+```powershell
+$env:OPENAI_API_KEY="<your-key>"
+$env:LLM_MODEL="<your-model>"
+# 선택: $env:OPENAI_BASE_URL="https://api.openai.com/v1"
+venv\Scripts\python.exe scripts\glossary_llm_cleanup_pipeline.py --apply
+```
+
+LLM cleanup 뒤에는 학습을 시작하기 전에 strict gate와 training dry-run을 다시 실행해야 합니다.
+
 본문 말뭉치 정제를 확인하거나 반복하려면 먼저 dry-run을 실행합니다.
 
 ```powershell
@@ -145,6 +160,16 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 ```
 
 이 pipeline은 먼저 `<c=...>` 같은 표현용 스타일 태그를 제거하고 대칭 외부 wrapper를 푼 뒤, 고신뢰 non-segment fragment와 한국어 target-language contamination을 삭제합니다. 그 다음 Stanza, jieba, kiwipiepy, `BAAI/bge-m3`로 term/entity-like segment를 점수화합니다. Placeholder 행은 기본적으로 보존하고 mismatch만 감사하지만, target 쪽이 강한 오염 규칙에 걸리면 삭제됩니다. 이 명령은 `data/segments.csv`를 다시 쓰지 않고 로컬 `data/review/segments/` 아래에 감사 CSV만 생성합니다. 수동 확인 후에만 `--apply`를 사용합니다. 각 정제 유형의 예시는 `docs/data-cleaning.md`를 참고하세요.
+
+`segments.csv` 전체를 LLM으로 다시 검사하려면 cloud segment cleanup entry point를 사용합니다. LLM은 행 삭제 또는 한국어 rewrite를 제안할 수 있지만, 로컬 검증을 통과한 한국어 rewrite만 corpus에 적용합니다. 검증은 비어 있지 않은 Hangul 출력, 중국어 오염 없음, placeholder 보존, exact/no-space glossary 보존, 길이 비율, 반복 출력 패턴을 확인합니다. 감사 파일은 로컬 `data/review/llm_segments_cleanup/` 아래에 기록되며 Git에 커밋하지 않습니다.
+
+```powershell
+$env:OPENAI_API_KEY="<your-key>"
+$env:LLM_MODEL="<your-model>"
+venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --dry-run
+```
+
+로컬 review를 확인한 뒤에만 `--apply`를 사용합니다. 전체 LLM segment cleanup 이후에는 기존 training run, split, report가 모두 무효가 되므로 strict-check와 training dry-run을 다시 실행해야 합니다.
 
 glossary와 segments의 용어 일관성을 확인하려면 먼저 dry-run을 실행하고 검토 후 apply합니다.
 

@@ -37,8 +37,10 @@ This README documents the repository as it exists today. The project is still cl
 │   └── training/
 ├── scripts/
 │   ├── glossary_semantic_pipeline.py
+│   ├── glossary_llm_cleanup_pipeline.py
 │   ├── evaluate_translation.py
 │   ├── segments_cleaning_pipeline.py
+│   ├── segments_llm_cleanup_pipeline.py
 │   ├── segments_glossary_cross_cleaning_pipeline.py
 │   ├── run_inference.py
 │   └── train_model.py
@@ -69,8 +71,10 @@ This README documents the repository as it exists today. The project is still cl
 | `configs/inference/default.json` | RF-006 phase 1 inference config for model path, input/output paths, language codes, and generation parameters. |
 | `configs/evaluation/default.json` | RF-007 evaluation config for translation-result CSVs, glossary path, BLEU settings, and local report output. |
 | `scripts/glossary_semantic_pipeline.py` | Local glossary semantic cleanup pipeline using Stanza, jieba, kiwipiepy, wordfreq, and `BAAI/bge-m3`. |
+| `scripts/glossary_llm_cleanup_pipeline.py` | Cloud OpenAI-compatible aggressive glossary cleanup entry point; it can only delete terms and writes local ignored review output. |
 | `scripts/evaluate_translation.py` | Translation evaluation CLI for BLEU and glossary preservation; it does not load models. |
 | `scripts/segments_cleaning_pipeline.py` | Local semantic segment cleanup pipeline; dry-run review output by default. |
+| `scripts/segments_llm_cleanup_pipeline.py` | Cloud OpenAI-compatible full-segment cleanup entry point; Korean rewrites are applied only after local validation. |
 | `scripts/segments_glossary_cross_cleaning_pipeline.py` | Glossary/segments cross-cleaning CLI for high-confidence terminology conflicts with local review output. |
 | `scripts/train_model.py` | Training CLI for config dry-run, local tiny-tokenizer smoke, real tokenizer + tiny Trainer smoke, real NLLB model one-step smoke, pilot training, and formal run-directory training. |
 | `scripts/run_inference.py` | Inference CLI for config dry-run and real checkpoint-based sample generation. |
@@ -138,6 +142,17 @@ venv\Scripts\python.exe scripts\glossary_semantic_pipeline.py
 
 The default rule directory is `configs/glossary/`, which contains seed files, lexicons, and `rules.json`; pass `--config-dir`, `--game-seeds`, and `--common-noun-seeds` to use alternatives.
 
+If local rules can no longer separate ordinary words from company game terms well enough, use the cloud LLM delete-only cleanup. It sends the current `data/glossary.csv` term pairs to an OpenAI-compatible Chat Completions API; the model may only keep or delete terms, never rewrite Korean, add terms, or merge terms. Audit output is written locally under `data/review/llm_glossary_cleanup/` and is not committed.
+
+```powershell
+$env:OPENAI_API_KEY="<your-key>"
+$env:LLM_MODEL="<your-model>"
+# Optional: $env:OPENAI_BASE_URL="https://api.openai.com/v1"
+venv\Scripts\python.exe scripts\glossary_llm_cleanup_pipeline.py --apply
+```
+
+After an LLM cleanup run, rerun the strict gate and training dry-run before starting training.
+
 To inspect or iterate segment cleanup, run a dry run first:
 
 ```powershell
@@ -145,6 +160,16 @@ venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 ```
 
 This pipeline first strips presentation tags such as `<c=...>` and unwraps symmetric outer wrappers, then removes high-confidence non-segment fragments and Korean-side target-language contamination before using Stanza, jieba, kiwipiepy, and `BAAI/bge-m3` to score term/entity-like segments. Placeholder rows are kept by default and only audited for mismatch unless the target side already triggers the strict contamination rule. The command does not rewrite `data/segments.csv`; it only writes local audit CSVs under `data/review/segments/`. Use `--apply` only after manual review. See `docs/data-cleaning.md` for examples of each cleanup type.
+
+For a full LLM review of `segments.csv`, use the cloud segment cleanup entry point. The LLM may suggest row deletion or a Korean rewrite, but only locally validated Korean rewrites are applied to the corpus. Validation checks non-empty Hangul output, no Chinese contamination, placeholder preservation, exact/no-space glossary preservation, length ratio, and repeated-output patterns. Audit files are written under local `data/review/llm_segments_cleanup/` and are not committed.
+
+```powershell
+$env:OPENAI_API_KEY="<your-key>"
+$env:LLM_MODEL="<your-model>"
+venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --dry-run
+```
+
+Use `--apply` only after reviewing the local outputs. Any full LLM segment cleanup invalidates old training runs, splits, and reports, so rerun strict-check and the training dry-run afterward.
 
 To check glossary/segment terminology consistency, run a dry run first and apply only after review:
 

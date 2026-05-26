@@ -99,3 +99,74 @@ The expected pre-training gate is:
 ```text
 strict_current_mismatch_rows=0
 ```
+
+## LLM Glossary Cleanup
+
+The local glossary cleanup pipeline is preferred because it is reproducible and does not send company terminology outside the local machine. If the remaining glossary noise is too semantic for local rules, the optional LLM cleanup pass can be used as an aggressive delete-only step.
+
+Example candidates:
+
+```text
+KEEP:   暴击 -> 치명타
+REMOVE: 月亮 -> 달
+REMOVE: 感谢有你 -> 함께해 주셔서 감사합니다
+```
+
+Cleanup behavior:
+
+- Send only `term_id`, `zh-CN`, and `ko` glossary rows to an OpenAI-compatible Chat Completions API.
+- Keep rows only when the model returns `KEEP_GAME_TERM`.
+- Delete rows classified as common words, phrase/sentence content, fragments, bad pairs, or not company game terms.
+- Never allow the model to rewrite Korean translations, add terms, or merge entries.
+- Write full audit files and raw batch envelopes under `data/review/llm_glossary_cleanup/`, which is ignored by Git.
+
+Required environment:
+
+```powershell
+$env:OPENAI_API_KEY="<your-key>"
+$env:LLM_MODEL="<your-model>"
+# Optional: $env:OPENAI_BASE_URL="https://api.openai.com/v1"
+venv\Scripts\python.exe scripts\glossary_llm_cleanup_pipeline.py --apply
+```
+
+After an LLM cleanup, rerun the strict glossary/segment gate before training:
+
+```powershell
+venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --strict-check
+```
+
+## LLM Segment Cleanup
+
+The segment LLM cleanup pass is for full-corpus review when local rules are no longer enough to separate usable training pairs from semantic noise. It can remove rows and can also accept a Korean rewrite, but only after local validation.
+
+Example candidates:
+
+```text
+KEEP:   zh-CN: 挑战次数:{0}/{1}
+        ko:    도전 횟수: {0}/{1}
+
+REMOVE: zh-CN: 艮
+        ko:    간
+
+REWRITE zh-CN: 技能升级
+        ko:    기술 강화
+        corrected_ko: 스킬 강화
+```
+
+Cleanup behavior:
+
+- Send `segment_id`, `zh-CN`, `ko`, detected placeholders, matched glossary terms, target-contamination flags, and structured-string hints to an OpenAI-compatible Chat Completions API.
+- Allow the model to choose keep, remove, review, or Korean rewrite actions.
+- Never allow the model to change Chinese source text, add rows, split rows, merge rows, or edit glossary.
+- Apply a Korean rewrite only if it is non-empty, contains Hangul, contains no Chinese CJK, preserves placeholders, preserves matched glossary terms by exact or no-space matching, and passes basic length/repetition checks.
+- If a rewrite fails validation, keep the original row for review unless the original Korean target is already contaminated; contaminated rows are removed.
+
+Command:
+
+```powershell
+$env:OPENAI_API_KEY="<your-key>"
+$env:LLM_MODEL="<your-model>"
+venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --dry-run
+```
+
+Use `--apply` only after reviewing `data/review/llm_segments_cleanup/`. A full segment LLM cleanup invalidates existing train/validation/test split artifacts and model reports.

@@ -58,6 +58,20 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Impact Scope:** `scripts/glossary_semantic_pipeline.py`, `configs/glossary/`, `.gitignore`, README data workflow notes.
 - **Follow-up Notes:** Long business rule lists and thresholds should live in `configs/glossary/`; `segments.csv` hashes may be recorded or optionally checked, but must not be hard-coded as a required source-code gate.
 
+## 2026-05-26: Cloud LLM Glossary Cleanup Is Delete-Only
+
+- **Decision:** Optional cloud LLM glossary cleanup may classify current `data/glossary.csv` rows, but it can only delete rows. It must not rewrite Korean, add terms, merge terms, or choose a hard-coded model from the repository.
+- **Background:** The remaining glossary noise is partly semantic and may be difficult to remove with deterministic local rules alone. The user accepted cloud OpenAI-compatible LLM use for an aggressive purification pass, but new translations would create unreviewed terminology conflicts.
+- **Impact Scope:** `scripts/glossary_llm_cleanup_pipeline.py`, `data/glossary.csv`, local `data/review/llm_glossary_cleanup/` artifacts, README/data-cleaning workflow notes.
+- **Follow-up Notes:** `OPENAI_API_KEY` and `LLM_MODEL` are required at runtime; `OPENAI_BASE_URL` is optional. Review artifacts remain ignored. After any LLM deletion pass, rerun `segments_glossary_cross_cleaning_pipeline.py --strict-check` and regenerate training splits before training.
+
+## 2026-05-26: Cloud LLM Segment Cleanup May Rewrite Korean With Local Guards
+
+- **Decision:** Optional cloud LLM segment cleanup may delete segment rows and may rewrite only the Korean target, but rewrites are applied only after local validation. The model must not change Chinese source text, add rows, split rows, merge rows, or edit glossary.
+- **Background:** The user chose full-corpus LLM review and allowed Korean rewrite because remaining segment noise may be too semantic for deterministic rules. Unvalidated synthetic translations would be risky, so local guards remain mandatory.
+- **Impact Scope:** `scripts/segments_llm_cleanup_pipeline.py`, `data/segments.csv`, local `data/review/llm_segments_cleanup/` artifacts, README/data-cleaning workflow notes.
+- **Follow-up Notes:** Rewrite validation must check Hangul presence, no Chinese target contamination, placeholder preservation, glossary preservation, length ratio, and repetition/explanation-like output. Any full LLM segment cleanup invalidates existing split artifacts, checkpoints, and reports.
+
 ## 2026-05-24: Segment Cleanup Is Review-First
 
 - **Decision:** The segment cleanup pipeline defaults to dry-run review outputs and rewrites `data/segments.csv` only when explicitly run with `--apply`.
