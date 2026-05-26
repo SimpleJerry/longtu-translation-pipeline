@@ -235,6 +235,7 @@ Notebook은 실험 기록으로 보존합니다. T&N+R 관련 notebook은 deprec
 장기 리팩터링 TODO는 README에서 관리하지 않습니다. 다음 문서를 참고하세요.
 
 - [리팩터링 backlog](docs/refactor/backlog.md)
+- [후속 작업 (병렬 트랙 맵)](docs/refactor/follow-up-tasks.md)
 - [리팩터링 결정 기록](docs/refactor/decisions.md)
 - [Notebook inventory](docs/notebooks/inventory.md)
 - [AI/Codex 작업 규칙](AGENTS.md)

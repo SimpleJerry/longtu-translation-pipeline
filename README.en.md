@@ -235,6 +235,7 @@ Current terminology protection logic now lives in `src/longtu_translation_pipeli
 Long-term refactor tasks are not maintained in README files. See:
 
 - [Refactor backlog](docs/refactor/backlog.md)
+- [Follow-up tasks (parallel track map)](docs/refactor/follow-up-tasks.md)
 - [Refactor decisions](docs/refactor/decisions.md)
 - [Notebook inventory](docs/notebooks/inventory.md)
 - [AI/Codex working rules](AGENTS.md)

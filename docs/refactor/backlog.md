@@ -317,3 +317,231 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Recommended Test Commands:** `venv\Scripts\python.exe -m py_compile scripts\segments_llm_cleanup_pipeline.py scripts\glossary_llm_cleanup_pipeline.py`; `venv\Scripts\python.exe -m unittest tests.test_segments_llm_cleanup_pipeline`; `venv\Scripts\python.exe -m unittest discover -s tests`; `$env:OPENAI_API_KEY="<your-key>"; $env:LLM_MODEL="<your-model>"; venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --dry-run`; after review, `venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --apply`; `venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --strict-check`; `venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --dry-run`; `git -c safe.directory=D:/longtu-translation-pipeline diff -- data/segments.csv`.
 - **Notes:** Implementation is present as of 2026-05-26 with mock-response unit tests for deletion, rewrite acceptance, placeholder rejection, glossary-preservation rejection, contaminated target deletion, invalid actions, missing rows, missing runtime credentials, payload field minimization, repeated-reason warnings, and review-uncertain behavior. The real full-corpus LLM run is blocked until `OPENAI_API_KEY` and `LLM_MODEL` are set locally and the user chooses to spend API tokens. Estimated cost for the remaining `66,385` rows is roughly `5M-10M` input tokens and `1.5M-4M` output tokens depending on rewrite rate and retry count.
 - **Follow-up Notes:** On 2026-05-26 commit `c107763` ("Harden LLM segment cleanup prompts and audits") also folded in a user-confirmed partial LLM segment cleanup pass, acknowledged by the user during the 2026-05-26 audit review. The pass removed `207` segment rows and applied `17` Korean rewrites (same `zh-CN`, different `ko`), reducing `data/segments.csv` from `66,592` rows to `66,385` rows. `data/glossary.csv` is unchanged at `3,396` rows. Current corpus state: `data/segments.csv` SHA256 = `D299B01FF90D571CAEA65C6933C1769D3B93B1E04798EEDF2B395C2248482419`. The associated review CSVs and raw LLM batch envelopes were not committed (they live under ignored `data/review/llm_segments_cleanup/` or were generated on the user's machine outside Git), so the change is not bit-for-bit reproducible from the repository alone; it is recorded here as user-confirmed evidence. On 2026-05-26 the post-pass strict glossary/segment gate was re-verified by `python scripts/segments_glossary_cross_cleaning_pipeline.py --strict-check`, which reported `strict_current_mismatch_rows=0`, `input_glossary_rows=3396`, `input_segment_rows=66385`, `term_action.STRONG_GLOSSARY_TERM=235`, and exit code `0`. Any previous `splits/train.csv`, `splits/validation.csv`, `splits/test.csv`, `run_manifest.json`, validation/test report directories under `fine-tuned-models/` and `data/review/` no longer correspond to the current `data/segments.csv` and must be regenerated before any new training run. The full-corpus LLM segment pass over the remaining rows is still **BLOCKED** until `OPENAI_API_KEY` and `LLM_MODEL` are set and the user chooses to proceed.
+
+## RF-006-P11: Formal 10k Training on LLM-Cleaned Segments
+
+- **Status:** TODO
+- **Scope:** `scripts/train_model.py --train`, `configs/training/full_10k.json`, ignored `fine-tuned-models/nllb-200-distilled-600M/zh2ko/runs/`, post-RF-015 corpus
+- **Background / Why:** After RF-015 applies the full-corpus LLM segment cleanup, every prior training run is invalid because `segments_sha256` and the deterministic 8:1:1 splits no longer match. A fresh formal 10k training run on the new corpus is the next quality baseline.
+- **Concrete Scope:** Re-execute `--train` with `configs/training/full_10k.json` against the post-RF-015 `data/segments.csv`, using a new `--run-name` such as `run-full-10k-llm-segments-v1`. Hyperparameters identical to the prior baseline so the comparison is direct. Record run name, manifest content, checkpoint list, final loss, and wall-clock time in Notes.
+- **Out of Scope:** Hyperparameter sweeps, base model changes (see RF-026), inference parameter sweeps (see RF-028).
+- **Risks:** Multi-hour GPU run; interruption requires `--resume-from-checkpoint` with matching `segments_sha256`. New checkpoints invalidate all prior validation/test reports.
+- **Acceptance Criteria:** Run directory exists with `splits/{train,validation,test}.csv`, `checkpoint-*`, and `run_manifest.json`; manifest carries `segments_sha256` matching the live `data/segments.csv`, `split_seed=42`, `split_ratios=[0.8,0.1,0.1]`; backlog Notes record the run name, final step, and loss; no files added to Git beyond this entry.
+- **Recommended Test Commands:** `venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --dry-run`; `$env:HF_HOME="D:\longtu-translation-pipeline\venv\hf_cache"; venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --train --run-name run-full-10k-llm-segments-v1`; `Get-Content "<run-dir>\run_manifest.json"`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`.
+- **Notes:** Owned by [T-A2](task-briefs/T-A2.md). Pending RF-015 application (T-A1).
+
+## RF-006-P12: Validation Generation and Reports for Re-Trained Run
+
+- **Status:** TODO
+- **Scope:** `scripts/run_inference.py --generate-validation`, `scripts/evaluate_translation.py`, ignored `data/review/inference/validation/`, ignored `data/review/evaluation/validation_report/`
+- **Background / Why:** RF-006-P11 produces multiple saved checkpoints. Per-checkpoint validation reports are the engineering signal used to pick the final checkpoint for RF-007-P3, not the model quality claim itself.
+- **Concrete Scope:** For each (or a representative subset of) saved checkpoint under the RF-006-P11 run directory, generate validation translations and run the evaluation report. Capture BLEU, exact glossary preservation, no-space glossary preservation, and `empty_candidate_rows` in a comparison table inside this backlog entry.
+- **Out of Scope:** Final model quality declarations (those belong to RF-007-P3); inference parameter sweeps (RF-028).
+- **Risks:** Generating on every checkpoint multiplies inference time; pick the last several checkpoints if compute-limited. Sample size is fixed by the validation split.
+- **Acceptance Criteria:** Each evaluated checkpoint has a directory under `data/review/evaluation/validation_report/run-...-v1/<checkpoint>/` with `evaluation_summary.csv`, `glossary_preservation_rows.csv`, `sample_review.csv`, and `report_manifest.json`; the comparison table is recorded in this entry; no files added to Git beyond this entry.
+- **Recommended Test Commands:** `venv\Scripts\python.exe scripts\run_inference.py --generate-validation --run-dir <run dir>`; `venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint <checkpoint>`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`.
+- **Notes:** Owned by [T-A3](task-briefs/T-A3.md). Pending RF-006-P11.
+
+## RF-007-P3: Final Held-Out Test Report on Selected Checkpoint
+
+- **Status:** TODO
+- **Scope:** `scripts/run_inference.py --generate-test`, `scripts/evaluate_translation.py`, ignored `data/review/inference/test/`, ignored `data/review/evaluation/test_report/`
+- **Background / Why:** Per the 2026-05-25 held-out test decision, validation reports are engineering signals and the test split (seed 42, 10% of corpus) is reserved for the final quality claim. After RF-006-P12 selects a checkpoint, this entry records the single test-set run for the project's headline number on this `segments_sha256`.
+- **Concrete Scope:** Run `--generate-test` on the selected checkpoint, then evaluate. Record selected checkpoint path, corpus SHA256, test BLEU, test exact + no-space glossary preservation, `empty_candidate_rows`, and a brief comparison against the same checkpoint's validation numbers.
+- **Out of Scope:** Iterating test-set results across checkpoints (data leakage); any change to splits, seed, or marker shape.
+- **Risks:** Re-running test on a different checkpoint after seeing this one is data leakage; record the result and stop.
+- **Acceptance Criteria:** `data/review/evaluation/test_report/.../<checkpoint>/` contains the four report files; `report_manifest.json` records checkpoint and corpus SHA256; backlog Notes carry the final metric block plus the explicit statement that any future change to `data/segments.csv` invalidates this report; no files added to Git beyond this entry.
+- **Recommended Test Commands:** `venv\Scripts\python.exe scripts\run_inference.py --generate-test --run-dir <run dir> --model-path <checkpoint>`; `venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint <checkpoint>`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`.
+- **Notes:** Owned by [T-A4](task-briefs/T-A4.md). Pending RF-006-P12.
+
+## RF-016: Test Coverage Backfill for Cleanup Pipelines
+
+- **Status:** TODO
+- **Scope:** `tests/test_cleanup_common.py` (new), `tests/test_segments_cleaning_pipeline.py`, `tests/test_glossary_semantic_pipeline.py` (new), foundation helpers
+- **Background / Why:** Audit 2026-05-26 §P2-1 surfaced that the largest cleanup module (`glossary_semantic_pipeline.py`, 1502 LOC) has zero unit tests, `cleanup_common.py` (foundation for five pipelines) has zero direct tests, and `segments_cleaning_pipeline.py` (1150 LOC) has only 10 assertions. Future refactors lack a regression net.
+- **Concrete Scope:** Split into three sub-phases (P1: foundation; P2: segments pipeline rules; P3: glossary pipeline pure logic). Each is independent and parallel-safe.
+- **Out of Scope:** Refactoring the pipelines themselves; tests must lock current behavior, not redesign.
+- **Risks:** Glossary semantic pipeline has many branches that need stanza / jieba / kiwi / bge-m3; those must be skipped or mocked so tests run on a bare environment.
+- **Acceptance Criteria:** All three sub-phase RF entries (RF-016-P1, P2, P3) reach `DONE`; `unittest discover` total count increases by at least 30; total suite still runs in < 60s without external models.
+- **Recommended Test Commands:** `venv\Scripts\python.exe -m unittest discover -s tests`.
+- **Notes:** Tracked via [T-C1](task-briefs/T-C1.md), [T-C2](task-briefs/T-C2.md), [T-C3](task-briefs/T-C3.md).
+
+## RF-016-P1: cleanup_common.py Tests
+
+- **Status:** TODO
+- **Scope:** `tests/test_cleanup_common.py` (new), `scripts/cleanup_common.py` (read-only)
+- **Background / Why:** `cleanup_common.py` is the shared foundation module imported by five cleanup pipelines. A regression here silently breaks all five. Zero direct tests today.
+- **Concrete Scope:** Add fixture-level unit tests for `sha256`, `read_term_file`, `read_json_config`, `compile_regexes`, `ensure_csv_columns`, covering at least one happy path and one error path per helper. Use `tempfile.TemporaryDirectory()` fixtures; no external dependencies.
+- **Out of Scope:** Modifying `cleanup_common.py`; if a bug is found, open a separate RF.
+- **Risks:** Tests must not depend on encoding shortcuts; verify UTF-8-with-BOM is handled.
+- **Acceptance Criteria:** `tests/test_cleanup_common.py` exists with ~12-15 test methods; `python -m unittest tests.test_cleanup_common` passes; `unittest discover` count increases by the new methods; no regressions.
+- **Recommended Test Commands:** `venv\Scripts\python.exe -m py_compile tests\test_cleanup_common.py`; `venv\Scripts\python.exe -m unittest tests.test_cleanup_common -v`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Owned by [T-C1](task-briefs/T-C1.md). Pending.
+
+## RF-016-P2: segments_cleaning_pipeline.py Tests Extension
+
+- **Status:** TODO
+- **Scope:** `tests/test_segments_cleaning_pipeline.py` (extend), `scripts/segments_cleaning_pipeline.py` (read-only)
+- **Background / Why:** `segments_cleaning_pipeline.py` is 1150 LOC; existing tests cover fragment removal and target contamination (10 assertions) but not markup stripping, symmetric wrapper unwrap, structured tuple split, or placeholder mismatch audit.
+- **Concrete Scope:** Add fixture-level tests for the deterministic, rule-based branches of those features. Do not exercise stanza / jieba / kiwi / bge-m3 paths in this RF.
+- **Out of Scope:** Semantic scoring tests (those require external models and are deferred), rewriting the pipeline.
+- **Risks:** Tests that accidentally pull in `BAAI/bge-m3` or `stanza` will fail in a clean env; mock or skip those branches.
+- **Acceptance Criteria:** Test file grows to at least 30 assertions; suite runs in < 30s without external models; `unittest discover` increases the total count; no regressions in existing tests.
+- **Recommended Test Commands:** `venv\Scripts\python.exe -m unittest tests.test_segments_cleaning_pipeline -v`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Owned by [T-C2](task-briefs/T-C2.md). Pending.
+
+## RF-016-P3: glossary_semantic_pipeline.py First-Wave Tests
+
+- **Status:** TODO
+- **Scope:** `tests/test_glossary_semantic_pipeline.py` (new), `scripts/glossary_semantic_pipeline.py` (read-only)
+- **Background / Why:** Single largest untested module in the repo (1502 LOC). Combines deterministic rules with stanza / jieba / kiwi / bge-m3 / wordfreq scoring. The rule-based branches are pure-Python and testable without those external deps.
+- **Concrete Scope:** Add first-wave tests for hard noise filters, strict 1:1 enforcement, product-corpus evidence gate, and config/seed file loading helpers. Mock external scorers when a branch unavoidably reaches them.
+- **Out of Scope:** Embedding / POS / Zipf scoring paths in this RF (later P4 if needed); modifying the pipeline.
+- **Risks:** Test scope can balloon; the brief gives a concrete branch list to keep this bounded.
+- **Acceptance Criteria:** At least 12 test methods; suite runs in < 30s without GPU or HF cache; `unittest discover` count increases; record any deferred branches in Notes for a future P4.
+- **Recommended Test Commands:** `venv\Scripts\python.exe -m unittest tests.test_glossary_semantic_pipeline -v`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Owned by [T-C3](task-briefs/T-C3.md). Pending.
+
+## RF-017: Extract scripts/llm_common.py
+
+- **Status:** TODO
+- **Scope:** `scripts/llm_common.py` (new), `scripts/glossary_llm_cleanup_pipeline.py`, `scripts/segments_llm_cleanup_pipeline.py`, `tests/test_llm_common.py` (new), related test imports
+- **Background / Why:** Audit 2026-05-26 §P1-1: `scripts/segments_llm_cleanup_pipeline.py:24` reverse-imports `ClientConfig`, `resolve_client_config`, `call_chat_completion`, `parse_json_content` from `scripts/glossary_llm_cleanup_pipeline.py`. CLI scripts importing CLI scripts violates AGENTS.md "Keep pure transformation logic in importable modules and keep CLI scripts thin."
+- **Concrete Scope:** Lift the four shared symbols into `scripts/llm_common.py`. Update both LLM scripts and their tests to import from the new module. Add minimal `tests/test_llm_common.py` covering missing credentials, JSON parsing, and the basic HTTP wrapper interface (mocked).
+- **Out of Scope:** Changing LLM payload contracts; redesigning retry behavior; moving the module into `src/longtu_translation_pipeline/` (deferred to avoid colliding with RF-020).
+- **Risks:** Test mock targets may need updating if they patched `glossary_llm_cleanup_pipeline.call_chat_completion`.
+- **Acceptance Criteria:** No reverse import remains; `tests/test_llm_common.py` passes; `unittest discover` count goes up; `git grep "from glossary_llm_cleanup_pipeline" scripts tests` returns no results.
+- **Recommended Test Commands:** `venv\Scripts\python.exe -m py_compile scripts\llm_common.py scripts\glossary_llm_cleanup_pipeline.py scripts\segments_llm_cleanup_pipeline.py`; `venv\Scripts\python.exe -m unittest tests.test_llm_common tests.test_glossary_llm_cleanup_pipeline tests.test_segments_llm_cleanup_pipeline`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Owned by [T-B1](task-briefs/T-B1.md). Recommended before RF-015 final LLM run.
+
+## RF-018: Consolidate torch Pinning in requirements-training.txt
+
+- **Status:** TODO
+- **Scope:** `requirements.txt`, `requirements-training.txt`, README install paragraphs (three languages)
+- **Background / Why:** Audit 2026-05-26 §P1-2: both `requirements.txt` and `requirements-training.txt` pin `torch==2.12.0+cu132` and `torchvision==0.27.0+cu132` plus the same `--extra-index-url`. Duplicate pin makes upgrades non-atomic.
+- **Concrete Scope:** Remove the torch/torchvision pin and `--extra-index-url` from `requirements.txt`; keep them only in `requirements-training.txt`. Document the install order `pip install -r requirements.txt; pip install -r requirements-training.txt` in README sections that currently show install commands.
+- **Out of Scope:** Actual pip install in this commit; upgrading any package version; introducing a base/extra requirements layout beyond what already exists.
+- **Risks:** Users running only `requirements.txt` will no longer get torch — confirm that's the intended boundary (RF-008 already separates training deps; this just removes the duplication).
+- **Acceptance Criteria:** `requirements.txt` does not contain `torch`, `torchvision`, or `cu132`; `requirements-training.txt` keeps them; READMEs show the two-step install; `unittest discover` passes.
+- **Recommended Test Commands:** `rg -n "torch|cu132" requirements.txt`; `rg -n "torch==|torchvision==" requirements-training.txt`; `rg -n -i "torch|cu132" README.md README.en.md README.zh-CN.md`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Owned by [T-B2](task-briefs/T-B2.md).
+
+## RF-019: Annotate configs/training/default.json as Dry-Run / Smoke Only
+
+- **Status:** TODO
+- **Scope:** `configs/training/default.json` (or `scripts/train_model.py`), README sections that show training commands
+- **Background / Why:** Audit 2026-05-26 §P1-3: `default.json` has no `max_steps`, so `--train --config configs/training/default.json` fails. But the CLI default for `--config` is exactly that file, so newcomers hit the pitfall.
+- **Concrete Scope:** Add a top-level `_comment` field in `default.json` marking it dry-run / smoke only and pointing at `full_10k.json` for `--train`. Fix README examples that pair `--train` with `default.json`. Larger alternative (changing the CLI default) is out of scope unless the user authorizes a behavior change.
+- **Out of Scope:** Changing existing dry-run / smoke / nllb-smoke / real-model-smoke behavior; changing default values for batch sizes etc.
+- **Risks:** A future config loader stricter about unknown fields would reject `_comment`; current loader ignores unrecognized keys, but document this in the entry.
+- **Acceptance Criteria:** `default.json` carries the `_comment`; existing dry-run path unchanged; READMEs no longer pair `--train` with `default.json`; `unittest discover` passes.
+- **Recommended Test Commands:** `venv\Scripts\python.exe -c "import json; d=json.load(open('configs/training/default.json', encoding='utf-8')); print('_comment' in d)"`; `venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run`; `rg -n "train.*default.json" README.md README.en.md README.zh-CN.md`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Owned by [T-B3](task-briefs/T-B3.md).
+
+## RF-020: Slim Public API Surface in Package __init__
+
+- **Status:** TODO
+- **Scope:** `src/longtu_translation_pipeline/__init__.py`
+- **Background / Why:** Audit 2026-05-26 §P2-2: `__init__.py` re-exports CLI-internal smoke/pilot helpers but does not export the real training entry `run_real_nllb_formal_training`. The exposed surface is inverted from the stable one.
+- **Concrete Scope:** Remove `run_real_nllb_pilot_training`, `run_real_nllb_model_smoke_test`, `run_nllb_trainer_smoke_test`, and their `format_*_smoke_test` / `format_real_model_*` companions plus their `NllbTrainerSmokeResult`/`RealModel*Result` data classes from `__init__.py` and `__all__`. CLI scripts continue importing them directly from `.training`.
+- **Out of Scope:** Renaming or relocating the removed functions; touching submodules themselves.
+- **Risks:** Any external user importing the removed names from the package root will break — confirm none exist (rg in the repo plus user awareness).
+- **Acceptance Criteria:** Removed names raise `ImportError` from the package root; stable names (configs, evaluators, marker helpers, dry-run helpers) still import; `scripts/train_model.py --dry-run` still works; `unittest discover` passes.
+- **Recommended Test Commands:** `venv\Scripts\python.exe -c "from longtu_translation_pipeline import TrainingConfig, evaluate_translation, protect_training_pair"`; `venv\Scripts\python.exe -c "from longtu_translation_pipeline import run_real_nllb_pilot_training" 2>&1`; `venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Owned by [T-D1](task-briefs/T-D1.md).
+
+## RF-021: Archive Deprecated Notebooks
+
+- **Status:** TODO
+- **Scope:** `notebooks/main/` (six deprecated `.ipynb` files), `notebooks/archive/2023-legacy/`, `docs/notebooks/inventory.md`, README link references (three languages)
+- **Background / Why:** Audit 2026-05-26 §P2-3 + §P3-3: T&N+R notebooks and notebooks replaced by `scripts/train_model.py` / `scripts/run_inference.py` still live in the active `notebooks/main/` directory despite being marked deprecated in `decisions.md` and `inventory.md`.
+- **Concrete Scope:** `git mv` the six notebooks (`T&N+R method.ipynb`, `T&N+R method code accuracy testing.ipynb`, `T&N+R method glossary accuracy testing.ipynb`, `T&N+R preprocess.ipynb`, `nllb-fine-tune_all.ipynb`, `model-generation.ipynb`) into `notebooks/archive/2023-legacy/`. Update inventory and README links. Do not modify notebook JSON.
+- **Out of Scope:** Deleting notebooks; editing notebook internal content; moving other notebooks.
+- **Risks:** README internal links to old paths must be updated for all three languages.
+- **Acceptance Criteria:** None of the six remain in `notebooks/main/`; all are present in `archive/2023-legacy/`; `git log --follow` preserves history; inventory reflects new paths; READMEs consistent; `unittest discover` passes.
+- **Recommended Test Commands:** `Get-ChildItem notebooks/main -Filter "*.ipynb" | Where-Object { $_.Name -like "*T&N+R*" -or $_.Name -in @('nllb-fine-tune_all.ipynb','model-generation.ipynb') }`; `rg -n "notebooks/main/T&N|notebooks/main/nllb-fine-tune_all|notebooks/main/model-generation" README.md README.en.md README.zh-CN.md docs/notebooks/inventory.md`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`.
+- **Notes:** Owned by [T-D2](task-briefs/T-D2.md).
+
+## RF-022: AGENTS.md unittest Reference Fix and RF-003 Closure
+
+- **Status:** TODO
+- **Scope:** `AGENTS.md` Required Checks section, `docs/refactor/backlog.md` RF-003 section
+- **Background / Why:** Audit 2026-05-26 §P3-1 and §P2-4 — two small drift items bundled into one commit. AGENTS.md tells agents to use `pytest`, but the repo uses `unittest discover` (no pytest config exists). RF-003 status is `TODO` but its Notes already record that the source-to-final pipeline is no longer meaningful in this repository.
+- **Concrete Scope:** Replace the `python -m pytest` paragraph in AGENTS.md with the `unittest discover` form actually used by the project. Mark RF-003 as `OBSOLETE` with a closing note explaining that raw xlsx inputs are not retained.
+- **Out of Scope:** Restructuring AGENTS.md; rewriting RF-003 background.
+- **Risks:** None significant — both edits are textual.
+- **Acceptance Criteria:** AGENTS.md no longer recommends pytest as the primary command; RF-003 status is `OBSOLETE`; `unittest discover` still passes.
+- **Recommended Test Commands:** `rg -n "pytest" AGENTS.md`; `rg -n "unittest discover -s tests" AGENTS.md`; `rg -n "^- \*\*Status:\*\* OBSOLETE" docs/refactor/backlog.md`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Owned by [T-E1](task-briefs/T-E1.md).
+
+## RF-023: README Tri-Language Sync
+
+- **Status:** TODO
+- **Scope:** `README.md` (zh-CN), `README.en.md`, `README.zh-CN.md`, optionally `scripts/check_readme_sync.py`
+- **Background / Why:** Audit 2026-05-26 §P3-2: three READMEs duplicate corpus numbers and command examples without any sync mechanism. Drift risk grows with every corpus change.
+- **Concrete Scope:** Two strategies — Strategy A centralizes numbers (link to `docs/refactor/backlog.md` instead of duplicating); Strategy B adds a sync-checker script. Pick A by default; pick B only if the user wants to keep per-language numerical prose.
+- **Out of Scope:** Restructuring README sections; changing the project's tri-language commitment.
+- **Risks:** Strategy A removes per-language numeric context that some readers may rely on; mitigate by leaving structural prose intact and only centralizing numbers.
+- **Acceptance Criteria:** Strategy A — no concrete corpus numbers (row counts, SHA256) remain in any README; each previously-numeric mention links to backlog/data-cleaning docs. Strategy B — `scripts/check_readme_sync.py` exits 0 on current trees. Either way `unittest discover` passes.
+- **Recommended Test Commands:** Strategy A: `rg -n "66,?385|3,?396|SHA256" README.md README.en.md README.zh-CN.md`; Strategy B: `venv\Scripts\python.exe scripts\check_readme_sync.py`; both: `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Owned by [T-E2](task-briefs/T-E2.md). Lower priority; do only if continued tri-language maintenance is intended.
+
+## RF-024: Add chrF Metric to Evaluation
+
+- **Status:** TODO
+- **Scope:** `src/longtu_translation_pipeline/evaluation.py`, `configs/evaluation/*.json`, `tests/test_evaluation.py`, README evaluation section
+- **Background / Why:** chrF correlates better with human judgment than BLEU on morphologically rich languages like Korean and needs no learned model. Adding it expands evaluation diagnostics without changing the existing BLEU / glossary preservation contract.
+- **Concrete Scope:** Add `compute_chrf` (and optionally `compute_chrf_plus`); extend `EvaluationResult` and `format_evaluation_summary`; add config toggle; backfill at least one historical generation CSV report.
+- **Out of Scope:** Replacing BLEU; changing existing report column shapes (only add new ones).
+- **Risks:** Pure-Python chrF implementation must match an authoritative reference within tolerance; if using `sacrebleu`, pin the version and add to `requirements.txt`.
+- **Acceptance Criteria:** `evaluation_summary.csv` has a chrF row; `compute_chrf` is unit-tested (3+ assertions); historical backfill report exists under `data/review/evaluation/.../chrf-backfill/`; BLEU and glossary numbers unchanged.
+- **Recommended Test Commands:** `venv\Scripts\python.exe -m unittest tests.test_evaluation -v`; `venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint <pilot or latest>`; `Get-Content "data\review\evaluation\generation_report\evaluation_summary.csv"`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Owned by [T-F1](task-briefs/T-F1.md). Can run immediately (does not block on Track A).
+
+## RF-025: Add Optional COMET Metric
+
+- **Status:** TODO
+- **Scope:** new `src/longtu_translation_pipeline/comet_metric.py`, `evaluation.py`, `requirements-training.txt`, `configs/evaluation/generation_report.json`, `tests/test_evaluation.py`, `docs/refactor/decisions.md`
+- **Background / Why:** COMET (unbabel-comet) is a learned reference-based MT metric that correlates better than BLEU/chrF with human judgment for mid-resource pairs like zh→ko. It is optional because of model size and dependency weight.
+- **Concrete Scope:** Add COMET as an opt-in metric (default off). Pin `unbabel-comet` in `requirements-training.txt`. Use lazy import + module-level model caching so the rest of the package is not affected. Mock the call in tests. Record the contract change in `decisions.md`.
+- **Out of Scope:** Replacing BLEU/chrF/glossary preservation; downloading models in CI.
+- **Risks:** Large dependency, ~1.5GB model download on first use; runtime dominated by COMET on CPU.
+- **Acceptance Criteria:** Default config has `comet_enabled=false` and reports look identical to before this RF; with the flag on, a COMET row appears in `evaluation_summary.csv` and `report_manifest.json`; tests do not download the model.
+- **Recommended Test Commands:** `venv\Scripts\python.exe -m unittest tests.test_evaluation -v`; `venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint <ckpt>`; (with custom flagged config) confirm COMET row appears; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
+- **Notes:** Owned by [T-F2](task-briefs/T-F2.md). Optional research extension; depends on at least one generation CSV from T-A3.
+
+## RF-026: NLLB-1.3B / 3.3B Base Model Experiment
+
+- **Status:** TODO
+- **Scope:** `configs/training/full_10k_nllb_1.3b.json` (new), optional `_3.3b.json`, `configs/inference/nllb_1.3b.json` (new), training runs against the same RF-015 corpus
+- **Background / Why:** After RF-007-P3 establishes a 600M baseline, larger NLLB variants (1.3B, 3.3B) are the next obvious quality lever. Keeping the same segments / split / seed / marker shape allows direct comparison.
+- **Concrete Scope:** Clone `full_10k.json` to a 1.3B profile; run full 10k training, validation, and test; record side-by-side comparison vs. RF-007-P3 baseline. Optionally repeat for 3.3B if VRAM allows.
+- **Out of Scope:** Changing segments, glossary, splits, seed, marker shape; hyperparameter sweeps within the new base.
+- **Risks:** VRAM requirements grow; gradient accumulation or LoRA may be needed for 1.3B+ on smaller GPUs; document deviations.
+- **Acceptance Criteria:** New run directory under `fine-tuned-models/nllb-200-1.3B/zh2ko/runs/` with matching `segments_sha256`; side-by-side test report comparison recorded in this entry; 600M baseline untouched.
+- **Recommended Test Commands:** `venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k_nllb_1.3b.json --nllb-smoke-test --smoke-rows 2`; `$env:HF_HOME="...; venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k_nllb_1.3b.json --train --run-name run-full-10k-nllb-1.3b-v1`; `Get-Content "<run>\run_manifest.json"`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`.
+- **Notes:** Owned by [T-F3](task-briefs/T-F3.md). Pending RF-007-P3.
+
+## RF-027: Back-Translation Data Augmentation
+
+- **Status:** TODO
+- **Scope:** new `scripts/generate_back_translation.py`, new `configs/training/full_10k_with_backtrans.json`, ignored `data/segments_synth_backtrans.csv`, manifest schema extension to record synthetic source SHA256
+- **Background / Why:** Back-translation augments training data with synthetic zh→ko pairs derived from a ko corpus translated by a ko→zh model. Done with strict isolation it can lift quality; done carelessly it leaks synthetic content into validation/test.
+- **Concrete Scope:** Generate a synthetic file outside `data/segments.csv`; extend training to append it to the train split only (after the deterministic 8:1:1 split is computed on real data); record both real and synthetic SHA256 in the manifest; verify validation/test splits are bit-identical to the baseline run.
+- **Out of Scope:** Modifying `data/segments.csv` directly; auto-generating synthetic data on every run; changing seed/ratio.
+- **Risks:** Synthetic rows leaking into validation or test invalidate the test report; the verification step that compares val/test SHA256 to baseline is non-negotiable.
+- **Acceptance Criteria:** Synthetic file outside `data/segments.csv`; no synth row appears in validation or test splits (verified by SHA256 equality with baseline splits); manifest records both SHA256s; backlog Notes carry comparison vs. RF-007-P3 baseline.
+- **Recommended Test Commands:** `Get-FileHash <baseline>\splits\validation.csv,<synth>\splits\validation.csv -Algorithm SHA256`; `Get-FileHash <baseline>\splits\test.csv,<synth>\splits\test.csv -Algorithm SHA256`; leak-check script in the brief; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`.
+- **Notes:** Owned by [T-F4](task-briefs/T-F4.md). Pending RF-007-P3.
+
+## RF-028: Inference Parameter Sweep
+
+- **Status:** TODO
+- **Scope:** new `scripts/sweep_inference_params.py`, new `configs/inference/sweep_v1.json`, ignored `data/review/inference/sweeps/`
+- **Background / Why:** After RF-007-P3 selects a checkpoint, the cheapest remaining lever is inference hyperparameters (beam width, length penalty, no_repeat_ngram_size, sampling). A small grid sweep on validation can reveal a better operating point without retraining.
+- **Concrete Scope:** Add a sweep script that takes a JSON grid, generates per-grid-point validation translations, evaluates, and writes a comparison CSV. Run the winning config once on the test split for the final number.
+- **Out of Scope:** Retraining; modifying the checkpoint; iterating test results across grid points.
+- **Risks:** Iterating the grid on the test split is data leakage; the contract is strict — sweep on validation, run the winning config on test once.
+- **Acceptance Criteria:** `sweep_results.csv` lists at least 6 grid points with all configured metrics; winning validation config identified; one-shot test report on the winner recorded; comparison vs. baseline inference config in this entry.
+- **Recommended Test Commands:** `venv\Scripts\python.exe scripts\sweep_inference_params.py --run-dir <run> --model-path <ckpt> --split validation --grid configs\inference\sweep_v1.json --output-dir data\review\inference\sweeps\v1`; `Get-Content "data\review\inference\sweeps\v1\sweep_results.csv"`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`.
+- **Notes:** Owned by [T-F5](task-briefs/T-F5.md). Pending RF-007-P3 (selected checkpoint).

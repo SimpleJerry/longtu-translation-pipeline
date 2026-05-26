@@ -235,6 +235,7 @@ Notebook 保留为实验记录；T&N+R 相关 notebook 已视为 deprecated hist
 长期重构待办不放在 README 中维护。请查看：
 
 - [重构 backlog](docs/refactor/backlog.md)
+- [后续任务（并行 track 索引）](docs/refactor/follow-up-tasks.md)
 - [重构决策记录](docs/refactor/decisions.md)
 - [Notebook inventory](docs/notebooks/inventory.md)
 - [AI/Codex 工作规则](AGENTS.md)
