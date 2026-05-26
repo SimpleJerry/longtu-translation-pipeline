@@ -20,12 +20,6 @@ These notebooks describe the historical main experiment path and should remain f
 
 | Notebook | Timeline | Experiment Meaning | Current Dependency Status | Recommendation | Replacement Path |
 | --- | --- | --- | --- | --- | --- |
-| `notebooks/main/nllb-fine-tune_all.ipynb` | First committed 2023-09-06; last meaningful update 2023-09-18. | Baseline NLLB fine-tuning workflow. | References old `all_files_merged.csv` and local training config/state not committed now. | Keep as baseline experiment record. | RF-006 should replace training config and launch flow. |
-| `notebooks/main/T&N+R preprocess.ipynb` | Originates from late 2023 tag/code preprocessing experiments; key creation 2023-11-28. | Deprecated historical preprocessing experiment for terminology, tags, and code/return-token protection. | Uses current `data/glossary.csv`; still has templated local CSV/log references. | Keep as deprecated historical reference; do not treat as current mainline. | RF-005 replaced current terminology marker logic with `<start>...<end>` only. |
-| `notebooks/main/T&N+R method.ipynb` | Main `T&N+R` method formed around 2023-11-01; updated through 2023-11-29 and mechanically in 2026. | Deprecated historical training experiment for terminology/code-aware training. | Uses current `data/glossary.csv`; still references old merged/tagged CSV files not committed. | Keep as deprecated historical reference; do not treat as current mainline. | RF-006 should define the future training path without T&N+R assumptions. |
-| `notebooks/main/model-generation.ipynb` | Renamed/created around 2023-10-27; mechanically updated in 2026. | Inference/generation entry for fine-tuned models. | References old validation/tagged CSV paths and local fine-tuned model outputs. | Keep as generation reference. | RF-006 should replace model path and inference config. |
-| `notebooks/main/T&N+R method glossary accuracy testing.ipynb` | Created 2023-11-03; mechanically updated in 2026. | Deprecated glossary preservation accuracy check for the `T&N+R` method. | References historical `tests/files/translation_result...` outputs not committed now. | Keep only as historical evaluation reference. | RF-007 should automate glossary preservation metrics for the simplified marker policy. |
-| `notebooks/main/T&N+R method code accuracy testing.ipynb` | Created 2023-11-03; mechanically updated in 2026. | Deprecated code-token preservation accuracy check for the `T&N+R` method. | References historical `tests/files/translation_result...` outputs not committed now. | Keep only as historical evaluation reference. | Delete candidate after RF-007 if code-token protection remains deprecated. |
 
 ### Analysis Notebooks
 
@@ -39,6 +33,12 @@ These notebooks are kept for historical traceability but should not be treated a
 
 | Notebook | Timeline | Experiment Meaning | Current Dependency Status | Recommendation | Replacement Path |
 | --- | --- | --- | --- | --- | --- |
+| `notebooks/archive/2023-legacy/nllb-fine-tune_all.ipynb` | First committed 2023-09-06; last meaningful update 2023-09-18. | Baseline NLLB fine-tuning workflow. | References old `all_files_merged.csv` and local training config/state not committed now. | Archive (moved from main, 2026-05-27). | RF-006 should replace training config and launch flow. |
+| `notebooks/archive/2023-legacy/T&N+R preprocess.ipynb` | Originates from late 2023 tag/code preprocessing experiments; key creation 2023-11-28. | Deprecated historical preprocessing experiment for terminology, tags, and code/return-token protection. | Uses current `data/glossary.csv`; still has templated local CSV/log references. | Archive (moved from main, 2026-05-27). | RF-005 replaced current terminology marker logic with `<start>...<end>` only. |
+| `notebooks/archive/2023-legacy/T&N+R method.ipynb` | Main `T&N+R` method formed around 2023-11-01; updated through 2023-11-29 and mechanically in 2026. | Deprecated historical training experiment for terminology/code-aware training. | Uses current `data/glossary.csv`; still references old merged/tagged CSV files not committed. | Archive (moved from main, 2026-05-27). | RF-006 should define the future training path without T&N+R assumptions. |
+| `notebooks/archive/2023-legacy/model-generation.ipynb` | Renamed/created around 2023-10-27; mechanically updated in 2026. | Inference/generation entry for fine-tuned models. | References old validation/tagged CSV paths and local fine-tuned model outputs. | Archive (moved from main, 2026-05-27). | RF-006 should replace model path and inference config. |
+| `notebooks/archive/2023-legacy/T&N+R method glossary accuracy testing.ipynb` | Created 2023-11-03; mechanically updated in 2026. | Deprecated glossary preservation accuracy check for the `T&N+R` method. | References historical `tests/files/translation_result...` outputs not committed now. | Archive (moved from main, 2026-05-27). | RF-007 should automate glossary preservation metrics for the simplified marker policy. |
+| `notebooks/archive/2023-legacy/T&N+R method code accuracy testing.ipynb` | Created 2023-11-03; mechanically updated in 2026. | Deprecated code-token preservation accuracy check for the `T&N+R` method. | References historical `tests/files/translation_result...` outputs not committed now. | Archive (moved from main, 2026-05-27). | Delete candidate after RF-007 if code-token protection remains deprecated. |
 | `notebooks/archive/2023-legacy/T&N method.ipynb` | First committed 2023-09-06; evolved through 2023-10. | Early terminology-only workflow using glossary special tokens. | Uses current `data/glossary.csv`; references old merged CSV files not committed now. | Archive, not main. | Superseded by `T&N+R` notebooks and future RF-005 module. |
 | `notebooks/archive/2023-legacy/T&N method_modified.ipynb` | Created 2023-10-31; updated around 2023-11-01. | Transitional experiment from terminology-only protection toward code protection. | References old merged/tagged CSV files not committed now. | Archive, not main. | Superseded by `T&N+R preprocess` and RF-005. |
 | `notebooks/archive/2023-legacy/T&N method glossary accuracy testing.ipynb` | Originated in early testing flow; last mechanical update 2026-05-19. | Legacy glossary-preservation evaluation for `T&N`. | References old translation-result CSV not committed now. | Archive, later delete candidate after RF-007. | Superseded by `T&N+R` glossary evaluation and RF-007. |
@@ -56,6 +56,12 @@ No notebook is deleted in the first RF-004 pass. These files are candidates for 
 - `notebooks/archive/2023-legacy/T&N method_modified.ipynb`
 - `notebooks/archive/2023-legacy/T&N method glossary accuracy testing.ipynb`
 - `notebooks/archive/2023-legacy/T&N method code accuracy testing.ipynb`
+- `notebooks/archive/2023-legacy/T&N+R method.ipynb`
+- `notebooks/archive/2023-legacy/T&N+R method code accuracy testing.ipynb`
+- `notebooks/archive/2023-legacy/T&N+R method glossary accuracy testing.ipynb`
+- `notebooks/archive/2023-legacy/T&N+R preprocess.ipynb`
+- `notebooks/archive/2023-legacy/nllb-fine-tune_all.ipynb`
+- `notebooks/archive/2023-legacy/model-generation.ipynb`
 
 ## Known Dependency Gaps
 

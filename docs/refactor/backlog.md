@@ -458,7 +458,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-021: Archive Deprecated Notebooks
 
-- **Status:** TODO
+- **Status:** DONE (2026-05-27)
 - **Scope:** `notebooks/main/` (six deprecated `.ipynb` files), `notebooks/archive/2023-legacy/`, `docs/notebooks/inventory.md`, README link references (three languages)
 - **Background / Why:** Audit 2026-05-26 §P2-3 + §P3-3: T&N+R notebooks and notebooks replaced by `scripts/train_model.py` / `scripts/run_inference.py` still live in the active `notebooks/main/` directory despite being marked deprecated in `decisions.md` and `inventory.md`.
 - **Concrete Scope:** `git mv` the six notebooks (`T&N+R method.ipynb`, `T&N+R method code accuracy testing.ipynb`, `T&N+R method glossary accuracy testing.ipynb`, `T&N+R preprocess.ipynb`, `nllb-fine-tune_all.ipynb`, `model-generation.ipynb`) into `notebooks/archive/2023-legacy/`. Update inventory and README links. Do not modify notebook JSON.
