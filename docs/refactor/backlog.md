@@ -440,7 +440,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-020: Slim Public API Surface in Package __init__
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `src/longtu_translation_pipeline/__init__.py`
 - **Background / Why:** Audit 2026-05-26 §P2-2: `__init__.py` re-exports CLI-internal smoke/pilot helpers but does not export the real training entry `run_real_nllb_formal_training`. The exposed surface is inverted from the stable one.
 - **Concrete Scope:** Remove `run_real_nllb_pilot_training`, `run_real_nllb_model_smoke_test`, `run_nllb_trainer_smoke_test`, and their `format_*_smoke_test` / `format_real_model_*` companions plus their `NllbTrainerSmokeResult`/`RealModel*Result` data classes from `__init__.py` and `__all__`. CLI scripts continue importing them directly from `.training`.
