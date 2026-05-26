@@ -28,7 +28,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-003: Data Pipeline Modularization
 
-- **Status:** TODO
+- **Status:** OBSOLETE
 - **Scope:** `data/data-cleaning-and-merging.py`, future `src/longtu_l10n_mt/data/`, CLI entry points
 - **Background / Why:** Data cleaning currently lives in one script with hard-coded paths, header rows, and column mappings.
 - **Concrete Scope:** Move reusable cleaning, merging, and language-pair generation logic into importable modules; keep a thin CLI wrapper; move mappings to config.
@@ -36,7 +36,7 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** Changing output CSV shape or language column names unintentionally.
 - **Acceptance Criteria:** Existing basic workflow still works; data transforms are covered by small fixture tests; config controls input/output paths and language mappings.
 - **Recommended Test Commands:** `python -m pytest tests`; CLI dry run against a tiny fixture workbook or CSV fixture.
-- **Notes:** Preserve current language normalization behavior unless a later task explicitly changes it. After the 2026-05-19 final-corpus cleanup, the old `data/data-cleaning-and-merging.py` script is no longer retained; re-triage this task if a reproducible source-to-final pipeline is needed again.
+- **Notes:** Preserve current language normalization behavior unless a later task explicitly changes it. After the 2026-05-19 final-corpus cleanup, the old `data/data-cleaning-and-merging.py` script is no longer retained; re-triage this task if a reproducible source-to-final pipeline is needed again. Closed on 2026-05-26 (RF-022): the raw xlsx inputs and the original `data/data-cleaning-and-merging.py` are not retained in this repository. A source-to-final data pipeline would only be useful if those raw inputs return; until then this item carries no actionable scope.
 
 ## RF-004: Notebook Governance
 
@@ -464,7 +464,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-022: AGENTS.md unittest Reference Fix and RF-003 Closure
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `AGENTS.md` Required Checks section, `docs/refactor/backlog.md` RF-003 section
 - **Background / Why:** Audit 2026-05-26 §P3-1 and §P2-4 — two small drift items bundled into one commit. AGENTS.md tells agents to use `pytest`, but the repo uses `unittest discover` (no pytest config exists). RF-003 status is `TODO` but its Notes already record that the source-to-final pipeline is no longer meaningful in this repository.
 - **Concrete Scope:** Replace the `python -m pytest` paragraph in AGENTS.md with the `unittest discover` form actually used by the project. Mark RF-003 as `OBSOLETE` with a closing note explaining that raw xlsx inputs are not retained.
@@ -472,7 +472,7 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** None significant — both edits are textual.
 - **Acceptance Criteria:** AGENTS.md no longer recommends pytest as the primary command; RF-003 status is `OBSOLETE`; `unittest discover` still passes.
 - **Recommended Test Commands:** `rg -n "pytest" AGENTS.md`; `rg -n "unittest discover -s tests" AGENTS.md`; `rg -n "^- \*\*Status:\*\* OBSOLETE" docs/refactor/backlog.md`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
-- **Notes:** Owned by [T-E1](task-briefs/T-E1.md).
+- **Notes:** Completed on 2026-05-27. AGENTS.md "Required Checks" section replaced `python -m pytest` with `venv\Scripts\python.exe -m unittest discover -s tests` to match the repository's actual test setup (no pytest config exists). RF-003 marked OBSOLETE with closing note explaining that raw xlsx inputs are not retained post-2026-05-19 cleanup and source-to-final pipeline is not currently actionable. Both edits verified: pytest no longer mentioned in AGENTS.md required checks, unittest discover command confirmed in place, RF-003 status changed, all unit tests pass.
 
 ## RF-023: README Tri-Language Sync
 

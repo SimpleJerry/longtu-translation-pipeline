@@ -48,11 +48,13 @@ git -c safe.directory=D:/longtu-translation-pipeline diff --check
 rg -n -i "TODO|FIXME|NEEDS_TRIAGE|backlog|decisions" AGENTS.md docs/refactor
 ```
 
-For Python code changes, also run targeted unit tests or import checks. When a full test suite exists, prefer:
+For Python code changes, also run targeted unit tests or import checks. The full test suite uses Python's stdlib unittest:
 
 ```powershell
-python -m pytest
+venv\Scripts\python.exe -m unittest discover -s tests
 ```
+
+Individual tests can be run with `python -m unittest tests.<module>`.
 
 For data pipeline changes, include a small fixture or dry-run command that does not require private data or large model downloads.
 
