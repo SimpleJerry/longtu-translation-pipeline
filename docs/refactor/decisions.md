@@ -65,6 +65,13 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Impact Scope:** `scripts/segments_cleaning_pipeline.py`, `configs/segments/`, `data/segments.csv`, local `data/review/segments/` outputs.
 - **Follow-up Notes:** Term/entity-like deletion is based on local semantic signals rather than fixed text length thresholds. Presentation tags such as `<c=...>` are stripped while preserving wrapped text, symmetric outer wrappers are unwrapped, and valid machine placeholders are audited rather than deleted. Structured tuple-like strings should be split when safely aligned and removed only when parsing/alignment fails.
 
+## 2026-05-26: Segment Fragments And Target Contamination Are Training Noise
+
+- **Decision:** High-confidence non-segment fragments and Korean-side target-language contamination are removed from `data/segments.csv` before training.
+- **Background:** Validation sample review showed isolated one-character fragments such as `艮 -> 간` and target rows that still contained Chinese or no Hangul. These rows do not behave like seq2seq sentence pairs and can degrade train/validation/test quality.
+- **Impact Scope:** `scripts/segments_cleaning_pipeline.py`, `data/segments.csv`, local `data/review/segments/` outputs, future full-run split artifacts.
+- **Follow-up Notes:** Pure one-character CJK fragments are a permanent segment cleanup rule. The 2-3 character short-fragment migration from segments into glossary was a one-time historical repair for the current mixed corpus; it is not a recurring pipeline step. The target-language contamination rule is intentionally strict for this corpus: Korean targets containing CJK or no Hangul are deleted without placeholder or version-number exceptions.
+
 ## 2026-05-25: Cross Cleaning Deletes Strong Conflicts, Not Translations
 
 - **Decision:** Glossary/segments cross-consistency cleanup may delete high-confidence glossary noise and segment rows that miss strong glossary terms, but it must not auto-rewrite Korean segment translations.

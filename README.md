@@ -49,6 +49,7 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 │   ├── analysis/
 │   └── archive/2023-legacy/
 └── docs/
+    ├── data-cleaning.md
     ├── notebooks/inventory.md
     └── refactor/
 ```
@@ -82,6 +83,7 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 | `notebooks/analysis/` | train/eval loss 시각화 같은 보조 분석 notebook입니다. |
 | `notebooks/archive/2023-legacy/` | 2023년 legacy 실험 archive이며 첫 번째 정리 단계에서는 삭제하지 않습니다. |
 | `docs/notebooks/inventory.md` | Notebook의 시간순 흐름, 목적, 의존성 상태, 보존/archive/삭제 제안입니다. |
+| `docs/data-cleaning.md` | 스타일 태그, 구조화 문자열, 짧은 조각, target 오염, strict gate 예시를 포함한 데이터 정제 규칙 설명입니다. |
 | `requirements-training.txt` | RF-006 학습 smoke test 및 이후 학습 chain 의존성입니다. |
 
 ## 실행 환경
@@ -142,7 +144,7 @@ venv\Scripts\python.exe scripts\glossary_semantic_pipeline.py
 venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 ```
 
-이 pipeline은 먼저 `<c=...>` 같은 표현용 스타일 태그를 제거하고 대칭 외부 wrapper를 푼 뒤, Stanza, jieba, kiwipiepy, `BAAI/bge-m3`로 term/entity-like segment를 점수화합니다. Placeholder 행은 기본적으로 보존하고 mismatch만 감사합니다. 이 명령은 `data/segments.csv`를 다시 쓰지 않고 로컬 `data/review/segments/` 아래에 감사 CSV만 생성합니다. 수동 확인 후에만 `--apply`를 사용합니다.
+이 pipeline은 먼저 `<c=...>` 같은 표현용 스타일 태그를 제거하고 대칭 외부 wrapper를 푼 뒤, 고신뢰 non-segment fragment와 한국어 target-language contamination을 삭제합니다. 그 다음 Stanza, jieba, kiwipiepy, `BAAI/bge-m3`로 term/entity-like segment를 점수화합니다. Placeholder 행은 기본적으로 보존하고 mismatch만 감사하지만, target 쪽이 강한 오염 규칙에 걸리면 삭제됩니다. 이 명령은 `data/segments.csv`를 다시 쓰지 않고 로컬 `data/review/segments/` 아래에 감사 CSV만 생성합니다. 수동 확인 후에만 `--apply`를 사용합니다. 각 정제 유형의 예시는 `docs/data-cleaning.md`를 참고하세요.
 
 glossary와 segments의 용어 일관성을 확인하려면 먼저 dry-run을 실행하고 검토 후 apply합니다.
 

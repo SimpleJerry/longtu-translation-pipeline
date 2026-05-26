@@ -1,10 +1,11 @@
 """Review-first semantic cleanup for Chinese-Korean segment training data.
 
 Segments are seq2seq training examples, not glossary terms.  This pipeline
-therefore only removes high-confidence term/entity-like rows and exact glossary
-pairs, while keeping sentence-like UI text and placeholder-bearing strings for
-training.  It defaults to dry-run and writes local review CSVs under
-data/review/segments/, which is ignored by Git.
+therefore removes high-confidence non-segment fragments, target-language
+contamination, term/entity-like rows, and exact glossary pairs, while keeping
+sentence-like UI text and placeholder-bearing strings for training unless the
+target side is clearly contaminated.  It defaults to dry-run and writes local
+review CSVs under data/review/segments/, which is ignored by Git.
 """
 
 from __future__ import annotations
@@ -145,6 +146,42 @@ def has_meaningful_text(text: str) -> bool:
 
 def has_cjk(text: str) -> bool:
     return any("\u4e00" <= char <= "\u9fff" for char in text)
+
+
+def has_hangul(text: str) -> bool:
+    return any("\uac00" <= char <= "\ud7af" for char in text)
+
+
+def pure_cjk_len(text: str) -> int:
+    stripped = text.strip()
+    if not stripped:
+        return 0
+    if not all("\u4e00" <= char <= "\u9fff" for char in stripped):
+        return 0
+    return len(stripped)
+
+
+def target_language_contamination_reason(ko: str) -> str:
+    if has_cjk(ko):
+        return "ko_contains_cjk"
+    if ko and not has_hangul(ko):
+        return "ko_without_hangul"
+    return ""
+
+
+def is_non_segment_single_cjk_fragment(
+    zh: str,
+    ko: str,
+    *,
+    patterns: dict[str, re.Pattern[str]],
+) -> bool:
+    return (
+        pure_cjk_len(zh) == 1
+        and not patterns["machine_placeholder"].search(zh + ko)
+        and not patterns["sentence_punctuation"].search(zh + ko)
+        and not patterns["tuple_wrapper"].match(zh)
+        and not patterns["tuple_wrapper"].match(ko)
+    )
 
 
 def strip_presentation_tags(text: str, patterns: dict[str, re.Pattern[str]]) -> str:
@@ -508,6 +545,19 @@ def initial_classify(
         item["semantic_action"] = "SKIP_EMPTY"
         return
 
+    contamination_reason = target_language_contamination_reason(ko)
+    if contamination_reason:
+        item["action"] = "REMOVE_TARGET_LANGUAGE_CONTAMINATION"
+        item["reason"] = contamination_reason
+        item["semantic_action"] = "AUTO_REMOVE_TARGET_LANGUAGE_CONTAMINATION"
+        return
+
+    if is_non_segment_single_cjk_fragment(zh, ko, patterns=patterns):
+        item["action"] = "REMOVE_NON_SEGMENT_FRAGMENT"
+        item["reason"] = "pure_cjk_single_char_fragment"
+        item["semantic_action"] = "AUTO_REMOVE_NON_SEGMENT_FRAGMENT"
+        return
+
     if patterns["machine_placeholder"].search(zh + ko):
         item["reason"] = "placeholder_kept"
         item["semantic_action"] = "SKIP_PLACEHOLDER"
@@ -788,6 +838,24 @@ def write_review_outputs(
 ) -> None:
     write_csv(review_dir / "segments_cleaning_audit.csv", AUDIT_FIELDS, audit)
 
+    removed_non_segment = [
+        row for row in audit if row["action"] == "REMOVE_NON_SEGMENT_FRAGMENT"
+    ]
+    write_csv(
+        review_dir / "removed_segment_non_segment_fragment.csv",
+        AUDIT_FIELDS,
+        removed_non_segment,
+    )
+
+    removed_target_contamination = [
+        row for row in audit if row["action"] == "REMOVE_TARGET_LANGUAGE_CONTAMINATION"
+    ]
+    write_csv(
+        review_dir / "removed_segment_target_language_contamination.csv",
+        AUDIT_FIELDS,
+        removed_target_contamination,
+    )
+
     removed_term_like = [row for row in audit if row["action"] == "REMOVE_TERM_LIKE"]
     write_csv(review_dir / "removed_segment_term_like.csv", AUDIT_FIELDS, removed_term_like)
 
@@ -1010,6 +1078,26 @@ def main() -> None:
             (
                 "removed_empty_rows",
                 str(sum(1 for row in audit if row["action"] == "REMOVE_EMPTY")),
+            ),
+            (
+                "removed_non_segment_fragment_rows",
+                str(
+                    sum(
+                        1
+                        for row in audit
+                        if row["action"] == "REMOVE_NON_SEGMENT_FRAGMENT"
+                    )
+                ),
+            ),
+            (
+                "removed_target_language_contamination_rows",
+                str(
+                    sum(
+                        1
+                        for row in audit
+                        if row["action"] == "REMOVE_TARGET_LANGUAGE_CONTAMINATION"
+                    )
+                ),
             ),
             (
                 "removed_markup_only_rows",

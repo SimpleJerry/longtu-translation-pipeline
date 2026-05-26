@@ -49,6 +49,7 @@ This README documents the repository as it exists today. The project is still cl
 │   ├── analysis/
 │   └── archive/2023-legacy/
 └── docs/
+    ├── data-cleaning.md
     ├── notebooks/inventory.md
     └── refactor/
 ```
@@ -82,6 +83,7 @@ This README documents the repository as it exists today. The project is still cl
 | `notebooks/analysis/` | Auxiliary analysis notebooks, such as train/eval loss visualization. |
 | `notebooks/archive/2023-legacy/` | Archived 2023 legacy experiments; not deleted in the first pass. |
 | `docs/notebooks/inventory.md` | Notebook timeline, purpose, dependency status, and keep/archive/delete guidance. |
+| `docs/data-cleaning.md` | Data-cleaning rule notes with examples for style tags, structured strings, short fragments, target contamination, and the strict gate. |
 | `requirements-training.txt` | RF-006 training smoke-test and future training-chain dependencies. |
 
 ## Environment
@@ -142,7 +144,7 @@ To inspect or iterate segment cleanup, run a dry run first:
 venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 ```
 
-This pipeline first strips presentation tags such as `<c=...>` and unwraps symmetric outer wrappers, then uses Stanza, jieba, kiwipiepy, and `BAAI/bge-m3` to score term/entity-like segments. Placeholder rows are kept by default and only audited for mismatch. The command does not rewrite `data/segments.csv`; it only writes local audit CSVs under `data/review/segments/`. Use `--apply` only after manual review.
+This pipeline first strips presentation tags such as `<c=...>` and unwraps symmetric outer wrappers, then removes high-confidence non-segment fragments and Korean-side target-language contamination before using Stanza, jieba, kiwipiepy, and `BAAI/bge-m3` to score term/entity-like segments. Placeholder rows are kept by default and only audited for mismatch unless the target side already triggers the strict contamination rule. The command does not rewrite `data/segments.csv`; it only writes local audit CSVs under `data/review/segments/`. Use `--apply` only after manual review. See `docs/data-cleaning.md` for examples of each cleanup type.
 
 To check glossary/segment terminology consistency, run a dry run first and apply only after review:
 

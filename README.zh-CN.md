@@ -49,6 +49,7 @@
 │   ├── analysis/
 │   └── archive/2023-legacy/
 └── docs/
+    ├── data-cleaning.md
     ├── notebooks/inventory.md
     └── refactor/
 ```
@@ -82,6 +83,7 @@
 | `notebooks/analysis/` | 辅助分析 notebook，例如训练 loss 可视化。 |
 | `notebooks/archive/2023-legacy/` | 2023 年旧实验归档，第一轮不直接删除。 |
 | `docs/notebooks/inventory.md` | Notebook 时间线、用途、依赖状态和保留/归档/删除建议。 |
+| `docs/data-cleaning.md` | 数据清洗规则说明，包含样式 tag、结构化字符串、短碎片、目标语言污染和 strict gate 示例。 |
 | `requirements-training.txt` | RF-006 训练 smoke / 后续训练链路依赖。 |
 
 ## 运行环境
@@ -142,7 +144,7 @@ venv\Scripts\python.exe scripts\glossary_semantic_pipeline.py
 venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
 ```
 
-该 pipeline 会先剥离 `<c=...>` 等表现层样式标签并解开对称外层包装，再使用 Stanza、jieba、kiwipiepy 和 `BAAI/bge-m3` 判断 term/entity-like segment；placeholder 行默认保留，只做 mismatch 审计。该命令不会改写 `data/segments.csv`，只会在本地 `data/review/segments/` 下生成审计 CSV。人工确认后再使用 `--apply` 重写最终语料。
+该 pipeline 会先剥离 `<c=...>` 等表现层样式标签并解开对称外层包装，再删除高置信非句段碎片和 ko 侧目标语言污染，然后使用 Stanza、jieba、kiwipiepy 和 `BAAI/bge-m3` 判断 term/entity-like segment；placeholder 行默认保留，只做 mismatch 审计，除非目标侧已经触发强污染规则。该命令不会改写 `data/segments.csv`，只会在本地 `data/review/segments/` 下生成审计 CSV。人工确认后再使用 `--apply` 重写最终语料。各类清洗的例子见 `docs/data-cleaning.md`。
 
 如需检查 glossary 与 segments 的术语一致性，先 dry-run，再在确认后 apply：
 
