@@ -320,7 +320,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-006-P11: Formal 10k Training on LLM-Cleaned Segments
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `scripts/train_model.py --train`, `configs/training/full_10k.json`, ignored `fine-tuned-models/nllb-200-distilled-600M/zh2ko/runs/`, post-RF-015 corpus
 - **Background / Why:** After RF-015 applies the full-corpus LLM segment cleanup, every prior training run is invalid because `segments_sha256` and the deterministic 8:1:1 splits no longer match. A fresh formal 10k training run on the new corpus is the next quality baseline.
 - **Concrete Scope:** Re-execute `--train` with `configs/training/full_10k.json` against the post-RF-015 `data/segments.csv`, using a new `--run-name` such as `run-full-10k-llm-segments-v1`. Hyperparameters identical to the prior baseline so the comparison is direct. Record run name, manifest content, checkpoint list, final loss, and wall-clock time in Notes.
@@ -332,7 +332,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-006-P12: Validation Generation and Reports for Re-Trained Run
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `scripts/run_inference.py --generate-validation`, `scripts/evaluate_translation.py`, ignored `data/review/inference/validation/`, ignored `data/review/evaluation/validation_report/`
 - **Background / Why:** RF-006-P11 produces multiple saved checkpoints. Per-checkpoint validation reports are the engineering signal used to pick the final checkpoint for RF-007-P3, not the model quality claim itself.
 - **Concrete Scope:** For each (or a representative subset of) saved checkpoint under the RF-006-P11 run directory, generate validation translations and run the evaluation report. Capture BLEU, exact glossary preservation, no-space glossary preservation, and `empty_candidate_rows` in a comparison table inside this backlog entry.
@@ -344,7 +344,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-007-P3: Final Held-Out Test Report on Selected Checkpoint
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `scripts/run_inference.py --generate-test`, `scripts/evaluate_translation.py`, ignored `data/review/inference/test/`, ignored `data/review/evaluation/test_report/`
 - **Background / Why:** Per the 2026-05-25 held-out test decision, validation reports are engineering signals and the test split (seed 42, 10% of corpus) is reserved for the final quality claim. After RF-006-P12 selects a checkpoint, this entry records the single test-set run for the project's headline number on this `segments_sha256`.
 - **Concrete Scope:** Run `--generate-test` on the selected checkpoint, then evaluate. Record selected checkpoint path, corpus SHA256, test BLEU, test exact + no-space glossary preservation, `empty_candidate_rows`, and a brief comparison against the same checkpoint's validation numbers.
@@ -356,7 +356,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-016: Test Coverage Backfill for Cleanup Pipelines
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `tests/test_cleanup_common.py` (new), `tests/test_segments_cleaning_pipeline.py`, `tests/test_glossary_semantic_pipeline.py` (new), foundation helpers
 - **Background / Why:** Audit 2026-05-26 §P2-1 surfaced that the largest cleanup module (`glossary_semantic_pipeline.py`, 1502 LOC) has zero unit tests, `cleanup_common.py` (foundation for five pipelines) has zero direct tests, and `segments_cleaning_pipeline.py` (1150 LOC) has only 10 assertions. Future refactors lack a regression net.
 - **Concrete Scope:** Split into three sub-phases (P1: foundation; P2: segments pipeline rules; P3: glossary pipeline pure logic). Each is independent and parallel-safe.
@@ -368,7 +368,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-016-P1: cleanup_common.py Tests
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `tests/test_cleanup_common.py` (new), `scripts/cleanup_common.py` (read-only)
 - **Background / Why:** `cleanup_common.py` is the shared foundation module imported by five cleanup pipelines. A regression here silently breaks all five. Zero direct tests today.
 - **Concrete Scope:** Add fixture-level unit tests for `sha256`, `read_term_file`, `read_json_config`, `compile_regexes`, `ensure_csv_columns`, covering at least one happy path and one error path per helper. Use `tempfile.TemporaryDirectory()` fixtures; no external dependencies.
@@ -380,7 +380,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-016-P2: segments_cleaning_pipeline.py Tests Extension
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `tests/test_segments_cleaning_pipeline.py` (extend), `scripts/segments_cleaning_pipeline.py` (read-only)
 - **Background / Why:** `segments_cleaning_pipeline.py` is 1150 LOC; existing tests cover fragment removal and target contamination (10 assertions) but not markup stripping, symmetric wrapper unwrap, structured tuple split, or placeholder mismatch audit.
 - **Concrete Scope:** Add fixture-level tests for the deterministic, rule-based branches of those features. Do not exercise stanza / jieba / kiwi / bge-m3 paths in this RF.
@@ -392,7 +392,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-016-P3: glossary_semantic_pipeline.py First-Wave Tests
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `tests/test_glossary_semantic_pipeline.py` (new), `scripts/glossary_semantic_pipeline.py` (read-only)
 - **Background / Why:** Single largest untested module in the repo (1502 LOC). Combines deterministic rules with stanza / jieba / kiwi / bge-m3 / wordfreq scoring. The rule-based branches are pure-Python and testable without those external deps.
 - **Concrete Scope:** Add first-wave tests for hard noise filters, strict 1:1 enforcement, product-corpus evidence gate, and config/seed file loading helpers. Mock external scorers when a branch unavoidably reaches them.
@@ -434,7 +434,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-019: Annotate configs/training/default.json as Dry-Run / Smoke Only
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `configs/training/default.json` (or `scripts/train_model.py`), README sections that show training commands
 - **Background / Why:** Audit 2026-05-26 §P1-3: `default.json` has no `max_steps`, so `--train --config configs/training/default.json` fails. But the CLI default for `--config` is exactly that file, so newcomers hit the pitfall.
 - **Concrete Scope:** Add a top-level `_comment` field in `default.json` marking it dry-run / smoke only and pointing at `full_10k.json` for `--train`. Fix README examples that pair `--train` with `default.json`. Larger alternative (changing the CLI default) is out of scope unless the user authorizes a behavior change.
@@ -458,7 +458,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-021: Archive Deprecated Notebooks
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `notebooks/main/` (six deprecated `.ipynb` files), `notebooks/archive/2023-legacy/`, `docs/notebooks/inventory.md`, README link references (three languages)
 - **Background / Why:** Audit 2026-05-26 §P2-3 + §P3-3: T&N+R notebooks and notebooks replaced by `scripts/train_model.py` / `scripts/run_inference.py` still live in the active `notebooks/main/` directory despite being marked deprecated in `decisions.md` and `inventory.md`.
 - **Concrete Scope:** `git mv` the six notebooks (`T&N+R method.ipynb`, `T&N+R method code accuracy testing.ipynb`, `T&N+R method glossary accuracy testing.ipynb`, `T&N+R preprocess.ipynb`, `nllb-fine-tune_all.ipynb`, `model-generation.ipynb`) into `notebooks/archive/2023-legacy/`. Update inventory and README links. Do not modify notebook JSON.
@@ -482,7 +482,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-023: README Tri-Language Sync
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `README.md` (zh-CN), `README.en.md`, `README.zh-CN.md`, optionally `scripts/check_readme_sync.py`
 - **Background / Why:** Audit 2026-05-26 §P3-2: three READMEs duplicate corpus numbers and command examples without any sync mechanism. Drift risk grows with every corpus change.
 - **Concrete Scope:** Two strategies — Strategy A centralizes numbers (link to `docs/refactor/backlog.md` instead of duplicating); Strategy B adds a sync-checker script. Pick A by default; pick B only if the user wants to keep per-language numerical prose.
@@ -494,7 +494,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-024: Add chrF Metric to Evaluation
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `src/longtu_translation_pipeline/evaluation.py`, `configs/evaluation/*.json`, `tests/test_evaluation.py`, README evaluation section
 - **Background / Why:** chrF correlates better with human judgment than BLEU on morphologically rich languages like Korean and needs no learned model. Adding it expands evaluation diagnostics without changing the existing BLEU / glossary preservation contract.
 - **Concrete Scope:** Add `compute_chrf` (and optionally `compute_chrf_plus`); extend `EvaluationResult` and `format_evaluation_summary`; add config toggle; backfill at least one historical generation CSV report.
@@ -506,7 +506,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-025: Add Optional COMET Metric
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** new `src/longtu_translation_pipeline/comet_metric.py`, `evaluation.py`, `requirements-training.txt`, `configs/evaluation/generation_report.json`, `tests/test_evaluation.py`, `docs/refactor/decisions.md`
 - **Background / Why:** COMET (unbabel-comet) is a learned reference-based MT metric that correlates better than BLEU/chrF with human judgment for mid-resource pairs like zh→ko. It is optional because of model size and dependency weight.
 - **Concrete Scope:** Add COMET as an opt-in metric (default off). Pin `unbabel-comet` in `requirements-training.txt`. Use lazy import + module-level model caching so the rest of the package is not affected. Mock the call in tests. Record the contract change in `decisions.md`.
@@ -518,7 +518,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-026: NLLB-1.3B / 3.3B Base Model Experiment
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `configs/training/full_10k_nllb_1.3b.json` (new), optional `_3.3b.json`, `configs/inference/nllb_1.3b.json` (new), training runs against the same RF-015 corpus
 - **Background / Why:** After RF-007-P3 establishes a 600M baseline, larger NLLB variants (1.3B, 3.3B) are the next obvious quality lever. Keeping the same segments / split / seed / marker shape allows direct comparison.
 - **Concrete Scope:** Clone `full_10k.json` to a 1.3B profile; run full 10k training, validation, and test; record side-by-side comparison vs. RF-007-P3 baseline. Optionally repeat for 3.3B if VRAM allows.
@@ -530,7 +530,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-027: Back-Translation Data Augmentation
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** new `scripts/generate_back_translation.py`, new `configs/training/full_10k_with_backtrans.json`, ignored `data/segments_synth_backtrans.csv`, manifest schema extension to record synthetic source SHA256
 - **Background / Why:** Back-translation augments training data with synthetic zh→ko pairs derived from a ko corpus translated by a ko→zh model. Done with strict isolation it can lift quality; done carelessly it leaks synthetic content into validation/test.
 - **Concrete Scope:** Generate a synthetic file outside `data/segments.csv`; extend training to append it to the train split only (after the deterministic 8:1:1 split is computed on real data); record both real and synthetic SHA256 in the manifest; verify validation/test splits are bit-identical to the baseline run.
@@ -542,7 +542,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-028: Inference Parameter Sweep
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** new `scripts/sweep_inference_params.py`, new `configs/inference/sweep_v1.json`, ignored `data/review/inference/sweeps/`
 - **Background / Why:** After RF-007-P3 selects a checkpoint, the cheapest remaining lever is inference hyperparameters (beam width, length penalty, no_repeat_ngram_size, sampling). A small grid sweep on validation can reveal a better operating point without retraining.
 - **Concrete Scope:** Add a sweep script that takes a JSON grid, generates per-grid-point validation translations, evaluates, and writes a comparison CSV. Run the winning config once on the test split for the final number.

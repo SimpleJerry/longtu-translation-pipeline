@@ -1,4 +1,4 @@
-# LongtuKorea Translation Model
+﻿# LongtuKorea Translation Model
 
 [한국어](README.md) | [English](README.en.md) | [中文](README.zh-CN.md)
 

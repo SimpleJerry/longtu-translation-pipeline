@@ -1,4 +1,5 @@
 {
+  "_comment": "Dry-run / smoke / nllb-smoke / real-model-smoke profile. For --train use configs/training/full_10k.json.",
   "data": {
     "segments_path": "data/segments.csv",
     "glossary_path": "data/glossary.csv",
