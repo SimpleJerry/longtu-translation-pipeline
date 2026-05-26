@@ -101,10 +101,10 @@ python -m pip install -r requirements.txt
 jupyter lab
 ```
 
-RF-006-P2 이후 학습/inference chain을 실행하려면 학습 chain 의존성도 설치합니다.
+RF-006-P2 이후 학습/inference chain을 실행하려면 학습 chain 의존성도 설치합니다. 먼저 `requirements.txt`를 설치한 후 `requirements-training.txt`를 설치합니다.
 
 ```powershell
-python -m pip install -r requirements-training.txt
+python -m pip install -r requirements-training.txt   # 학습이 필요한 경우에만
 ```
 
 참고:
@@ -198,8 +198,8 @@ venv\Scripts\python.exe scripts\train_model.py --config configs\training\default
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --nllb-smoke-test --smoke-rows 2
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --real-model-smoke-test --smoke-rows 2
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --pilot-train --pilot-rows 64 --max-steps 4 --save-steps 2
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --train --limit-rows 128 --max-steps 4 --save-steps 2 --save-total-limit 2 --logging-steps 1
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --train --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-name --resume-from-checkpoint latest --max-steps 6 --save-steps 2 --save-total-limit 2 --logging-steps 1
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --train --limit-rows 128 --max-steps 4 --save-steps 2 --save-total-limit 2 --logging-steps 1
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --train --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-name --resume-from-checkpoint latest --max-steps 6 --save-steps 2 --save-total-limit 2 --logging-steps 1
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --train --run-name run-full-10k-corrected-v1
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate --model-path fine-tuned-models\nllb-200-distilled-600M\zh2ko\pilot\run-20260525-093832\checkpoint-4 --sample-rows 8

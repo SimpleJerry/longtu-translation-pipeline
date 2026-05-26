@@ -1,3 +1,4 @@
+# Install requirements.txt first, then this file: pip install -r requirements.txt -r requirements-training.txt
 --extra-index-url https://download.pytorch.org/whl/cu132
 torch==2.12.0+cu132
 torchvision==0.27.0+cu132

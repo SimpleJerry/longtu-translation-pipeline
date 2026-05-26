@@ -101,10 +101,10 @@ python -m pip install -r requirements.txt
 jupyter lab
 ```
 
-To run RF-006-P2 and later training/inference-chain commands, also install the training-chain dependencies:
+To run RF-006-P2 and later training/inference-chain commands, also install the training-chain dependencies. First install `requirements.txt`, then `requirements-training.txt`:
 
 ```powershell
-python -m pip install -r requirements-training.txt
+python -m pip install -r requirements-training.txt   # only if you need training
 ```
 
 Notes:
@@ -198,8 +198,8 @@ venv\Scripts\python.exe scripts\train_model.py --config configs\training\default
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --nllb-smoke-test --smoke-rows 2
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --real-model-smoke-test --smoke-rows 2
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --pilot-train --pilot-rows 64 --max-steps 4 --save-steps 2
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --train --limit-rows 128 --max-steps 4 --save-steps 2 --save-total-limit 2 --logging-steps 1
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --train --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-name --resume-from-checkpoint latest --max-steps 6 --save-steps 2 --save-total-limit 2 --logging-steps 1
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --train --limit-rows 128 --max-steps 4 --save-steps 2 --save-total-limit 2 --logging-steps 1
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --train --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-name --resume-from-checkpoint latest --max-steps 6 --save-steps 2 --save-total-limit 2 --logging-steps 1
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --train --run-name run-full-10k-corrected-v1
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate --model-path fine-tuned-models\nllb-200-distilled-600M\zh2ko\pilot\run-20260525-093832\checkpoint-4 --sample-rows 8

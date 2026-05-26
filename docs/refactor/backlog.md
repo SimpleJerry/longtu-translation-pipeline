@@ -422,7 +422,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-018: Consolidate torch Pinning in requirements-training.txt
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `requirements.txt`, `requirements-training.txt`, README install paragraphs (three languages)
 - **Background / Why:** Audit 2026-05-26 §P1-2: both `requirements.txt` and `requirements-training.txt` pin `torch==2.12.0+cu132` and `torchvision==0.27.0+cu132` plus the same `--extra-index-url`. Duplicate pin makes upgrades non-atomic.
 - **Concrete Scope:** Remove the torch/torchvision pin and `--extra-index-url` from `requirements.txt`; keep them only in `requirements-training.txt`. Document the install order `pip install -r requirements.txt; pip install -r requirements-training.txt` in README sections that currently show install commands.
@@ -430,7 +430,7 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** Users running only `requirements.txt` will no longer get torch — confirm that's the intended boundary (RF-008 already separates training deps; this just removes the duplication).
 - **Acceptance Criteria:** `requirements.txt` does not contain `torch`, `torchvision`, or `cu132`; `requirements-training.txt` keeps them; READMEs show the two-step install; `unittest discover` passes.
 - **Recommended Test Commands:** `rg -n "torch|cu132" requirements.txt`; `rg -n "torch==|torchvision==" requirements-training.txt`; `rg -n -i "torch|cu132" README.md README.en.md README.zh-CN.md`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
-- **Notes:** Owned by [T-B2](task-briefs/T-B2.md).
+- **Notes:** Completed on 2026-05-27. Removed `torch==2.12.0+cu132`, `torchvision==0.27.0+cu132`, and `--extra-index-url https://download.pytorch.org/whl/cu132` from `requirements.txt`, leaving only the base semantic-cleaning dependencies. Added clarifying comment to top of `requirements-training.txt` explaining the two-step install order. Updated all three READMEs (README.md, README.en.md, README.zh-CN.md) to emphasize the install order and that `requirements-training.txt` is only needed for training. Validation: `rg -n "torch|cu132" requirements.txt` returns no matches; `rg -n "torch==2.12.0|torchvision==0.27.0" requirements-training.txt` confirms both pins present; all three READMEs now clearly document the two-step install sequence; `unittest discover -s tests` passes with 108/108 tests.
 
 ## RF-019: Annotate configs/training/default.json as Dry-Run / Smoke Only
 
