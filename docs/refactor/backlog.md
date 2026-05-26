@@ -376,7 +376,7 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** Tests must not depend on encoding shortcuts; verify UTF-8-with-BOM is handled.
 - **Acceptance Criteria:** `tests/test_cleanup_common.py` exists with ~12-15 test methods; `python -m unittest tests.test_cleanup_common` passes; `unittest discover` count increases by the new methods; no regressions.
 - **Recommended Test Commands:** `venv\Scripts\python.exe -m py_compile tests\test_cleanup_common.py`; `venv\Scripts\python.exe -m unittest tests.test_cleanup_common -v`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
-- **Notes:** Owned by [T-C1](task-briefs/T-C1.md). Pending.
+- **Notes:** Owned by [T-C1](task-briefs/T-C1.md). Completed 2026-05-27: 16 tests added in `tests/test_cleanup_common.py`.
 
 ## RF-016-P2: segments_cleaning_pipeline.py Tests Extension
 
