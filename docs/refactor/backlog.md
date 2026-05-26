@@ -388,7 +388,7 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** Tests that accidentally pull in `BAAI/bge-m3` or `stanza` will fail in a clean env; mock or skip those branches.
 - **Acceptance Criteria:** Test file grows to at least 30 assertions; suite runs in < 30s without external models; `unittest discover` increases the total count; no regressions in existing tests.
 - **Recommended Test Commands:** `venv\Scripts\python.exe -m unittest tests.test_segments_cleaning_pipeline -v`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
-- **Notes:** Owned by [T-C2](task-briefs/T-C2.md). Pending.
+- **Notes:** Owned by [T-C2](task-briefs/T-C2.md). Completed 2026-05-27. 46 tests / ~62 assertions across 8 test classes covering markup stripping, symmetric wrapper unwrap, structured tuple split, placeholder mismatch, non-segment fragment, target contamination, utility functions, and sentence-like scoring. Suite runs in < 30s without any external models.
 
 ## RF-016-P3: glossary_semantic_pipeline.py First-Wave Tests
 
