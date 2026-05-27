@@ -365,7 +365,26 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** Re-running test on a different checkpoint after seeing this one is data leakage; record the result and stop.
 - **Acceptance Criteria:** `data/review/evaluation/test_report/.../<checkpoint>/` contains the four report files; `report_manifest.json` records checkpoint and corpus SHA256; backlog Notes carry the final metric block plus the explicit statement that any future change to `data/segments.csv` invalidates this report; no files added to Git beyond this entry.
 - **Recommended Test Commands:** `venv\Scripts\python.exe scripts\run_inference.py --generate-test --run-dir <run dir> --model-path <checkpoint>`; `venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint <checkpoint>`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`.
-- **Notes:** Owned by [T-A4](task-briefs/T-A4.md). Pending RF-006-P12.
+- **Notes:** Completed 2026-05-27 by T-A4. Selected checkpoint `checkpoint-9000` from the RF-006-P12 validation table (best `glossary_preservation_rate_nospace`, tied-best exact preservation, BLEU within 0.001 of `checkpoint-10000`). Test split: seed `42`, 6 626 rows (10 % of corpus), held out from training.
+
+  Final test report (single run, no iteration):
+
+  | Metric | Test (checkpoint-9000) | Validation (checkpoint-9000) | Δ (test − val) |
+  |---|---|---|---|
+  | BLEU (whitespace) | 0.1979 | 0.1959 | +0.0020 |
+  | glossary_preservation_rate (exact) | 0.7754 | 0.7679 | +0.0075 |
+  | glossary_preservation_rate_nospace | 0.7975 | 0.7917 | +0.0058 |
+  | empty_candidate_rows | 0 | 0 | 0 |
+
+  - Selected checkpoint: `fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-full-10k-llm-segments-v1\checkpoint-9000`
+  - `data/segments.csv` SHA256 at run time: `1462B2E18CDB82B0FF1E9E3C80AC5AFF583227E396C54F5C6431FFD379F147BA` (matches `run_manifest.json`)
+  - Test rows: 6 626; sample review rows: 50
+  - Test BLEU brevity penalty: 1.000000; glossary terms matched exact: 2 072 / 2 672; nospace: 2 131 / 2 672
+  - Sanity check: test and validation are in the same ballpark, with test marginally higher across all metrics — consistent with no over-fitting to validation during checkpoint selection.
+
+  Report artifacts (Git-ignored): `data/review/evaluation/test_report/run-full-10k-llm-segments-v1/checkpoint-9000/` — `evaluation_summary.csv`, `glossary_preservation_rows.csv`, `sample_review.csv`, `report_manifest.json`. Test generation CSV: `data/review/inference/test/run-full-10k-llm-segments-v1/test_generated.csv`.
+
+  > Any future re-training on a different `data/segments.csv` SHA256 invalidates this test report. Re-run T-A1 → T-A4 in order.
 
 ## RF-016: Test Coverage Backfill for Cleanup Pipelines
 
