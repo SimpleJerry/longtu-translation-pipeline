@@ -387,8 +387,14 @@ def run_cleanup(
     glossary_sorted = sorted(glossary, key=lambda term: len(term.zh), reverse=True)
     review_dir.mkdir(parents=True, exist_ok=True)
 
+    # Each microbatch of 50 segments can need up to ~10k output tokens when many
+    # REWRITE_KO decisions include long Korean rewrites and verbose reasons.
+    # batch_size * 300 gives ~15 000 for batch_size=50, near the model ceiling,
+    # which prevents virtually all truncation without wasting money (max_tokens
+    # only caps; actual usage is whatever the model generates).
     effective_max_output_tokens = (
-        max_output_tokens if max_output_tokens is not None else batch_size * 90
+        max_output_tokens if max_output_tokens is not None
+        else min(batch_size * 300, 16000)
     )
 
     if batch_mode == "sync":
@@ -761,7 +767,19 @@ def _run_chunked_batch_path(
     state_path = review_dir / "batch_state_chunked.json"
 
     micro_batches = make_batches(segments, batch_size)
-    chunk_size = math.ceil(len(micro_batches) / n_chunks)
+    # Auto-calculate chunk_size from token budget so --batch-chunks and
+    # max_output_tokens never decouple.  Empirical avg input tokens per
+    # micro-batch (batch_size=50 on segments.csv): ~3500.  Keep 200k headroom
+    # below the 2M org enqueued-token limit to avoid off-by-one rejections.
+    _effective_max_out = max_output_tokens if max_output_tokens is not None else 15000
+    _tokens_per_mb = 3500 + _effective_max_out
+    _auto_chunk_size = max(1, int(1_800_000 / _tokens_per_mb))
+    # n_chunks > 1 acts as an explicit lower bound (more chunks = smaller
+    # chunk_size), so honour the stricter of the two constraints.
+    if n_chunks > 1:
+        chunk_size = min(_auto_chunk_size, math.ceil(len(micro_batches) / n_chunks))
+    else:
+        chunk_size = _auto_chunk_size
     chunks_mb = [
         micro_batches[i : i + chunk_size]
         for i in range(0, len(micro_batches), chunk_size)
