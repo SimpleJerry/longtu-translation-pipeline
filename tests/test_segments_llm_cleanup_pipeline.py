@@ -161,16 +161,31 @@ class SegmentsLlmCleanupTest(unittest.TestCase):
 
             self.assertFalse(paths["review"].exists())
 
-    def test_invalid_action_is_rejected(self) -> None:
+    def test_invalid_action_falls_back_to_review_uncertain(self) -> None:
+        """Since cdfa1b6 (RF-029 follow-up), parse_and_validate_response degrades
+        gracefully: an unrecognised action no longer raises RuntimeError; it
+        emits a warning and replaces the decision with REVIEW_UNCERTAIN so the
+        rest of the batch survives. This was discovered during the real T-A1
+        full-corpus run, where truncated outputs occasionally mangled an action
+        token and the strict-raise behaviour killed the whole micro-batch."""
         response = response_for(
             [{"segment_id": "1", "action": "KEEP", "reason": "bad", "corrected_ko": ""}]
         )
         batch = [segments_llm.SegmentRow("1", "技能升级", "스킬 강화")]
 
-        with self.assertRaisesRegex(RuntimeError, "Invalid action"):
-            segments_llm.parse_and_validate_response(response, batch)
+        decisions = segments_llm.parse_and_validate_response(response, batch)
 
-    def test_missing_row_retries_whole_batch(self) -> None:
+        self.assertEqual(len(decisions), 1)
+        self.assertEqual(decisions[0].segment_id, "1")
+        self.assertEqual(decisions[0].action, segments_llm.REVIEW_ACTION)
+
+    def test_missing_row_falls_back_to_review_uncertain(self) -> None:
+        """Since cdfa1b6 (RF-029 follow-up), a missing segment_id no longer
+        triggers a whole-batch retry. The single missing row is filled with a
+        REVIEW_UNCERTAIN placeholder and the run continues; the retry loop
+        therefore makes exactly one call. The user-visible cost is one
+        REVIEW_UNCERTAIN row instead of N×max_retries duplicate batches when
+        the upstream truncates."""
         with tempfile.TemporaryDirectory() as tmp:
             paths = make_project(tmp)
             write_segments(
@@ -190,22 +205,6 @@ class SegmentsLlmCleanupTest(unittest.TestCase):
                             }
                         ]
                     ),
-                    response_for(
-                        [
-                            {
-                                "segment_id": "1",
-                                "action": "KEEP_SEGMENT",
-                                "reason": "good",
-                                "corrected_ko": "",
-                            },
-                            {
-                                "segment_id": "2",
-                                "action": "KEEP_SEGMENT",
-                                "reason": "good",
-                                "corrected_ko": "",
-                            },
-                        ]
-                    ),
                 ]
             )
 
@@ -220,8 +219,9 @@ class SegmentsLlmCleanupTest(unittest.TestCase):
                 client=client,
             )
 
-        self.assertEqual(client.calls, 2)
-        self.assertEqual(result.kept_rows, 2)
+        self.assertEqual(client.calls, 1)
+        self.assertEqual(result.kept_rows, 1)
+        self.assertEqual(result.review_rows, 1)
 
     def test_repeated_reason_writes_warning_metrics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -291,7 +291,8 @@ class SegmentsLlmBatchModeTest(unittest.TestCase):
 
     These tests verify that:
       (1) `build_request_payload` now emits `response_format` (json_schema
-          strict), `parallel_tool_calls=False`, and `max_tokens`.
+          strict) and `max_tokens` (parallel_tool_calls was dropped in
+          cdfa1b6 because Batch API rejects it when no tools are used).
       (2) `run_batch_path` writes the input JSONL with one line per
           micro-batch keyed by `seg-batch-NNNN`.
       (3) State transitions through init → input_written → uploaded →
@@ -309,7 +310,9 @@ class SegmentsLlmBatchModeTest(unittest.TestCase):
             temperature=0.0,
             max_output_tokens=2250,
         )
-        self.assertEqual(payload["parallel_tool_calls"], False)
+        # parallel_tool_calls was dropped in cdfa1b6: Batch API rejects it
+        # when no tools are specified, and sync API silently ignored it.
+        self.assertNotIn("parallel_tool_calls", payload)
         self.assertEqual(payload["max_tokens"], 2250)
         rf = payload["response_format"]
         self.assertEqual(rf["type"], "json_schema")
@@ -430,7 +433,8 @@ class SegmentsLlmBatchModeTest(unittest.TestCase):
             self.assertEqual(first["url"], "/v1/chat/completions")
             self.assertEqual(first["body"]["model"], "test-model")
             self.assertEqual(first["body"]["max_tokens"], 2250)
-            self.assertEqual(first["body"]["parallel_tool_calls"], False)
+            # parallel_tool_calls intentionally absent (cdfa1b6).
+            self.assertNotIn("parallel_tool_calls", first["body"])
             self.assertEqual(first["body"]["response_format"]["type"], "json_schema")
             self.assertEqual(recorded["created_for"], "file_abc")
             self.assertEqual(recorded["completion_window"], "24h")
