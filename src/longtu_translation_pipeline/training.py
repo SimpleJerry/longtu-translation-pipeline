@@ -191,7 +191,7 @@ class FormalTrainingRunResult:
     tokenized_validation_rows: int
     input_shape: str
     label_shape: str
-    max_steps: int
+    max_steps: int | None
     save_steps: int
     eval_steps: int
     save_total_limit: int
@@ -206,6 +206,8 @@ class FormalTrainingRunResult:
     train_loss: float | None
     eval_loss: float | None
     final_global_step: int
+    best_metric_value: float | None = None
+    best_model_checkpoint: str | None = None
 
 
 def build_training_dry_run(config: TrainingConfig) -> TrainingDryRunPlan:
@@ -566,11 +568,21 @@ def run_real_nllb_formal_training(
     command: Sequence[str] | None = None,
     repo_root: str | Path | None = None,
 ) -> FormalTrainingRunResult:
-    resolved_max_steps = resolve_required_positive_int(
-        "max_steps",
-        max_steps,
-        config.training.max_steps,
+    metrics_config = config.metrics
+    use_seq2seq = (
+        metrics_config is not None
+        and metrics_config.enabled
+        and metrics_config.predict_with_generate
     )
+
+    # max_steps is optional when using early stopping (num_train_epochs acts as ceiling)
+    _raw_max_steps = max_steps if max_steps is not None else config.training.max_steps
+    if _raw_max_steps is not None and _raw_max_steps <= 0:
+        raise ValueError("max_steps must be a positive integer")
+    resolved_max_steps: int | None = _raw_max_steps
+    if not use_seq2seq and resolved_max_steps is None:
+        raise ValueError("Formal training requires max_steps from config or CLI when early stopping is not enabled")
+
     resolved_save_steps = resolve_positive_int(
         "save_steps",
         save_steps,
@@ -631,7 +643,7 @@ def run_real_nllb_formal_training(
 
     output_dir = resolve_formal_run_dir(config, run_dir=run_dir, run_name=run_name)
     resolved_resume_checkpoint = resolve_resume_checkpoint(output_dir, resume_from_checkpoint)
-    if resolved_resume_checkpoint is not None:
+    if resolved_resume_checkpoint is not None and resolved_max_steps is not None:
         resume_step = checkpoint_step(resolved_resume_checkpoint)
         if resume_step is not None and resume_step >= resolved_max_steps:
             raise ValueError(
@@ -699,36 +711,64 @@ def run_real_nllb_formal_training(
     embedding_size_after = model.get_input_embeddings().num_embeddings
     parameter_count = sum(parameter.numel() for parameter in model.parameters())
 
-    trainer = build_trainer(
-        model=model,
-        dataset=train_dataset,
-        output_dir=output_dir,
-        max_steps=resolved_max_steps,
-        use_cpu=training_device == "cpu",
-        fp16=precision_mode == "fp16",
-        bf16=precision_mode == "bf16",
-        save_strategy="steps",
-        save_steps=resolved_save_steps,
-        save_total_limit=resolved_save_total_limit,
-        logging_strategy="steps",
-        logging_steps=resolved_logging_steps,
-        eval_dataset=validation_dataset,
-        eval_strategy="steps",
-        eval_steps=resolved_eval_steps,
-        per_device_train_batch_size=config.training.per_device_train_batch_size,
-        per_device_eval_batch_size=config.training.per_device_eval_batch_size,
-        gradient_accumulation_steps=resolved_gradient_accumulation_steps,
-        learning_rate=resolved_learning_rate,
-        warmup_ratio=resolved_warmup_ratio,
-        weight_decay=resolved_weight_decay,
-        max_grad_norm=resolved_max_grad_norm,
-    )
+    if use_seq2seq:
+        trainer = _build_seq2seq_trainer(
+            model=model,
+            tokenizer=tokenizer,
+            train_dataset=train_dataset,
+            eval_dataset=validation_dataset,
+            output_dir=output_dir,
+            config=config,
+            metrics_config=metrics_config,
+            validation_examples=validation_examples,
+            resolved_max_steps=resolved_max_steps,
+            resolved_save_steps=resolved_save_steps,
+            resolved_eval_steps=resolved_eval_steps,
+            resolved_save_total_limit=resolved_save_total_limit,
+            resolved_logging_steps=resolved_logging_steps,
+            resolved_gradient_accumulation_steps=resolved_gradient_accumulation_steps,
+            resolved_learning_rate=resolved_learning_rate,
+            resolved_warmup_ratio=resolved_warmup_ratio,
+            resolved_weight_decay=resolved_weight_decay,
+            resolved_max_grad_norm=resolved_max_grad_norm,
+            use_cpu=training_device == "cpu",
+            fp16=precision_mode == "fp16",
+            bf16=precision_mode == "bf16",
+        )
+    else:
+        trainer = build_trainer(
+            model=model,
+            dataset=train_dataset,
+            output_dir=output_dir,
+            max_steps=resolved_max_steps,
+            use_cpu=training_device == "cpu",
+            fp16=precision_mode == "fp16",
+            bf16=precision_mode == "bf16",
+            save_strategy="steps",
+            save_steps=resolved_save_steps,
+            save_total_limit=resolved_save_total_limit,
+            logging_strategy="steps",
+            logging_steps=resolved_logging_steps,
+            eval_dataset=validation_dataset,
+            eval_strategy="steps",
+            eval_steps=resolved_eval_steps,
+            per_device_train_batch_size=config.training.per_device_train_batch_size,
+            per_device_eval_batch_size=config.training.per_device_eval_batch_size,
+            gradient_accumulation_steps=resolved_gradient_accumulation_steps,
+            learning_rate=resolved_learning_rate,
+            warmup_ratio=resolved_warmup_ratio,
+            weight_decay=resolved_weight_decay,
+            max_grad_norm=resolved_max_grad_norm,
+        )
+
     train_result = trainer.train(
         resume_from_checkpoint=str(resolved_resume_checkpoint)
         if resolved_resume_checkpoint is not None
         else None
     )
     eval_loss = find_last_log_value(trainer.state.log_history, "eval_loss")
+    best_metric_value = getattr(trainer.state, "best_metric", None)
+    best_model_checkpoint = getattr(trainer.state, "best_model_checkpoint", None)
 
     checkpoint_paths = list_checkpoint_paths(output_dir)
     input_shape = shape_text([example.input_ids for example in tokenized_train_examples])
@@ -788,6 +828,8 @@ def run_real_nllb_formal_training(
         else None,
         eval_loss=eval_loss,
         final_global_step=int(trainer.state.global_step),
+        best_metric_value=float(best_metric_value) if best_metric_value is not None else None,
+        best_model_checkpoint=str(best_model_checkpoint) if best_model_checkpoint is not None else None,
     )
     write_run_manifest(
         result,
@@ -976,6 +1018,113 @@ def batch_list(batch: Any, field: str) -> list[list[int]]:
     if not isinstance(value, list):
         raise ValueError(f"Tokenizer output field '{field}' must be a list")
     return [list(item) for item in value]
+
+
+def _build_seq2seq_trainer(
+    model: Any,
+    tokenizer: Any,
+    train_dataset: Any,
+    eval_dataset: Any,
+    output_dir: Path,
+    config: Any,
+    metrics_config: Any,
+    validation_examples: Any,
+    resolved_max_steps: int | None,
+    resolved_save_steps: int,
+    resolved_eval_steps: int,
+    resolved_save_total_limit: int,
+    resolved_logging_steps: int,
+    resolved_gradient_accumulation_steps: int,
+    resolved_learning_rate: float | None,
+    resolved_warmup_ratio: float,
+    resolved_weight_decay: float,
+    resolved_max_grad_norm: float | None,
+    use_cpu: bool,
+    fp16: bool,
+    bf16: bool,
+) -> Any:
+    """Build a Seq2SeqTrainer with EarlyStoppingCallback and compute_metrics."""
+    from transformers import (
+        EarlyStoppingCallback,
+        Seq2SeqTrainer,
+        Seq2SeqTrainingArguments,
+    )
+    from .evaluation import GlossaryTerm as EvalGlossaryTerm
+    from .text_protection import load_glossary_terms
+    from .training_metrics import make_compute_metrics
+
+    training_kwargs: dict[str, Any] = {
+        "output_dir": str(output_dir),
+        "num_train_epochs": config.training.num_train_epochs,
+        "per_device_train_batch_size": config.training.per_device_train_batch_size,
+        "per_device_eval_batch_size": config.training.per_device_eval_batch_size,
+        "gradient_accumulation_steps": resolved_gradient_accumulation_steps,
+        "warmup_ratio": resolved_warmup_ratio,
+        "weight_decay": resolved_weight_decay,
+        "report_to": "none",
+        "save_strategy": "steps",
+        "save_steps": resolved_save_steps,
+        "eval_strategy": "steps",
+        "eval_steps": resolved_eval_steps,
+        "save_total_limit": resolved_save_total_limit,
+        "logging_strategy": "steps",
+        "logging_steps": resolved_logging_steps,
+        "disable_tqdm": True,
+        "do_train": True,
+        "do_eval": True,
+        "optim": "adamw_torch",
+        "use_cpu": use_cpu,
+        "fp16": fp16,
+        "bf16": bf16,
+        "remove_unused_columns": False,
+        "load_best_model_at_end": config.training.load_best_model_at_end,
+        "predict_with_generate": metrics_config.predict_with_generate,
+        "generation_max_length": metrics_config.generation_max_length,
+        "generation_num_beams": metrics_config.generation_num_beams,
+    }
+    if resolved_max_steps is not None:
+        training_kwargs["max_steps"] = resolved_max_steps
+    if resolved_learning_rate is not None:
+        training_kwargs["learning_rate"] = resolved_learning_rate
+    if resolved_max_grad_norm is not None:
+        training_kwargs["max_grad_norm"] = resolved_max_grad_norm
+    if config.training.metric_for_best_model is not None:
+        training_kwargs["metric_for_best_model"] = config.training.metric_for_best_model
+    if config.training.greater_is_better is not None:
+        training_kwargs["greater_is_better"] = config.training.greater_is_better
+    if config.training.lr_scheduler_type is not None:
+        training_kwargs["lr_scheduler_type"] = config.training.lr_scheduler_type
+
+    raw_terms = load_glossary_terms(config.data.glossary_path)
+    glossary_terms = [EvalGlossaryTerm(source=t.zh_cn, target=t.ko) for t in raw_terms]
+    validation_sources = [ex.source_text for ex in validation_examples]
+    compute_metrics_fn = make_compute_metrics(
+        tokenizer=tokenizer,
+        glossary_terms=glossary_terms,
+        weight_bleu=metrics_config.composite_weight_bleu,
+        weight_preservation_nospace=metrics_config.composite_weight_preservation_nospace,
+        validation_sources=validation_sources,
+    )
+
+    callbacks = []
+    if config.training.early_stopping_patience is not None:
+        callbacks.append(
+            EarlyStoppingCallback(
+                early_stopping_patience=config.training.early_stopping_patience,
+                early_stopping_threshold=config.training.early_stopping_threshold,
+            )
+        )
+
+    training_args = Seq2SeqTrainingArguments(**training_kwargs)
+    return Seq2SeqTrainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
+        processing_class=tokenizer,
+        compute_metrics=compute_metrics_fn,
+        callbacks=callbacks,
+    )
 
 
 def build_trainer(
@@ -1394,6 +1543,8 @@ def write_run_manifest(
             "final_global_step": result.final_global_step,
             "train_loss": result.train_loss,
             "eval_loss": result.eval_loss,
+            "best_metric_value": result.best_metric_value,
+            "best_model_checkpoint": result.best_model_checkpoint,
             "device": result.device,
             "cuda_device_name": result.cuda_device_name,
             "cuda_memory_summary": result.cuda_memory_summary,

@@ -20,6 +20,8 @@ from longtu_translation_pipeline.training import (  # noqa: E402
     TorchTrainingDataset,
     TrainingExample,
     TokenizedTrainingExample,
+    _build_seq2seq_trainer,
+    build_trainer,
     build_training_dry_run,
     build_training_smoke_test,
     checkpoint_step,
@@ -42,6 +44,7 @@ from longtu_translation_pipeline.training import (  # noqa: E402
     tokenize_training_examples,
     write_split_artifacts,
 )
+from longtu_translation_pipeline.training_metrics import make_compute_metrics  # noqa: E402
 
 
 class TrainingPipelineTest(unittest.TestCase):
@@ -697,6 +700,343 @@ class TextTargetTokenizer:
             "attention_mask": [[1, 0] for _ in texts],
             "labels": [[202, 0] for _ in text_target],
         }
+
+
+class EarlyStoppingConfigTest(unittest.TestCase):
+    def _make_earlystop_config(self, tmp_path: Path) -> Path:
+        segments_path = tmp_path / "segments.csv"
+        glossary_path = tmp_path / "glossary.csv"
+        config_path = tmp_path / "training.json"
+        write_csv(
+            segments_path,
+            ["segment_id", "zh-CN", "ko"],
+            [{"segment_id": "1", "zh-CN": "打开神秘宝箱", "ko": "신비한 보물상자 열기"}],
+        )
+        write_csv(glossary_path, ["term_id", "zh-CN", "ko"], [])
+        config_data = build_training_config(segments_path, glossary_path)
+        config_data["training"]["load_best_model_at_end"] = True
+        config_data["training"]["metric_for_best_model"] = "eval_composite"
+        config_data["training"]["greater_is_better"] = True
+        config_data["training"]["early_stopping_patience"] = 5
+        config_data["training"]["early_stopping_threshold"] = 0.0
+        config_data["training"]["lr_scheduler_type"] = "cosine"
+        config_path.write_text(json.dumps(config_data, ensure_ascii=False), encoding="utf-8")
+        return config_path
+
+    def test_training_args_config_parses_early_stopping_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = self._make_earlystop_config(Path(tmp))
+            config = load_training_config(config_path)
+
+        self.assertTrue(config.training.load_best_model_at_end)
+        self.assertEqual(config.training.metric_for_best_model, "eval_composite")
+        self.assertTrue(config.training.greater_is_better)
+        self.assertEqual(config.training.early_stopping_patience, 5)
+        self.assertEqual(config.training.early_stopping_threshold, 0.0)
+        self.assertEqual(config.training.lr_scheduler_type, "cosine")
+
+    def test_training_args_config_parses_metrics_subsection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            segments_path = tmp_path / "segments.csv"
+            glossary_path = tmp_path / "glossary.csv"
+            config_path = tmp_path / "training.json"
+            write_csv(segments_path, ["segment_id", "zh-CN", "ko"], [{"segment_id": "1", "zh-CN": "x", "ko": "y"}])
+            write_csv(glossary_path, ["term_id", "zh-CN", "ko"], [])
+            config_data = build_training_config(segments_path, glossary_path)
+            config_data["metrics"] = {
+                "enabled": True,
+                "composite_weight_bleu": 0.6,
+                "composite_weight_preservation_nospace": 0.4,
+                "predict_with_generate": True,
+                "generation_max_length": 200,
+                "generation_num_beams": 2,
+            }
+            config_path.write_text(json.dumps(config_data, ensure_ascii=False), encoding="utf-8")
+            config = load_training_config(config_path)
+
+        self.assertIsNotNone(config.metrics)
+        self.assertTrue(config.metrics.enabled)
+        self.assertAlmostEqual(config.metrics.composite_weight_bleu, 0.6)
+        self.assertAlmostEqual(config.metrics.composite_weight_preservation_nospace, 0.4)
+        self.assertTrue(config.metrics.predict_with_generate)
+        self.assertEqual(config.metrics.generation_max_length, 200)
+        self.assertEqual(config.metrics.generation_num_beams, 2)
+
+    def test_training_config_without_metrics_section_has_none(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            segments_path = tmp_path / "segments.csv"
+            glossary_path = tmp_path / "glossary.csv"
+            config_path = tmp_path / "training.json"
+            write_csv(segments_path, ["segment_id", "zh-CN", "ko"], [{"segment_id": "1", "zh-CN": "x", "ko": "y"}])
+            write_csv(glossary_path, ["term_id", "zh-CN", "ko"], [])
+            config_path.write_text(
+                json.dumps(build_training_config(segments_path, glossary_path), ensure_ascii=False),
+                encoding="utf-8",
+            )
+            config = load_training_config(config_path)
+
+        self.assertIsNone(config.metrics)
+
+
+class Seq2SeqTrainerWiringTest(unittest.TestCase):
+    def _make_tiny_model_and_tokenizer(self):
+        from transformers import M2M100Config, M2M100ForConditionalGeneration
+
+        class TinyTokenizer:
+            vocab_size = 64
+            pad_token_id = 1
+            bos_token_id = 0
+            eos_token_id = 2
+
+            def __len__(self):
+                return self.vocab_size
+
+            def batch_decode(self, token_ids, skip_special_tokens=True):
+                return ["" for _ in token_ids]
+
+        tokenizer = TinyTokenizer()
+        model_config = M2M100Config(
+            vocab_size=tokenizer.vocab_size,
+            decoder_start_token_id=3,
+            bos_token_id=0,
+            eos_token_id=2,
+            pad_token_id=1,
+            d_model=16,
+            encoder_layers=1,
+            decoder_layers=1,
+            encoder_attention_heads=1,
+            decoder_attention_heads=1,
+            encoder_ffn_dim=32,
+            decoder_ffn_dim=32,
+            max_position_embeddings=32,
+        )
+        model = M2M100ForConditionalGeneration(model_config)
+        return model, tokenizer
+
+    def _make_tiny_dataset(self):
+        examples = [
+            TokenizedTrainingExample(
+                segment_id="1",
+                input_ids=[0, 1, 2],
+                attention_mask=[1, 1, 1],
+                labels=[3, 1, 2],
+            )
+        ]
+        return TorchTrainingDataset(examples)
+
+    def _make_metrics_config_obj(self):
+        from longtu_translation_pipeline.config import MetricsConfig
+
+        return MetricsConfig(
+            enabled=True,
+            composite_weight_bleu=0.5,
+            composite_weight_preservation_nospace=0.5,
+            predict_with_generate=True,
+            generation_max_length=32,
+            generation_num_beams=1,
+        )
+
+    def _make_training_config_with_early_stop(self, tmp_path: Path):
+        segments_path = tmp_path / "segments.csv"
+        glossary_path = tmp_path / "glossary.csv"
+        config_path = tmp_path / "training.json"
+        write_csv(
+            segments_path,
+            ["segment_id", "zh-CN", "ko"],
+            [{"segment_id": "1", "zh-CN": "打开神秘宝箱", "ko": "신비한 보물상자 열기"}],
+        )
+        write_csv(glossary_path, ["term_id", "zh-CN", "ko"], [])
+        config_data = build_training_config(segments_path, glossary_path)
+        config_data["training"]["load_best_model_at_end"] = True
+        config_data["training"]["metric_for_best_model"] = "eval_composite"
+        config_data["training"]["greater_is_better"] = True
+        config_data["training"]["early_stopping_patience"] = 3
+        config_data["training"]["early_stopping_threshold"] = 0.0
+        config_data["metrics"] = {
+            "enabled": True,
+            "composite_weight_bleu": 0.5,
+            "composite_weight_preservation_nospace": 0.5,
+            "predict_with_generate": True,
+            "generation_max_length": 32,
+            "generation_num_beams": 1,
+        }
+        config_path.write_text(json.dumps(config_data, ensure_ascii=False), encoding="utf-8")
+        return load_training_config(config_path)
+
+    def test_seq2seq_trainer_attaches_early_stopping_callback_when_configured(self) -> None:
+        from transformers import EarlyStoppingCallback
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            model, tokenizer = self._make_tiny_model_and_tokenizer()
+            dataset = self._make_tiny_dataset()
+            config = self._make_training_config_with_early_stop(tmp_path)
+            output_dir = tmp_path / "out"
+            output_dir.mkdir()
+
+            trainer = _build_seq2seq_trainer(
+                model=model,
+                tokenizer=tokenizer,
+                train_dataset=dataset,
+                eval_dataset=dataset,
+                output_dir=output_dir,
+                config=config,
+                metrics_config=config.metrics,
+                validation_examples=[TrainingExample("1", "打开神秘宝箱", "신비한 보물상자 열기")],
+                resolved_max_steps=None,
+                resolved_save_steps=10,
+                resolved_eval_steps=10,
+                resolved_save_total_limit=1,
+                resolved_logging_steps=1,
+                resolved_gradient_accumulation_steps=1,
+                resolved_learning_rate=2e-5,
+                resolved_warmup_ratio=0.0,
+                resolved_weight_decay=0.0,
+                resolved_max_grad_norm=None,
+                use_cpu=True,
+                fp16=False,
+                bf16=False,
+            )
+
+        callback_types = [type(cb) for cb in trainer.callback_handler.callbacks]
+        self.assertIn(EarlyStoppingCallback, callback_types)
+
+    def test_seq2seq_trainer_load_best_model_plumbed_through(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            model, tokenizer = self._make_tiny_model_and_tokenizer()
+            dataset = self._make_tiny_dataset()
+            config = self._make_training_config_with_early_stop(tmp_path)
+            output_dir = tmp_path / "out"
+            output_dir.mkdir()
+
+            trainer = _build_seq2seq_trainer(
+                model=model,
+                tokenizer=tokenizer,
+                train_dataset=dataset,
+                eval_dataset=dataset,
+                output_dir=output_dir,
+                config=config,
+                metrics_config=config.metrics,
+                validation_examples=[TrainingExample("1", "打开神秘宝箱", "신비한 보물상자 열기")],
+                resolved_max_steps=None,
+                resolved_save_steps=10,
+                resolved_eval_steps=10,
+                resolved_save_total_limit=1,
+                resolved_logging_steps=1,
+                resolved_gradient_accumulation_steps=1,
+                resolved_learning_rate=2e-5,
+                resolved_warmup_ratio=0.0,
+                resolved_weight_decay=0.0,
+                resolved_max_grad_norm=None,
+                use_cpu=True,
+                fp16=False,
+                bf16=False,
+            )
+
+        self.assertTrue(trainer.args.load_best_model_at_end)
+
+    def test_formal_training_falls_back_to_trainer_when_metrics_disabled(self) -> None:
+        from transformers import Trainer, Seq2SeqTrainer
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            model, tokenizer = self._make_tiny_model_and_tokenizer()
+            dataset = self._make_tiny_dataset()
+            output_dir = tmp_path / "out"
+            output_dir.mkdir()
+
+            trainer = build_trainer(
+                model=model,
+                dataset=dataset,
+                output_dir=output_dir,
+                max_steps=1,
+                use_cpu=True,
+                fp16=False,
+            )
+
+        self.assertIsInstance(trainer, Trainer)
+        self.assertNotIsInstance(trainer, Seq2SeqTrainer)
+
+
+class ComputeMetricsTest(unittest.TestCase):
+    def _make_tokenizer(self, decode_map: dict[int, str]):
+        class FixedTokenizer:
+            pad_token_id = 0
+
+            def __len__(self):
+                return 10
+
+            def batch_decode(self, token_ids_list, skip_special_tokens=True):
+                results = []
+                for token_ids in token_ids_list:
+                    results.append(decode_map.get(tuple(token_ids), ""))
+                return results
+
+        return FixedTokenizer()
+
+    def test_compute_metrics_returns_composite_dict(self) -> None:
+        import numpy as np
+        from longtu_translation_pipeline.evaluation import GlossaryTerm
+
+        # predictions: token IDs for "안녕하세요" (decoded via map)
+        # labels: same (perfect match → BLEU near 1.0)
+        decode_map = {
+            (10, 11, 12): "안녕하세요",
+            (10, 11, 12, 0): "안녕하세요",
+        }
+        tokenizer = self._make_tokenizer(decode_map)
+        glossary_terms = [GlossaryTerm(source="안녕", target="hello")]
+        predictions = np.array([[10, 11, 12]])
+        label_ids = np.array([[10, 11, 12]])
+
+        compute_metrics = make_compute_metrics(
+            tokenizer=tokenizer,
+            glossary_terms=glossary_terms,
+            weight_bleu=0.5,
+            weight_preservation_nospace=0.5,
+            validation_sources=["source text"],
+        )
+        result = compute_metrics((predictions, label_ids))
+
+        self.assertIn("bleu", result)
+        self.assertIn("glossary_preservation_exact", result)
+        self.assertIn("glossary_preservation_nospace", result)
+        self.assertIn("composite", result)
+        # composite = 0.5 * bleu + 0.5 * preservation_nospace
+        expected_composite = 0.5 * result["bleu"] + 0.5 * result["glossary_preservation_nospace"]
+        self.assertAlmostEqual(result["composite"], expected_composite, places=6)
+
+    def test_compute_metrics_handles_minus_100_labels(self) -> None:
+        import numpy as np
+
+        # Tokenizer always returns "안녕" regardless of tokens — simulates skip_special_tokens behavior
+        class AlwaysDecodeTokenizer:
+            pad_token_id = 0
+
+            def __len__(self):
+                return 10
+
+            def batch_decode(self, token_ids_list, skip_special_tokens=True):
+                return ["안녕" for _ in token_ids_list]
+
+        tokenizer = AlwaysDecodeTokenizer()
+        predictions = np.array([[5, 6]])
+        # Labels with -100 padding that gets replaced by pad_token_id=0 before decode
+        label_ids = np.array([[5, 6, -100, -100]])
+
+        compute_metrics = make_compute_metrics(
+            tokenizer=tokenizer,
+            glossary_terms=[],
+            weight_bleu=1.0,
+            weight_preservation_nospace=0.0,
+            validation_sources=["source"],
+        )
+        # Should not raise; -100 is replaced with pad_token_id before decoding
+        result = compute_metrics((predictions, label_ids))
+        self.assertIn("bleu", result)
 
 
 if __name__ == "__main__":
