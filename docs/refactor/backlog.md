@@ -619,15 +619,9 @@ This file is the single source of truth for systematic refactor work. README fil
 
   **2026-05-28 follow-up — incremental refinement before training restart.** The user paused the first T-A5 attempt after the 38 min/eval measurement and asked whether raising `eval_steps` was treating the symptom rather than the cause. After a research pass (see decisions.md 2026-05-27 follow-up note), the agreed cleaner fix is: **add `metrics.eval_subset_rows=1000` and lower `metrics.generation_max_length` to 256**, then return `eval_steps` to 1000. This replaces the temporary `eval_steps=2000` workaround. Implementation increment scope: (a) extend `MetricsConfig` with `eval_subset_rows` field + loader parse + a 7th unit test; (b) in training.py construct `inloop_eval_dataset` via `Subset(eval_dataset, range(N))` when configured; (c) update `configs/training/full_earlystop.json` `metrics` block to `generation_max_length=256` + `eval_subset_rows=1000` and `training.eval_steps`/`save_steps` back to 1000; (d) on training restart, also implement the post-hoc top-K full-eval workflow (T-A5 brief Step 6b/6c). The expected wall-clock for the new attempt: ~3-8 h total (vs 76 h before mitigation).
 
-  *To resume training in a new conversation (after the incremental refinement is committed):*
-  ```powershell
-  $env:HF_HOME = "D:\longtu-translation-pipeline\venv\hf_cache"
-  venv\Scripts\python.exe scripts\train_model.py `
-      --config configs\training\full_earlystop.json `
-      --train `
-      --run-name run-full-earlystop-v1
-  ```
-  Watch for `eval_composite`, `eval_bleu`, `eval_glossary_preservation_nospace` at each 1000-step eval. After training completes, run the post-hoc top-K full-validation (T-A5 brief Step 6b), record the in-loop curve + post-hoc full-val table + branch decision in this Notes block, then set Status → DONE.
+  **Code increment committed 2026-05-28**: `b759563` (`Add eval subset and reduce generation_max_length for in-loop eval`). All 204 tests pass (203 → 204, +`test_eval_dataset_is_subsetted_when_eval_subset_rows_configured`). Final config: `generation_max_length=256`, `eval_subset_rows=1000`, `eval_steps=save_steps=1000`.
+
+  **Training run `run-full-earlystop-v1` started manually by user on 2026-05-28.** After training completes, run the post-hoc top-K full-validation (T-A5 brief Step 6b), record the in-loop eval curve + post-hoc full-val table + branch decision in this Notes block, then set Status → DONE.
 
 ## RF-007-P4: New Held-Out Test Report on Early-Stop Best Checkpoint
 
