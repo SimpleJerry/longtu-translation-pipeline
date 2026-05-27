@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import os
 import re
 import tempfile
@@ -303,6 +304,17 @@ def parse_args() -> argparse.Namespace:
         default="24h",
         help="Completion window passed to /v1/batches (batch mode only).",
     )
+    parser.add_argument(
+        "--batch-chunks",
+        type=int,
+        default=1,
+        help=(
+            "Split the corpus into N sequential batch jobs (batch mode only). "
+            "Use when the org enqueued-token quota is smaller than the full corpus. "
+            "Each chunk is submitted and completed before the next is uploaded. "
+            "State is persisted in batch_state_chunked.json; resumable across restarts."
+        ),
+    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true", help="Write review only.")
     mode.add_argument("--apply", action="store_true", help="Rewrite segments.csv.")
@@ -330,6 +342,7 @@ def main() -> int:
             poll_interval_sec=args.poll_interval,
             max_wait_sec=args.max_wait_sec,
             completion_window=args.completion_window,
+            n_chunks=args.batch_chunks,
         )
     except RuntimeError as exc:
         print(f"Segments LLM cleanup failed in {mode} mode: {exc}")
@@ -357,6 +370,7 @@ def run_cleanup(
     poll_interval_sec: int = 60,
     max_wait_sec: int = 24 * 3600,
     completion_window: str = "24h",
+    n_chunks: int = 1,
 ) -> CleanupResult:
     if batch_mode not in ("sync", "batch"):
         raise RuntimeError(f"Invalid batch-mode: {batch_mode}")
@@ -374,7 +388,7 @@ def run_cleanup(
     review_dir.mkdir(parents=True, exist_ok=True)
 
     effective_max_output_tokens = (
-        max_output_tokens if max_output_tokens is not None else batch_size * 45
+        max_output_tokens if max_output_tokens is not None else batch_size * 90
     )
 
     if batch_mode == "sync":
@@ -402,6 +416,7 @@ def run_cleanup(
             poll_interval_sec=poll_interval_sec,
             max_wait_sec=max_wait_sec,
             completion_window=completion_window,
+            n_chunks=n_chunks,
         )
 
     write_review_files(
@@ -491,14 +506,31 @@ def run_batch_path(
     poll_interval_sec: int,
     max_wait_sec: int,
     completion_window: str,
+    n_chunks: int = 1,
 ) -> tuple[list[RowOutcome], dict[str, int]]:
-    """OpenAI Batch API path: submit one job for the whole corpus.
+    """OpenAI Batch API path: submit one or more jobs for the whole corpus.
 
-    Resumable across process restarts via ``batch_state.json``.  Each phase
-    transition is persisted atomically so a kill / network outage / VM
-    restart can resume without re-uploading the JSONL or re-billing.
-    Quota-eligible only when the upstream endpoint supports /v1/batches.
+    When n_chunks > 1, the corpus is split into n_chunks sequential batch jobs
+    so each job stays under the org's enqueued-token limit.  State is persisted
+    in batch_state_chunked.json; resumable across restarts.
+
+    When n_chunks == 1 (default), the original single-job path is used with
+    batch_state.json for state.
     """
+    if n_chunks > 1:
+        return _run_chunked_batch_path(
+            segments=segments,
+            glossary_sorted=glossary_sorted,
+            review_dir=review_dir,
+            client_config=client_config,
+            batch_size=batch_size,
+            n_chunks=n_chunks,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            poll_interval_sec=poll_interval_sec,
+            max_wait_sec=max_wait_sec,
+            completion_window=completion_window,
+        )
     batch_input_dir = review_dir / "batch_input"
     batch_output_dir = review_dir / "batch_output"
     batch_input_dir.mkdir(parents=True, exist_ok=True)
@@ -685,6 +717,151 @@ def _parse_existing_output_jsonl(path: Path) -> dict[str, dict[str, Any]]:
     return by_custom_id
 
 
+def _write_batch_input_jsonl_offset(
+    path: Path,
+    micro_batches: list[list[SegmentRow]],
+    glossary_sorted: list[GlossaryTerm],
+    model: str,
+    temperature: float,
+    max_output_tokens: int | None,
+    start_batch_no: int,
+) -> None:
+    """Like _write_batch_input_jsonl but custom_ids start from start_batch_no."""
+    with path.open("w", encoding="utf-8") as f:
+        for batch_no, batch in enumerate(micro_batches, start_batch_no):
+            payload = build_request_payload(
+                model, batch, glossary_sorted, temperature, max_output_tokens
+            )
+            line = build_batch_request_line(_segment_custom_id(batch_no), payload)
+            f.write(json.dumps(line, ensure_ascii=False) + "\n")
+
+
+def _run_chunked_batch_path(
+    segments: list[SegmentRow],
+    glossary_sorted: list[GlossaryTerm],
+    review_dir: Path,
+    client_config: ClientConfig,
+    batch_size: int,
+    n_chunks: int,
+    temperature: float,
+    max_output_tokens: int | None,
+    poll_interval_sec: int,
+    max_wait_sec: int,
+    completion_window: str,
+) -> tuple[list[RowOutcome], dict[str, int]]:
+    """Submit the corpus as n_chunks sequential batch jobs to stay under enqueued-token limits.
+
+    Each chunk is fully completed (downloaded) before the next is uploaded.
+    State is persisted in batch_state_chunked.json; resumable across restarts.
+    """
+    batch_input_dir = review_dir / "batch_input"
+    batch_output_dir = review_dir / "batch_output"
+    batch_input_dir.mkdir(parents=True, exist_ok=True)
+    batch_output_dir.mkdir(parents=True, exist_ok=True)
+    state_path = review_dir / "batch_state_chunked.json"
+
+    micro_batches = make_batches(segments, batch_size)
+    chunk_size = math.ceil(len(micro_batches) / n_chunks)
+    chunks_mb = [
+        micro_batches[i : i + chunk_size]
+        for i in range(0, len(micro_batches), chunk_size)
+    ]
+    actual_n_chunks = len(chunks_mb)
+
+    state = _load_state(state_path) or {
+        "phase": "chunked",
+        "model": client_config.model,
+        "batch_size": batch_size,
+        "n_chunks": actual_n_chunks,
+        "n_micro_batches": len(micro_batches),
+        "n_rows": len(segments),
+        "chunks": [{"phase": "init"} for _ in range(actual_n_chunks)],
+    }
+
+    by_custom_id: dict[str, dict[str, Any]] = {}
+
+    start_batch_no = 1
+    for i, mb_chunk in enumerate(chunks_mb):
+        chunk_state = state["chunks"][i]
+        input_jsonl = batch_input_dir / f"chunk_{i:03d}.jsonl"
+        output_jsonl = batch_output_dir / f"result_{i:03d}.jsonl"
+
+        if chunk_state.get("phase") == "init":
+            _write_batch_input_jsonl_offset(
+                input_jsonl,
+                mb_chunk,
+                glossary_sorted,
+                client_config.model,
+                temperature,
+                max_output_tokens,
+                start_batch_no,
+            )
+            chunk_state["phase"] = "input_written"
+            _save_state_atomic(state_path, state)
+
+        if chunk_state["phase"] == "input_written":
+            file_id = upload_batch_input_file(input_jsonl, client_config)
+            chunk_state.update({"phase": "uploaded", "input_file_id": file_id})
+            _save_state_atomic(state_path, state)
+
+        if chunk_state["phase"] == "uploaded":
+            batch_id = create_batch(
+                chunk_state["input_file_id"],
+                client_config,
+                completion_window=completion_window,
+                metadata={
+                    "source": "segments_llm_cleanup_pipeline",
+                    "chunk": str(i),
+                    "n_chunks": str(actual_n_chunks),
+                },
+            )
+            chunk_state.update(
+                {"phase": "submitted", "batch_id": batch_id, "submitted_at": _now_iso()}
+            )
+            _save_state_atomic(state_path, state)
+
+        if chunk_state["phase"] == "submitted":
+            def _on_poll(batch_obj: dict[str, Any], _cs: dict[str, Any] = chunk_state) -> None:
+                _cs["last_status"] = batch_obj.get("status")
+                _save_state_atomic(state_path, state)
+
+            batch_obj = wait_for_batch(
+                chunk_state["batch_id"],
+                client_config,
+                poll_interval_sec=poll_interval_sec,
+                max_wait_sec=max_wait_sec,
+                progress_cb=_on_poll,
+            )
+            output_file_id = batch_obj.get("output_file_id")
+            if not output_file_id:
+                raise RuntimeError(
+                    f"Chunk {i} batch {chunk_state['batch_id']} has no output_file_id."
+                )
+            chunk_state.update(
+                {
+                    "phase": "completed",
+                    "output_file_id": output_file_id,
+                    "error_file_id": batch_obj.get("error_file_id"),
+                    "completed_at": _now_iso(),
+                }
+            )
+            _save_state_atomic(state_path, state)
+
+        if chunk_state["phase"] == "completed":
+            chunk_by_id = download_batch_output(
+                chunk_state["output_file_id"], client_config, output_jsonl
+            )
+            by_custom_id.update(chunk_by_id)
+            chunk_state["phase"] = "downloaded"
+            _save_state_atomic(state_path, state)
+        else:
+            by_custom_id.update(_parse_existing_output_jsonl(output_jsonl))
+
+        start_batch_no += len(mb_chunk)
+
+    return _process_batch_results(micro_batches, glossary_sorted, by_custom_id)
+
+
 def _load_state(state_path: Path) -> dict[str, Any] | None:
     if not state_path.is_file():
         return None
@@ -858,9 +1035,6 @@ def build_request_payload(
     payload: dict[str, Any] = {
         "model": model,
         "temperature": temperature,
-        # Disable parallel tool calls defensively even though this task uses
-        # no tools: some models default it on and emit unexpected wrappers.
-        "parallel_tool_calls": False,
         # Strict json_schema rejects malformed shapes server-side and lets
         # the local parser drop its regex fallback. Every row must include
         # corrected_ko as a string (empty for non-REWRITE actions).
@@ -878,39 +1052,132 @@ def build_request_payload(
     return payload
 
 
+def _recover_truncated_results(content: str) -> dict[str, Any]:
+    """Extract whatever complete result objects exist in a truncated JSON response.
+
+    The model output is cut mid-array; we walk the content with a JSON decoder
+    to collect every fully-formed object before the truncation point.
+    """
+    decoder = json.JSONDecoder()
+    results: list[Any] = []
+    start = content.find("[")
+    if start == -1:
+        return {"results": results}
+    pos = start + 1
+    while pos < len(content):
+        tail = content[pos:].lstrip()
+        if not tail or tail[0] == "]":
+            break
+        skip = len(content[pos:]) - len(tail)
+        try:
+            obj, end = decoder.raw_decode(tail)
+        except json.JSONDecodeError:
+            break
+        if isinstance(obj, dict):
+            results.append(obj)
+        pos += skip + end
+        while pos < len(content) and content[pos] in ", \t\n\r":
+            pos += 1
+    return {"results": results}
+
+
 def parse_and_validate_response(
     response: dict[str, Any], batch: list[SegmentRow]
 ) -> list[Decision]:
+    choices = response.get("choices") or []
+    finish_reason = choices[0].get("finish_reason") if choices else None
+    truncated = finish_reason == "length"
+
     content = extract_message_content(response)
-    payload = parse_json_content(content)
+    try:
+        payload = parse_json_content(content)
+    except RuntimeError:
+        if truncated:
+            payload = _recover_truncated_results(content)
+        else:
+            raise
+
     results = payload.get("results")
     if not isinstance(results, list):
-        raise RuntimeError("LLM response JSON must contain a 'results' list.")
+        if truncated:
+            results = []
+        else:
+            raise RuntimeError("LLM response JSON must contain a 'results' list.")
 
     expected_ids = {row.segment_id for row in batch}
     decisions: dict[str, Decision] = {}
     for index, item in enumerate(results, 1):
         if not isinstance(item, dict):
-            raise RuntimeError(f"Result #{index} must be a JSON object.")
+            if not truncated:
+                raise RuntimeError(f"Result #{index} must be a JSON object.")
+            continue
         segment_id = str(item.get("segment_id", "")).strip()
         action = str(item.get("action", "")).strip()
         reason = str(item.get("reason", "")).strip()
         corrected_ko = str(item.get("corrected_ko", "")).strip()
         if segment_id not in expected_ids:
-            raise RuntimeError(f"Unexpected segment_id in LLM result: {segment_id}")
+            if not truncated:
+                print(
+                    f"WARNING: Unexpected segment_id {segment_id!r} in LLM result "
+                    f"(finish_reason={finish_reason!r}); ignoring."
+                )
+            continue
         if segment_id in decisions:
-            raise RuntimeError(f"Duplicate segment_id in LLM result: {segment_id}")
+            if not truncated:
+                print(
+                    f"WARNING: Duplicate segment_id {segment_id!r} in LLM result "
+                    f"(finish_reason={finish_reason!r}); keeping first occurrence."
+                )
+            continue
         if action not in VALID_ACTIONS:
-            raise RuntimeError(f"Invalid action for segment_id {segment_id}: {action}")
+            if not truncated:
+                print(
+                    f"WARNING: Invalid action {action!r} for segment_id {segment_id!r} "
+                    f"(finish_reason={finish_reason!r}); marking as {REVIEW_ACTION}."
+                )
+                action = REVIEW_ACTION
+                reason = reason or f"invalid action {action!r} from LLM"
+            else:
+                continue
         if not reason:
-            raise RuntimeError(f"Missing reason for segment_id {segment_id}.")
+            if not truncated:
+                print(
+                    f"WARNING: Missing reason for segment_id {segment_id!r} "
+                    f"(finish_reason={finish_reason!r}); using placeholder."
+                )
+                reason = "no reason provided by LLM"
+            else:
+                continue
         if action == REWRITE_ACTION and not corrected_ko:
-            raise RuntimeError(f"REWRITE_KO requires corrected_ko for segment_id {segment_id}.")
+            # Model returned REWRITE_KO with empty corrected_ko — demote to REVIEW.
+            if not truncated:
+                print(
+                    f"WARNING: REWRITE_KO missing corrected_ko for segment_id {segment_id!r}; "
+                    f"demoting to {REVIEW_ACTION}."
+                )
+            action = REVIEW_ACTION
+            reason = f"REWRITE_KO missing corrected_ko (original reason: {reason})"
         decisions[segment_id] = Decision(segment_id, action, reason, corrected_ko)
 
     missing = expected_ids - set(decisions)
     if missing:
-        raise RuntimeError(f"LLM response is missing segment_id values: {sorted(missing)}")
+        reason = (
+            "response truncated by token limit"
+            if truncated
+            else "segment omitted from LLM response"
+        )
+        if not truncated:
+            print(
+                f"WARNING: LLM response missing segment_id(s) {sorted(missing)} "
+                f"(finish_reason={finish_reason!r}); marking as {REVIEW_ACTION}."
+            )
+        for seg_id in missing:
+            decisions[seg_id] = Decision(
+                segment_id=seg_id,
+                action=REVIEW_ACTION,
+                reason=reason,
+                corrected_ko="",
+            )
     return [decisions[row.segment_id] for row in batch]
 
 
