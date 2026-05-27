@@ -31,11 +31,13 @@ the brief that gets it started.
 ## Dependency DAG
 
 ```text
-Track A  (sequential, critical path)
-  T-A1 (RF-015 full LLM segments apply)
-      └─> T-A2 (RF-006-P11 re-train 10k)
-              └─> T-A3 (RF-006-P12 validation generation + report)
-                      └─> T-A4 (RF-007-P3 final held-out test report)
+Track A  (sequential, critical path — first 4 done as historical baseline)
+  T-A1 (RF-015 full LLM segments apply)               [DONE]
+      └─> T-A2 (RF-006-P11 re-train 10k)              [DONE]
+              └─> T-A3 (RF-006-P12 validation report) [DONE]
+                      └─> T-A4 (RF-007-P3 final held-out test report) [DONE — historical baseline]
+                              └─> T-A5 (RF-006-P13 early-stopping training, composite metric)  [PENDING]
+                                      └─> T-A6 (RF-007-P4 new held-out test on best checkpoint) [PENDING]
 
 Track B  (parallel, engineering hardening — audit P1)
   T-B1 (RF-017 extract llm_common.py)       # recommended before T-A1
