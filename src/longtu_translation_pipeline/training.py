@@ -1115,12 +1115,22 @@ def _build_seq2seq_trainer(
             )
         )
 
+    import torch
+
+    if metrics_config.eval_subset_rows is not None:
+        n = metrics_config.eval_subset_rows
+        inloop_eval_dataset = torch.utils.data.Subset(
+            eval_dataset, range(min(n, len(eval_dataset)))
+        )
+    else:
+        inloop_eval_dataset = eval_dataset
+
     training_args = Seq2SeqTrainingArguments(**training_kwargs)
     return Seq2SeqTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
+        eval_dataset=inloop_eval_dataset,
         processing_class=tokenizer,
         compute_metrics=compute_metrics_fn,
         callbacks=callbacks,
