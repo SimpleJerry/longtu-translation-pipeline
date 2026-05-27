@@ -340,7 +340,20 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** Generating on every checkpoint multiplies inference time; pick the last several checkpoints if compute-limited. Sample size is fixed by the validation split.
 - **Acceptance Criteria:** Each evaluated checkpoint has a directory under `data/review/evaluation/validation_report/run-...-v1/<checkpoint>/` with `evaluation_summary.csv`, `glossary_preservation_rows.csv`, `sample_review.csv`, and `report_manifest.json`; the comparison table is recorded in this entry; no files added to Git beyond this entry.
 - **Recommended Test Commands:** `venv\Scripts\python.exe scripts\run_inference.py --generate-validation --run-dir <run dir>`; `venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint <checkpoint>`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`.
-- **Notes:** Owned by [T-A3](task-briefs/T-A3.md). Pending RF-006-P11.
+- **Notes:** Completed 2026-05-27 by T-A3. Run: `run-full-10k-llm-segments-v1`. Evaluated last 4 checkpoints (7000–10000) on the 6 626-row validation split (seed 42, 10 % of corpus). **Validation is not the final quality claim**; it is the engineering signal used by T-A4 to select the checkpoint that will be evaluated on the held-out test split.
+
+  Checkpoint comparison table (validation split, whitespace-tokenised BLEU):
+
+  | Checkpoint | BLEU | glossary_preservation_rate (exact) | glossary_preservation_rate_nospace | empty_candidate_rows |
+  |---|---|---|---|---|
+  | checkpoint-7000 | 0.1917 | 0.7586 | 0.7820 | 0 |
+  | checkpoint-8000 | 0.1938 | 0.7679 | 0.7898 | 0 |
+  | checkpoint-9000 | 0.1959 | 0.7679 | 0.7917 | 0 |
+  | checkpoint-10000 | 0.1969 | 0.7653 | 0.7887 | 0 |
+
+  Observations: BLEU improves monotonically from 7000 → 10000 (no regression). Exact glossary preservation peaks at 8000/9000 (0.7679) then dips slightly at 10000 (0.7653); nospace preservation follows the same pattern, peaking at 9000 (0.7917). No empty_candidate_rows at any checkpoint. Anomaly to flag for T-A4: checkpoint-10000 has the highest BLEU but loses ~3 pp on glossary preservation versus checkpoint-9000 — trade-off to consider during final selection.
+
+  Report artifacts (Git-ignored): `data/review/evaluation/validation_report/run-full-10k-llm-segments-v1/checkpoint-{7000,8000,9000,10000}/` — each contains `evaluation_summary.csv`, `glossary_preservation_rows.csv`, `sample_review.csv`, `report_manifest.json`.
 
 ## RF-007-P3: Final Held-Out Test Report on Selected Checkpoint
 
