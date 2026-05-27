@@ -21,10 +21,14 @@ Do not start unless the user has authorized the cost.
 ## Prerequisites
 
 1. `OPENAI_API_KEY` set in the local PowerShell session.
-2. `LLM_MODEL` set (e.g. `gpt-4o-mini` or whichever model the user chose).
-3. Optionally `OPENAI_BASE_URL` if using a non-OpenAI compatible endpoint.
-4. Recommended (not required): T-B1 (extract `llm_common.py`) committed
-   first so the LLM client lives in a single audited place.
+2. `LLM_MODEL` set. The 2026-05-27 cost review (RF-029) confirmed
+   `gpt-4.1-mini` + Batch API + strict json_schema as the recommended
+   configuration. Use a different model only after re-pricing.
+3. Optionally `OPENAI_BASE_URL` if using a non-OpenAI-compatible
+   endpoint — that endpoint must support `/v1/batches` for the default
+   `--batch-mode batch`. Fall back to `--batch-mode sync` if not.
+4. RF-029 (Batch API refactor) merged. T-B1 (`llm_common.py` extraction)
+   is already DONE; both are preconditions for this task.
 5. Working tree clean.
 
 ## Shared context (read these first)
