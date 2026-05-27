@@ -38,11 +38,14 @@ def make_compute_metrics(
     def compute_metrics(eval_pred) -> dict[str, float]:
         predictions, label_ids = eval_pred
 
-        # Replace -100 padding sentinel with pad_token_id before decoding
+        # Replace -100 padding sentinel with pad_token_id before decoding.
+        # Seq2SeqTrainer pads both predictions and label_ids with -100 when
+        # predict_with_generate=True and sequences have unequal lengths.
         pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
+        safe_preds = np.where(predictions == -100, pad_id, predictions)
         safe_labels = np.where(label_ids == -100, pad_id, label_ids)
 
-        decoded_preds = tokenizer.batch_decode(predictions, skip_special_tokens=True)
+        decoded_preds = tokenizer.batch_decode(safe_preds, skip_special_tokens=True)
         decoded_labels = tokenizer.batch_decode(safe_labels, skip_special_tokens=True)
 
         candidates = [strip_glossary_markers(p.strip()) for p in decoded_preds]
