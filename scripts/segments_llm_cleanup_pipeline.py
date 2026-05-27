@@ -140,8 +140,11 @@ SYSTEM_PROMPT = (
     "You are a Chinese-to-Korean game localization segment reviewer. Review each "
     "row independently by its own meaning, not by applying a bulk rule to the "
     "whole batch. You may keep, remove, mark uncertain, or rewrite only the "
-    "Korean target. The reason for every row must cite that row's own semantic "
-    "problem or why it is usable. Do not return code, pseudocode, rules, batch "
+    "Korean target. The reason for every row must quote or name a specific "
+    "Chinese term, Korean phrase, or structural pattern from that row — a generic "
+    "verdict ('의미가 정확함', '语义准确', 'natural translation') is not acceptable. "
+    "Never reference another row ('同上', 'same as above', '이전과 동일', '동일 이유'). "
+    "Do not return code, pseudocode, rules, batch "
     "summaries, or explanations outside the required JSON. Never change Chinese "
     "source, add rows, split rows, merge rows, or edit glossary terms. Every "
     "row in the results array must include corrected_ko: an empty string for "
@@ -1034,7 +1037,7 @@ def build_request_payload(
             "Remove only when this row is not a trainable segment, is a bad semantic pair, or has unusable target-language content.",
             "Use REWRITE_KO only when a natural Korean target is clearly derivable from zh-CN and the glossary constraints.",
             "If uncertain, choose REVIEW_UNCERTAIN rather than guessing.",
-            "The reason must mention this row's own semantic issue or why it is usable; do not return generic rule labels.",
+            "The reason must name a concrete element from this row's own Chinese source or Korean target — e.g. '\"技能\" is correctly rendered as \"스킬\"' or '\"不分派别\" is wrongly translated as \"정사파\"'. Generic quality verdicts such as '의미가 정확함', '语义准确', or 'natural translation' are not acceptable. Never use cross-row references ('同上', 'same as above', 'see above').",
             "Do not change zh-CN, add rows, split rows, merge rows, or output explanations outside JSON.",
             "corrected_ko must always be a string; use \"\" (empty string, never null) when the action is not REWRITE_KO.",
         ],
