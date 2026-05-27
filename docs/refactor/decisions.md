@@ -205,6 +205,36 @@ This file records confirmed architecture decisions and refactor principles. Do n
 - **Impact Scope:** `configs/evaluation/default.json`, `src/longtu_translation_pipeline/evaluation.py`, `scripts/evaluate_translation.py`, README workflow notes, RF-007 tests.
 - **Follow-up Notes:** BLEU defaults to Korean whitespace tokenization, with character tokenization available as a config option. Glossary preservation checks Korean term presence after stripping glossary markers from candidate translations.
 
+## 2026-05-27: LLM Cleanup Defaults To Batch API With Strict JSON Schema
+
+- **Decision:** Both LLM cleanup pipelines (`scripts/segments_llm_cleanup_pipeline.py`,
+  `scripts/glossary_llm_cleanup_pipeline.py`) default `--batch-mode batch`, submitting
+  one OpenAI `/v1/batches` job for the whole corpus and downloading the JSONL result.
+  Every chat completion payload sent by either pipeline (sync or batch) carries
+  `response_format={"type":"json_schema","strict":true}`, `parallel_tool_calls=false`,
+  and `max_tokens=batch_size*45` (segments) or `batch_size*30` (glossary).
+  The legacy synchronous `/v1/chat/completions` path is preserved behind
+  `--batch-mode sync` for unit tests and small ad-hoc debugging runs only.
+- **Background:** T-A1 estimated ~7.3M input + ~2.3M output tokens for the
+  remaining segments corpus. Batch API gives a 50% discount, and strict
+  `json_schema` removes the regex fallback in `parse_json_content`. The user
+  confirmed `gpt-4.1-mini` + Batch + strict schema after pricing review.
+- **Impact Scope:** `scripts/llm_common.py` (new batch helpers:
+  `build_batch_request_line`, `upload_batch_input_file`, `create_batch`,
+  `get_batch`, `wait_for_batch`, `download_batch_output`),
+  `scripts/segments_llm_cleanup_pipeline.py`,
+  `scripts/glossary_llm_cleanup_pipeline.py`,
+  `tests/test_llm_common.py`, `tests/test_segments_llm_cleanup_pipeline.py`,
+  `tests/test_glossary_llm_cleanup_pipeline.py`,
+  `docs/refactor/task-briefs/T-A1.md`, `docs/refactor/backlog.md`.
+- **Follow-up Notes:** Batch runs are resumable via `batch_state.json`
+  (atomic write of `phase ∈ {init, input_written, uploaded, submitted,
+  completed, downloaded}` plus `input_file_id` / `batch_id` /
+  `output_file_id`). Sync mode payloads also carry json_schema strict so
+  legacy callers receive the same server-side validation. No new third-party
+  dependency was added; multipart upload is hand-rolled in `llm_common.py`
+  to keep the urllib-only audit surface intact (§P0-1).
+
 ## 2026-05-25: Evaluation Reports Empty Model Outputs Instead Of Failing
 
 - **Decision:** Empty `candidates` cells in generated translation CSVs are valid model-output failures for reporting, not schema errors. Evaluation should count them as zero-length BLEU candidates, glossary misses, and `empty_candidate_rows`.

@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -199,6 +200,96 @@ class GlossaryLlmCleanupTest(unittest.TestCase):
         decisions = llm_cleanup.parse_and_validate_response(response, batch)
 
         self.assertEqual(decisions[0].action, "KEEP_GAME_TERM")
+
+
+class GlossaryLlmBatchModeTest(unittest.TestCase):
+    def test_payload_includes_response_format_and_max_tokens(self) -> None:
+        payload = llm_cleanup.build_request_payload(
+            "gpt-4.1-mini",
+            [llm_cleanup.GlossaryRow("1", "暴击", "치명타")],
+            temperature=0.0,
+            max_output_tokens=1500,
+        )
+        self.assertEqual(payload["parallel_tool_calls"], False)
+        self.assertEqual(payload["max_tokens"], 1500)
+        rf = payload["response_format"]
+        self.assertEqual(rf["type"], "json_schema")
+        self.assertTrue(rf["json_schema"]["strict"])
+        self.assertEqual(
+            set(rf["json_schema"]["schema"]["properties"]["results"]["items"]
+                  ["properties"]["action"]["enum"]),
+            set(llm_cleanup.VALID_ACTIONS),
+        )
+
+    def test_end_to_end_batch_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            glossary = root / "glossary.csv"
+            review = root / "review"
+            write_glossary(
+                glossary,
+                [("1", "暴击", "치명타"), ("2", "月亮", "달"), ("3", "神秘宝箱", "신비한 보물상자")],
+            )
+
+            recorded: dict[str, Any] = {}
+
+            def fake_upload(jsonl_path, cfg, timeout=600):
+                recorded["uploaded_bytes"] = Path(jsonl_path).read_bytes()
+                return "file_g"
+
+            def fake_create(file_id, cfg, *, endpoint="/v1/chat/completions",
+                            completion_window="24h", metadata=None, timeout=60):
+                recorded["metadata"] = metadata
+                return "batch_g"
+
+            def fake_wait(*a, **k):
+                if k.get("progress_cb"):
+                    k["progress_cb"]({"status": "completed"})
+                return {"status": "completed", "output_file_id": "file_g_out"}
+
+            def fake_download(output_file_id, cfg, dest_path, timeout=600):
+                results = [
+                    {"term_id": "1", "action": "KEEP_GAME_TERM", "reason": "combat"},
+                    {"term_id": "2", "action": "REMOVE_COMMON_WORD", "reason": "ordinary"},
+                    {"term_id": "3", "action": "KEEP_GAME_TERM", "reason": "item"},
+                ]
+                body = {
+                    "choices": [{"message": {"content": json.dumps({"results": results})}}],
+                    "usage": {"prompt_tokens": 200, "completion_tokens": 60,
+                              "total_tokens": 260},
+                }
+                line = {"custom_id": "glo-batch-0001",
+                        "response": {"status_code": 200, "body": body}, "error": None}
+                Path(dest_path).write_text(json.dumps(line) + "\n", encoding="utf-8")
+                return {"glo-batch-0001": line}
+
+            with patch.object(llm_cleanup, "upload_batch_input_file", fake_upload), \
+                 patch.object(llm_cleanup, "create_batch", fake_create), \
+                 patch.object(llm_cleanup, "wait_for_batch", fake_wait), \
+                 patch.object(llm_cleanup, "download_batch_output", fake_download):
+                result = llm_cleanup.run_cleanup(
+                    glossary_path=glossary,
+                    review_dir=review,
+                    apply_changes=True,
+                    batch_mode="batch",
+                    batch_size=50,
+                    env=valid_env(),
+                )
+
+            output = read_csv(glossary)
+            self.assertEqual([row["term_id"] for row in output], ["1", "2"])
+            self.assertEqual(result.kept_rows, 2)
+            self.assertEqual(result.removed_rows, 1)
+            self.assertEqual(result.total_prompt_tokens, 200)
+            uploaded = recorded["uploaded_bytes"].decode("utf-8").strip().splitlines()
+            self.assertEqual(len(uploaded), 1)
+            first = json.loads(uploaded[0])
+            self.assertEqual(first["custom_id"], "glo-batch-0001")
+            self.assertEqual(first["body"]["response_format"]["type"], "json_schema")
+            self.assertEqual(recorded["metadata"],
+                             {"source": "glossary_llm_cleanup_pipeline"})
+            state = json.loads((review / "batch_state.json").read_text("utf-8"))
+            self.assertEqual(state["phase"], "downloaded")
 
 
 class StaticClient:

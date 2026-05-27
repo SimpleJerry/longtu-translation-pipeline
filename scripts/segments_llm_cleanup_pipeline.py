@@ -14,8 +14,10 @@ import csv
 import json
 import os
 import re
+import tempfile
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -23,17 +25,27 @@ try:
     from cleanup_common import ensure_csv_columns
     from llm_common import (
         ClientConfig,
+        build_batch_request_line,
         call_chat_completion,
+        create_batch,
+        download_batch_output,
         parse_json_content,
         resolve_client_config,
+        upload_batch_input_file,
+        wait_for_batch,
     )
 except ModuleNotFoundError:  # pragma: no cover - import fallback for tests
     from scripts.cleanup_common import ensure_csv_columns
     from scripts.llm_common import (
         ClientConfig,
+        build_batch_request_line,
         call_chat_completion,
+        create_batch,
+        download_batch_output,
         parse_json_content,
         resolve_client_config,
+        upload_batch_input_file,
+        wait_for_batch,
     )
 
 
@@ -130,8 +142,50 @@ SYSTEM_PROMPT = (
     "Korean target. The reason for every row must cite that row's own semantic "
     "problem or why it is usable. Do not return code, pseudocode, rules, batch "
     "summaries, or explanations outside the required JSON. Never change Chinese "
-    "source, add rows, split rows, merge rows, or edit glossary terms."
+    "source, add rows, split rows, merge rows, or edit glossary terms. Every "
+    "row in the results array must include corrected_ko: an empty string for "
+    "non-rewrite actions, never null."
 )
+
+
+def _segments_response_schema() -> dict[str, Any]:
+    """JSON schema enforced via response_format=json_schema strict.
+
+    Built lazily so VALID_ACTIONS (set ordering) is captured at call time.
+    """
+    return {
+        "name": "segment_review_results",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["results"],
+            "properties": {
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": [
+                            "segment_id",
+                            "action",
+                            "reason",
+                            "corrected_ko",
+                        ],
+                        "properties": {
+                            "segment_id": {"type": "string"},
+                            "action": {
+                                "type": "string",
+                                "enum": sorted(VALID_ACTIONS),
+                            },
+                            "reason": {"type": "string", "minLength": 1},
+                            "corrected_ko": {"type": "string"},
+                        },
+                    },
+                },
+            },
+        },
+    }
 
 
 @dataclass(frozen=True)
@@ -206,7 +260,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--review-dir", default="data/review/llm_segments_cleanup"
     )
-    parser.add_argument("--batch-size", type=int, default=25)
+    parser.add_argument("--batch-size", type=int, default=50)
     parser.add_argument("--max-retries", type=int, default=3)
     parser.add_argument(
         "--sample-review-rows",
@@ -218,6 +272,37 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--base-url", default=None)
     parser.add_argument("--model", default=None)
+    parser.add_argument(
+        "--batch-mode",
+        choices=["sync", "batch"],
+        default="batch",
+        help="sync: legacy synchronous /v1/chat/completions per micro-batch. "
+        "batch: submit one /v1/batches job for the whole corpus (50%% discount, "
+        "up to 24h SLA). Default: batch.",
+    )
+    parser.add_argument(
+        "--max-output-tokens",
+        type=int,
+        default=None,
+        help="Cap on completion tokens per micro-batch. Defaults to batch_size*45.",
+    )
+    parser.add_argument(
+        "--poll-interval",
+        type=int,
+        default=60,
+        help="Seconds between batch status polls (batch mode only).",
+    )
+    parser.add_argument(
+        "--max-wait-sec",
+        type=int,
+        default=24 * 3600,
+        help="Maximum seconds to wait for a batch job to complete.",
+    )
+    parser.add_argument(
+        "--completion-window",
+        default="24h",
+        help="Completion window passed to /v1/batches (batch mode only).",
+    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true", help="Write review only.")
     mode.add_argument("--apply", action="store_true", help="Rewrite segments.csv.")
@@ -240,6 +325,11 @@ def main() -> int:
             timeout=args.timeout,
             base_url=args.base_url,
             model=args.model,
+            batch_mode=args.batch_mode,
+            max_output_tokens=args.max_output_tokens,
+            poll_interval_sec=args.poll_interval,
+            max_wait_sec=args.max_wait_sec,
+            completion_window=args.completion_window,
         )
     except RuntimeError as exc:
         print(f"Segments LLM cleanup failed in {mode} mode: {exc}")
@@ -262,44 +352,57 @@ def run_cleanup(
     model: str | None = None,
     env: Mapping[str, str] | None = None,
     client: Client | None = None,
+    batch_mode: str = "sync",
+    max_output_tokens: int | None = None,
+    poll_interval_sec: int = 60,
+    max_wait_sec: int = 24 * 3600,
+    completion_window: str = "24h",
 ) -> CleanupResult:
+    if batch_mode not in ("sync", "batch"):
+        raise RuntimeError(f"Invalid batch-mode: {batch_mode}")
     validate_positive_int("batch-size", batch_size)
     validate_positive_int("max-retries", max_retries)
     validate_positive_int("timeout", timeout)
     validate_nonnegative_int("sample-review-rows", sample_review_rows)
+    if max_output_tokens is not None:
+        validate_positive_int("max-output-tokens", max_output_tokens)
     client_config = resolve_client_config(env or os.environ, base_url, model)
 
     segments = read_segments(segments_path)
     glossary = read_glossary(glossary_path)
     glossary_sorted = sorted(glossary, key=lambda term: len(term.zh), reverse=True)
     review_dir.mkdir(parents=True, exist_ok=True)
-    raw_dir = review_dir / "raw_batches"
-    raw_dir.mkdir(parents=True, exist_ok=True)
 
-    total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-    api_client = client or call_chat_completion
-    outcomes: list[RowOutcome] = []
+    effective_max_output_tokens = (
+        max_output_tokens if max_output_tokens is not None else batch_size * 45
+    )
 
-    for batch_no, batch in enumerate(make_batches(segments, batch_size), 1):
-        response, decisions = classify_batch(
-            batch_no=batch_no,
-            batch=batch,
+    if batch_mode == "sync":
+        outcomes, total_usage = run_sync_path(
+            segments=segments,
             glossary_sorted=glossary_sorted,
+            review_dir=review_dir,
             client_config=client_config,
-            client=api_client,
-            raw_dir=raw_dir,
+            client=client,
+            batch_size=batch_size,
             max_retries=max_retries,
             temperature=temperature,
             timeout=timeout,
+            max_output_tokens=effective_max_output_tokens,
         )
-        for key, value in response.get("usage", {}).items():
-            if key in total_usage and isinstance(value, int):
-                total_usage[key] += value
-        decisions_by_id = {decision.segment_id: decision for decision in decisions}
-        for row in batch:
-            features = build_features(row, glossary_sorted)
-            outcome = build_outcome(row, decisions_by_id[row.segment_id], features)
-            outcomes.append(outcome)
+    else:
+        outcomes, total_usage = run_batch_path(
+            segments=segments,
+            glossary_sorted=glossary_sorted,
+            review_dir=review_dir,
+            client_config=client_config,
+            batch_size=batch_size,
+            temperature=temperature,
+            max_output_tokens=effective_max_output_tokens,
+            poll_interval_sec=poll_interval_sec,
+            max_wait_sec=max_wait_sec,
+            completion_window=completion_window,
+        )
 
     write_review_files(
         review_dir,
@@ -334,6 +437,282 @@ def run_cleanup(
         total_tokens=total_usage["total_tokens"],
         action_counts=action_counts,
     )
+
+
+def run_sync_path(
+    segments: list[SegmentRow],
+    glossary_sorted: list[GlossaryTerm],
+    review_dir: Path,
+    client_config: ClientConfig,
+    client: Client | None,
+    batch_size: int,
+    max_retries: int,
+    temperature: float,
+    timeout: int,
+    max_output_tokens: int | None,
+) -> tuple[list[RowOutcome], dict[str, int]]:
+    """Original synchronous per-batch /v1/chat/completions path.
+
+    Retained for unit tests, small ad-hoc debugging runs, and as a fallback
+    when the Batch API is unavailable. Raw responses are written under
+    ``raw_batches/`` exactly as before.
+    """
+    raw_dir = review_dir / "raw_batches"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    api_client = client or call_chat_completion
+    outcomes: list[RowOutcome] = []
+    for batch_no, batch in enumerate(make_batches(segments, batch_size), 1):
+        response, decisions = classify_batch(
+            batch_no=batch_no,
+            batch=batch,
+            glossary_sorted=glossary_sorted,
+            client_config=client_config,
+            client=api_client,
+            raw_dir=raw_dir,
+            max_retries=max_retries,
+            temperature=temperature,
+            timeout=timeout,
+            max_output_tokens=max_output_tokens,
+        )
+        _accumulate_usage(total_usage, response.get("usage", {}))
+        outcomes.extend(_build_outcomes_for_batch(batch, decisions, glossary_sorted))
+    return outcomes, total_usage
+
+
+def run_batch_path(
+    segments: list[SegmentRow],
+    glossary_sorted: list[GlossaryTerm],
+    review_dir: Path,
+    client_config: ClientConfig,
+    batch_size: int,
+    temperature: float,
+    max_output_tokens: int | None,
+    poll_interval_sec: int,
+    max_wait_sec: int,
+    completion_window: str,
+) -> tuple[list[RowOutcome], dict[str, int]]:
+    """OpenAI Batch API path: submit one job for the whole corpus.
+
+    Resumable across process restarts via ``batch_state.json``.  Each phase
+    transition is persisted atomically so a kill / network outage / VM
+    restart can resume without re-uploading the JSONL or re-billing.
+    Quota-eligible only when the upstream endpoint supports /v1/batches.
+    """
+    batch_input_dir = review_dir / "batch_input"
+    batch_output_dir = review_dir / "batch_output"
+    batch_input_dir.mkdir(parents=True, exist_ok=True)
+    batch_output_dir.mkdir(parents=True, exist_ok=True)
+    input_jsonl = batch_input_dir / "all.jsonl"
+    output_jsonl = batch_output_dir / "result.jsonl"
+    state_path = review_dir / "batch_state.json"
+
+    micro_batches = make_batches(segments, batch_size)
+    state = _load_state(state_path) or {"phase": "init"}
+
+    if state.get("phase") == "init":
+        _write_batch_input_jsonl(
+            input_jsonl,
+            micro_batches,
+            glossary_sorted,
+            client_config.model,
+            temperature,
+            max_output_tokens,
+        )
+        state = {
+            "phase": "input_written",
+            "model": client_config.model,
+            "batch_size": batch_size,
+            "n_micro_batches": len(micro_batches),
+            "n_rows": len(segments),
+            "submitted_at": None,
+            "completed_at": None,
+        }
+        _save_state_atomic(state_path, state)
+
+    if state["phase"] == "input_written":
+        file_id = upload_batch_input_file(input_jsonl, client_config)
+        state.update({"phase": "uploaded", "input_file_id": file_id})
+        _save_state_atomic(state_path, state)
+
+    if state["phase"] == "uploaded":
+        batch_id = create_batch(
+            state["input_file_id"],
+            client_config,
+            completion_window=completion_window,
+            metadata={"source": "segments_llm_cleanup_pipeline"},
+        )
+        state.update(
+            {
+                "phase": "submitted",
+                "batch_id": batch_id,
+                "submitted_at": _now_iso(),
+            }
+        )
+        _save_state_atomic(state_path, state)
+
+    if state["phase"] == "submitted":
+        def _on_poll(batch_obj: dict[str, Any]) -> None:
+            state["last_status"] = batch_obj.get("status")
+            _save_state_atomic(state_path, state)
+
+        batch_obj = wait_for_batch(
+            state["batch_id"],
+            client_config,
+            poll_interval_sec=poll_interval_sec,
+            max_wait_sec=max_wait_sec,
+            progress_cb=_on_poll,
+        )
+        output_file_id = batch_obj.get("output_file_id")
+        if not output_file_id:
+            raise RuntimeError(
+                f"Completed batch {state['batch_id']} has no output_file_id."
+            )
+        state.update(
+            {
+                "phase": "completed",
+                "output_file_id": output_file_id,
+                "error_file_id": batch_obj.get("error_file_id"),
+                "completed_at": _now_iso(),
+            }
+        )
+        _save_state_atomic(state_path, state)
+
+    if state["phase"] == "completed":
+        by_custom_id = download_batch_output(
+            state["output_file_id"], client_config, output_jsonl
+        )
+        state["phase"] = "downloaded"
+        _save_state_atomic(state_path, state)
+    else:
+        # Resuming after a previous successful download: re-parse the file.
+        by_custom_id = _parse_existing_output_jsonl(output_jsonl)
+
+    return _process_batch_results(micro_batches, glossary_sorted, by_custom_id)
+
+
+def _accumulate_usage(total: dict[str, int], usage: Mapping[str, Any]) -> None:
+    for key, value in usage.items():
+        if key in total and isinstance(value, int):
+            total[key] += value
+
+
+def _build_outcomes_for_batch(
+    batch: list[SegmentRow],
+    decisions: list[Decision],
+    glossary_sorted: list[GlossaryTerm],
+) -> list[RowOutcome]:
+    decisions_by_id = {decision.segment_id: decision for decision in decisions}
+    outcomes: list[RowOutcome] = []
+    for row in batch:
+        features = build_features(row, glossary_sorted)
+        outcomes.append(build_outcome(row, decisions_by_id[row.segment_id], features))
+    return outcomes
+
+
+def _segment_custom_id(batch_no: int) -> str:
+    return f"seg-batch-{batch_no:04d}"
+
+
+def _write_batch_input_jsonl(
+    path: Path,
+    micro_batches: list[list[SegmentRow]],
+    glossary_sorted: list[GlossaryTerm],
+    model: str,
+    temperature: float,
+    max_output_tokens: int | None,
+) -> None:
+    with path.open("w", encoding="utf-8") as f:
+        for batch_no, batch in enumerate(micro_batches, 1):
+            payload = build_request_payload(
+                model, batch, glossary_sorted, temperature, max_output_tokens
+            )
+            line = build_batch_request_line(_segment_custom_id(batch_no), payload)
+            f.write(json.dumps(line, ensure_ascii=False) + "\n")
+
+
+def _process_batch_results(
+    micro_batches: list[list[SegmentRow]],
+    glossary_sorted: list[GlossaryTerm],
+    by_custom_id: dict[str, dict[str, Any]],
+) -> tuple[list[RowOutcome], dict[str, int]]:
+    total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    outcomes: list[RowOutcome] = []
+    for batch_no, batch in enumerate(micro_batches, 1):
+        custom_id = _segment_custom_id(batch_no)
+        entry = by_custom_id.get(custom_id)
+        if entry is None:
+            raise RuntimeError(f"Batch output missing custom_id={custom_id}")
+        if entry.get("error"):
+            raise RuntimeError(
+                f"Batch output line {custom_id} returned error: {entry['error']}"
+            )
+        response_obj = entry.get("response") or {}
+        body = response_obj.get("body") or {}
+        if not isinstance(body, dict):
+            raise RuntimeError(f"Batch line {custom_id} has non-dict response.body.")
+        _accumulate_usage(total_usage, body.get("usage", {}) or {})
+        decisions = parse_and_validate_response(body, batch)
+        decisions = [
+            Decision(
+                segment_id=d.segment_id,
+                action=d.action,
+                reason=d.reason,
+                corrected_ko=d.corrected_ko,
+                batch_no=batch_no,
+            )
+            for d in decisions
+        ]
+        outcomes.extend(_build_outcomes_for_batch(batch, decisions, glossary_sorted))
+    return outcomes, total_usage
+
+
+def _parse_existing_output_jsonl(path: Path) -> dict[str, dict[str, Any]]:
+    if not path.is_file():
+        raise RuntimeError(f"Expected previously downloaded batch output at {path}.")
+    by_custom_id: dict[str, dict[str, Any]] = {}
+    for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        entry = json.loads(stripped)
+        custom_id = entry.get("custom_id")
+        if not isinstance(custom_id, str) or not custom_id:
+            raise RuntimeError(f"{path} line {line_no} missing custom_id.")
+        if custom_id in by_custom_id:
+            raise RuntimeError(f"Duplicate custom_id in {path}: {custom_id}")
+        by_custom_id[custom_id] = entry
+    return by_custom_id
+
+
+def _load_state(state_path: Path) -> dict[str, Any] | None:
+    if not state_path.is_file():
+        return None
+    try:
+        return json.loads(state_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Corrupt batch_state.json at {state_path}: {exc}") from exc
+
+
+def _save_state_atomic(state_path: Path, state: Mapping[str, Any]) -> None:
+    """Write state.json atomically: temp file + rename, never partial."""
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    serialised = json.dumps(state, ensure_ascii=False, indent=2)
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        delete=False,
+        dir=state_path.parent,
+        prefix=state_path.name + ".",
+        suffix=".tmp",
+    ) as tf:
+        tf.write(serialised)
+        tmp_path = Path(tf.name)
+    os.replace(tmp_path, state_path)
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def validate_positive_int(name: str, value: int) -> None:
@@ -395,8 +774,11 @@ def classify_batch(
     max_retries: int,
     temperature: float,
     timeout: int,
+    max_output_tokens: int | None = None,
 ) -> tuple[dict[str, Any], list[Decision]]:
-    request_payload = build_request_payload(client_config.model, batch, glossary_sorted, temperature)
+    request_payload = build_request_payload(
+        client_config.model, batch, glossary_sorted, temperature, max_output_tokens
+    )
     last_error = ""
     for attempt in range(1, max_retries + 1):
         response: dict[str, Any] | None = None
@@ -428,6 +810,7 @@ def build_request_payload(
     batch: list[SegmentRow],
     glossary_sorted: list[GlossaryTerm],
     temperature: float,
+    max_output_tokens: int | None = None,
 ) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     for row in batch:
@@ -458,6 +841,7 @@ def build_request_payload(
             "If uncertain, choose REVIEW_UNCERTAIN rather than guessing.",
             "The reason must mention this row's own semantic issue or why it is usable; do not return generic rule labels.",
             "Do not change zh-CN, add rows, split rows, merge rows, or output explanations outside JSON.",
+            "corrected_ko must always be a string; use \"\" (empty string, never null) when the action is not REWRITE_KO.",
         ],
         "output_schema": {
             "results": [
@@ -471,14 +855,27 @@ def build_request_payload(
         },
         "rows": rows,
     }
-    return {
+    payload: dict[str, Any] = {
         "model": model,
         "temperature": temperature,
+        # Disable parallel tool calls defensively even though this task uses
+        # no tools: some models default it on and emit unexpected wrappers.
+        "parallel_tool_calls": False,
+        # Strict json_schema rejects malformed shapes server-side and lets
+        # the local parser drop its regex fallback. Every row must include
+        # corrected_ko as a string (empty for non-REWRITE actions).
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": _segments_response_schema(),
+        },
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
         ],
     }
+    if max_output_tokens is not None:
+        payload["max_tokens"] = max_output_tokens
+    return payload
 
 
 def parse_and_validate_response(

@@ -14,7 +14,9 @@ follow-up note. The remaining 66,385 segments still need a full LLM
 review pass, after which the corpus is frozen for the new training cycle.
 
 This task spends real API tokens (estimated 5M-10M input + 1.5M-4M
-output). Do not start unless the user has authorized the cost.
+output). At `gpt-4.1-mini` Batch API pricing (50% discount applied
+server-side), the full run is expected to cost on the order of US$1.5-3.
+Do not start unless the user has authorized the cost.
 
 ## Prerequisites
 
@@ -54,25 +56,41 @@ output). Do not start unless the user has authorized the cost.
 - `configs/` — do not override prompts at run time
 - `fine-tuned-models/` — old checkpoints are stale anyway
 
-## Execution recipe
+## Execution recipe (Batch API, default since 2026-05-27)
 
 ```powershell
 $env:OPENAI_API_KEY = "<your-key>"
-$env:LLM_MODEL     = "<your-model>"
+$env:LLM_MODEL     = "gpt-4.1-mini"
 # Optional:
-# $env:OPENAI_BASE_URL = "<base-url>"
+# $env:OPENAI_BASE_URL = "<base-url>"   # Batch API requires an endpoint that
+                                        # supports /v1/batches; the OpenAI
+                                        # official endpoint is the default.
 
-# 1. Dry-run (no apply; writes review CSVs and a sample)
+# Behaviour: --batch-mode batch is the default; the pipeline uploads one
+# JSONL containing all micro-batches (default --batch-size 50), creates a
+# /v1/batches job, polls every --poll-interval seconds (default 60), and
+# downloads the result. Resumable: re-running with the same --review-dir
+# reads batch_state.json and skips already-completed phases.
+
+# 1. Dry-run (writes review CSVs and a sample; still spends real tokens
+#    because the batch job must run end-to-end to produce results).
 venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --dry-run
 
-# 2. Manually inspect:
-#    data/review/llm_segments_cleanup/segments_llm_sample_review.csv
-#    data/review/llm_segments_cleanup/segments_llm_warnings.csv
-#    data/review/llm_segments_cleanup/segments_llm_summary.csv
-#    data/review/llm_segments_cleanup/rewrite_failed_segments_llm.csv
-#    Confirm action distribution and rewrite accept rate are reasonable.
+# 2. Manually inspect under data/review/llm_segments_cleanup/:
+#      segments_llm_sample_review.csv
+#      segments_llm_warnings.csv
+#      segments_llm_summary.csv
+#      rewrite_failed_segments_llm.csv
+#      batch_state.json                  (phase should be 'downloaded')
+#      batch_input/all.jsonl             (one request line per micro-batch)
+#      batch_output/result.jsonl         (raw model output)
+#    Confirm action distribution, rewrite accept rate, and that summary
+#    prompt_tokens / completion_tokens / total_tokens look sane.
 
-# 3. If sample is acceptable, apply:
+# 3. If sample is acceptable, apply. The apply pass re-issues a fresh
+#    batch job (it does NOT reuse the dry-run state file because the dry-run
+#    review-dir already advanced to phase=downloaded). If you want to reuse
+#    a previous successful batch, point --review-dir at that directory.
 venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --apply
 
 # 4. Strict gate must pass:
@@ -84,6 +102,16 @@ venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10
 
 # 6. Diff segments.csv (rough sanity):
 git -c safe.directory=D:/longtu-translation-pipeline diff --stat -- data/segments.csv
+```
+
+### Fallback to synchronous mode
+
+If the upstream endpoint does not support `/v1/batches`, or you only need
+a small smoke run (< 1k rows), pass `--batch-mode sync`. Per-batch retries
+and raw_batches/ dumps work as before:
+
+```powershell
+venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --batch-mode sync --dry-run
 ```
 
 ## What to record in RF-015 follow-up Notes
