@@ -83,6 +83,7 @@ class MetricsConfig:
     predict_with_generate: bool = False
     generation_max_length: int = 400
     generation_num_beams: int = 1
+    eval_subset_rows: int | None = None
 
 
 @dataclass(frozen=True)
@@ -418,6 +419,7 @@ def load_metrics_config(data: JsonObject, path: Path) -> MetricsConfig:
         predict_with_generate=optional_bool(data, "predict_with_generate", path, default=False),
         generation_max_length=optional_positive_int(data, "generation_max_length", path, default=400),
         generation_num_beams=optional_positive_int(data, "generation_num_beams", path, default=1),
+        eval_subset_rows=optional_positive_int(data, "eval_subset_rows", path),
     )
 
 

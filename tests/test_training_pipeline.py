@@ -938,6 +938,95 @@ class Seq2SeqTrainerWiringTest(unittest.TestCase):
 
         self.assertTrue(trainer.args.load_best_model_at_end)
 
+    def test_eval_dataset_is_subsetted_when_eval_subset_rows_configured(self) -> None:
+        from longtu_translation_pipeline.config import MetricsConfig
+
+        examples = [
+            TokenizedTrainingExample(
+                segment_id=str(i),
+                input_ids=[0, 1, 2],
+                attention_mask=[1, 1, 1],
+                labels=[3, 1, 2],
+            )
+            for i in range(5)
+        ]
+        full_dataset = TorchTrainingDataset(examples)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            model, tokenizer = self._make_tiny_model_and_tokenizer()
+            config = self._make_training_config_with_early_stop(tmp_path)
+            (tmp_path / "out1").mkdir()
+            (tmp_path / "out2").mkdir()
+
+            metrics_with_subset = MetricsConfig(
+                enabled=True,
+                composite_weight_bleu=0.5,
+                composite_weight_preservation_nospace=0.5,
+                predict_with_generate=True,
+                generation_max_length=32,
+                generation_num_beams=1,
+                eval_subset_rows=3,
+            )
+            trainer_subset = _build_seq2seq_trainer(
+                model=model,
+                tokenizer=tokenizer,
+                train_dataset=full_dataset,
+                eval_dataset=full_dataset,
+                output_dir=tmp_path / "out1",
+                config=config,
+                metrics_config=metrics_with_subset,
+                validation_examples=[TrainingExample("1", "x", "y")],
+                resolved_max_steps=None,
+                resolved_save_steps=10,
+                resolved_eval_steps=10,
+                resolved_save_total_limit=1,
+                resolved_logging_steps=1,
+                resolved_gradient_accumulation_steps=1,
+                resolved_learning_rate=2e-5,
+                resolved_warmup_ratio=0.0,
+                resolved_weight_decay=0.0,
+                resolved_max_grad_norm=None,
+                use_cpu=True,
+                fp16=False,
+                bf16=False,
+            )
+
+            metrics_no_subset = MetricsConfig(
+                enabled=True,
+                composite_weight_bleu=0.5,
+                composite_weight_preservation_nospace=0.5,
+                predict_with_generate=True,
+                generation_max_length=32,
+                generation_num_beams=1,
+            )
+            trainer_full = _build_seq2seq_trainer(
+                model=model,
+                tokenizer=tokenizer,
+                train_dataset=full_dataset,
+                eval_dataset=full_dataset,
+                output_dir=tmp_path / "out2",
+                config=config,
+                metrics_config=metrics_no_subset,
+                validation_examples=[TrainingExample("1", "x", "y")],
+                resolved_max_steps=None,
+                resolved_save_steps=10,
+                resolved_eval_steps=10,
+                resolved_save_total_limit=1,
+                resolved_logging_steps=1,
+                resolved_gradient_accumulation_steps=1,
+                resolved_learning_rate=2e-5,
+                resolved_warmup_ratio=0.0,
+                resolved_weight_decay=0.0,
+                resolved_max_grad_norm=None,
+                use_cpu=True,
+                fp16=False,
+                bf16=False,
+            )
+
+        self.assertEqual(len(trainer_subset.eval_dataset), 3)
+        self.assertEqual(len(trainer_full.eval_dataset), 5)
+
     def test_formal_training_falls_back_to_trainer_when_metrics_disabled(self) -> None:
         from transformers import Trainer, Seq2SeqTrainer
 

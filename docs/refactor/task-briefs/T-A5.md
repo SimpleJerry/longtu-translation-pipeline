@@ -32,9 +32,13 @@ preservation), so that:
 
 ## Prerequisites
 
-1. `data/segments.csv` SHA256 = `1462B2E18CDB82B0FF1E9E3C80AC5AFF583227E396C54F5C6431FFD379F147BA`
-   (must equal RF-006-P11's manifest; if it has changed, T-A1 was re-run
-   and this brief needs the new hash before training)
+1. `data/segments.csv` SHA256 = `30D5C299828C10235AEE357E9333740913E55C291C5B07A45C0739E41818EA97`
+   (post-RF-029 OpenAI Batch Mode T-A1 re-clean; this differs from
+   RF-006-P11's training data SHA256 `1462B2E1…`. RF-006-P13 trains on
+   the new corpus, so the comparison vs RF-006-P11 is "training method
+   improvement on a slightly different corpus" rather than a pure
+   methodology ablation. The user confirmed the new corpus is the
+   correct current data on 2026-05-28.)
 2. GPU available (training runs to early stop, expected 2-6 hours)
 3. RF-006-P11 retained as historical baseline; **do not touch
    `configs/training/full_10k.json` or `run-full-10k-llm-segments-v1/`**
@@ -103,7 +107,15 @@ class MetricsConfig:
     predict_with_generate: bool = False
     generation_max_length: int = 400
     generation_num_beams: int = 1
+    eval_subset_rows: int | None = None  # cap in-loop eval at first N rows of validation split; None = full
 ```
+
+The `eval_subset_rows` field exists so in-loop eval can run on a small
+deterministic subset of `splits/validation.csv` (e.g. first 1000 rows)
+rather than the full 6,626. The full validation set is still used
+post-hoc (Step 6) for top-K checkpoint decision. This is the standard
+NMT-finetune pattern — see `docs/refactor/decisions.md` 2026-05-27
+follow-up note.
 
 Wire it into `TrainingConfig` as an optional field
 (`metrics: MetricsConfig | None`).
@@ -184,16 +196,32 @@ if early_stopping_patience is not None:
     ))
 
 training_args = Seq2SeqTrainingArguments(**training_kwargs)
+
+# Optional subsetting of the eval dataset for in-loop eval cost control.
+# Take the FIRST N rows of the already-shuffled splits/validation.csv;
+# do NOT re-shuffle here — determinism matters for resume-equivalence and
+# for comparing eval signals across runs.
+if metrics_config is not None and metrics_config.eval_subset_rows is not None:
+    n = metrics_config.eval_subset_rows
+    inloop_eval_dataset = eval_dataset.select(range(min(n, len(eval_dataset))))
+else:
+    inloop_eval_dataset = eval_dataset
+
 trainer = Seq2SeqTrainer(
     model=model,
     args=training_args,
     train_dataset=dataset,
-    eval_dataset=eval_dataset,
+    eval_dataset=inloop_eval_dataset,
     tokenizer=tokenizer,            # required for predict_with_generate + decoding
     compute_metrics=compute_metrics_fn,  # from training_metrics.make_compute_metrics
     callbacks=callbacks,
 )
 ```
+
+If `eval_dataset` is not a `datasets.Dataset` (this codebase uses a
+custom torch dataset), use the equivalent slice / Subset pattern but
+keep determinism — `torch.utils.data.Subset(eval_dataset, range(n))`
+works.
 
 Backward compatibility: if `metrics_config` is None or
 `predict_with_generate=False`, fall back to plain `Trainer` /
@@ -234,8 +262,9 @@ work.
     "composite_weight_bleu": 0.5,
     "composite_weight_preservation_nospace": 0.5,
     "predict_with_generate": true,
-    "generation_max_length": 400,
-    "generation_num_beams": 1
+    "generation_max_length": 256,
+    "generation_num_beams": 1,
+    "eval_subset_rows": 1000
   },
   "dry_run": { "preview_rows": 3 }
 }
@@ -249,6 +278,17 @@ Notes:
 - `weight_decay=0.01` unchanged (early stopping IS the regularization)
 - `generation_num_beams=1` (greedy) for eval-time speed; T-F5 still
   separately explores beam>1 at inference
+- `generation_max_length=256` (down from 400). Verified on
+  test_generated.csv: p99.9 of ko candidate tokens = 225, p99 = 60. A
+  256 cap truncates only ~0.06% of in-loop rows — far below patience-5
+  noise tolerance. The full 400 cap stays for post-hoc / T-A6 / final
+  inference where 0 truncation matters
+- `eval_subset_rows=1000` (in-loop only). 6,626-row full validation
+  takes 38 min per eval; first 1000 rows take ~5.7 min. Patience-5
+  buffer absorbs the small estimation noise (BLEU SD ≈ 0.003-0.005,
+  preservation SD ≈ 0.02 on 1000 rows). The remaining 5,626 rows are
+  used in Step 6 for top-K post-hoc full-eval — they are NOT
+  sacrificed, just delayed in use
 
 ### Step 5 — Tests
 
@@ -260,10 +300,13 @@ Add to `tests/test_training_pipeline.py`:
 4. `test_seq2seq_trainer_load_best_model_plumbed_through` — assert `trainer.args.load_best_model_at_end is True`
 5. `test_compute_metrics_returns_composite_dict` — make_compute_metrics with fixed pred/label arrays returns dict containing `bleu`, `glossary_preservation_exact`, `glossary_preservation_nospace`, `composite`; verifies composite math
 6. `test_formal_training_falls_back_to_trainer_when_metrics_disabled` — backward compatibility for RF-006-P11 profile
+7. `test_eval_dataset_is_subsetted_when_eval_subset_rows_configured` — assert that when `metrics.eval_subset_rows=N`, the Trainer receives an `eval_dataset` of length `N` (or `min(N, full_len)`); when the field is None/absent, full eval_dataset is passed
 
 All tests run on CPU, no real NLLB model load.
 
-### Step 6 — Execute the training run
+### Step 6 — Execute the training run + post-hoc top-K full-eval
+
+#### 6a — Train (in-loop eval on 1,000-row subset)
 
 ```powershell
 $env:HF_HOME = "D:\longtu-translation-pipeline\venv\hf_cache"
@@ -279,7 +322,48 @@ venv\Scripts\python.exe scripts\train_model.py `
 ```
 
 Watch the logs for `eval_composite`, `eval_bleu`,
-`eval_glossary_preservation_nospace` at each eval step.
+`eval_glossary_preservation_nospace` at each eval step. Expected per-eval
+time ~5-6 min on the 1,000-row subset (vs 38 min on full); full training
+wall-clock 3-8 hours including early-stop trigger.
+
+#### 6b — Post-hoc top-K full-eval (after early stop)
+
+After training completes and `load_best_model_at_end` resolves the best
+checkpoint, identify the top-3 checkpoints by in-loop `eval_composite`
+from `trainer_state.json` (best + the two adjacent on either side that
+were close). Run full-validation (6,626 rows, max_length=400) on each:
+
+```powershell
+$run = "fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-full-earlystop-v1"
+$topK = @("checkpoint-XXXX", "checkpoint-YYYY", "checkpoint-ZZZZ")   # fill from trainer_state.json
+foreach ($ckpt in $topK) {
+    venv\Scripts\python.exe scripts\run_inference.py `
+        --generate-validation `
+        --run-dir $run `
+        --model-path "$run\$ckpt"
+    venv\Scripts\python.exe scripts\evaluate_translation.py `
+        --config configs\evaluation\generation_report.json `
+        --checkpoint "$run\$ckpt"
+}
+```
+
+This uses the existing inference + evaluation pipeline (RF-006-P12 /
+RF-007-P2 machinery), so the report shape matches RF-006-P11 baseline
+for direct comparison.
+
+#### 6c — Decide
+
+Compare the top-K's full-validation `composite` (or BLEU + preservation
+side-by-side). Three branches:
+
+- **(i)** Trainer's auto-selected best is also the best on full-val →
+  proceed to T-A6 with that checkpoint
+- **(ii)** Another top-K checkpoint scores higher on full-val → record
+  the gap; T-A6 uses the full-val winner instead of trainer's auto-best
+- **(iii)** All top-K are within ε of each other → pick by tie-break:
+  prefer the earlier checkpoint (less overfit risk)
+
+Record which branch fired in RF-006-P13 Notes.
 
 ### Step 7 — Record results in RF-006-P13 Notes
 
@@ -287,11 +371,13 @@ Append to RF-006-P13:
 - Run name + full path
 - segments_sha256 (must match baseline)
 - Final epoch / global step where early stopping triggered
-- Wall-clock training time
-- Best `eval_composite` value + step at which it was achieved
+- Wall-clock training time (train + eval breakdown if available)
+- Best `eval_composite` value + step at which it was achieved (in-loop, on 1000-row subset)
 - Whether `load_best_model_at_end` actually loaded an earlier checkpoint (it should)
-- Full eval curve at each 1000-step interval as a table: step, eval_loss, eval_bleu, eval_preservation_exact, eval_preservation_nospace, eval_composite
-- Comparison vs RF-006-P11 baseline (same metrics at ckpt-9000 from RF-006-P12)
+- In-loop eval curve at each 1000-step interval as a table: step, eval_loss, eval_bleu, eval_preservation_exact, eval_preservation_nospace, eval_composite (all on val_mini=1000)
+- **Post-hoc top-K full-validation table** (Step 6b output) — same columns but on full 6,626 rows; identify which checkpoint wins on full val
+- Branch decision from Step 6c: (i) trainer auto-best confirmed / (ii) another top-K wins on full val / (iii) tie + chosen tie-break
+- Comparison vs RF-006-P11 baseline (same metrics at ckpt-9000 from RF-006-P12, computed on the same full validation rows)
 - Note: held-out test report comes from T-A6 / RF-007-P4 (separate run)
 
 ## Acceptance criteria
@@ -302,12 +388,13 @@ Append to RF-006-P13:
 4. `full_earlystop.json` loads via `load_training_config` without error.
 5. Training run completes (either by early stopping or by hitting `num_train_epochs=10` ceiling) and the run directory contains `run_manifest.json` with the new metrics config + best_metric_value recorded.
 6. Best checkpoint auto-loaded at end of training; `trainer.state.best_metric` and `trainer.state.best_model_checkpoint` present in `trainer_state.json`.
-7. Backlog RF-006-P13 set to `DONE` with the comparison block above.
-8. **No files added to Git** beyond `docs/refactor/backlog.md`, `configs/training/full_earlystop.json`, `src/longtu_translation_pipeline/config.py`, `src/longtu_translation_pipeline/training.py`, new `src/longtu_translation_pipeline/training_metrics.py`, and `tests/test_training_pipeline.py`.
+7. **Top-K full-validation** evaluated post-hoc on the 5,626-row remainder (Step 6b); branch decision (Step 6c) recorded in RF-006-P13 Notes.
+8. Backlog RF-006-P13 set to `DONE` with the in-loop eval curve table, post-hoc top-K full-val table, and branch decision.
+9. **No files added to Git** beyond `docs/refactor/backlog.md`, `configs/training/full_earlystop.json`, `src/longtu_translation_pipeline/config.py`, `src/longtu_translation_pipeline/training.py`, new `src/longtu_translation_pipeline/training_metrics.py`, and `tests/test_training_pipeline.py`.
 
 ## Risks and mitigations
 
-- **Risk:** `predict_with_generate=True` makes each eval 5-20× slower than loss-only eval. With eval_steps=1000 and num_train_epochs=10 ceiling, eval cost could dominate. **Mitigation:** start with `generation_num_beams=1` (greedy) and `per_device_eval_batch_size=4`; if total wall-clock blows up beyond 8h, consider raising `eval_steps` to 2000.
+- **Risk:** `predict_with_generate=True` makes each eval 5-20× slower than loss-only eval. The first attempt of T-A5 measured 38 min per eval on full 6,626-row validation, totalling ~8h eval per epoch. **Mitigation (primary):** `metrics.eval_subset_rows=1000` reduces per-eval wall-clock to ~5.7 min and per-epoch eval to ~74 min — a 6.6× speedup with negligible signal loss (BLEU SD ~0.003-0.005 on 1k rows, well below patience-5 tolerance). **Mitigation (secondary):** `generation_max_length=256` (down from 400) further saves KV-cache memory and padding. **Recovery:** if total wall-clock still > 8h, raise `eval_steps` to 2000 as a fallback only — but the subset is the primary lever.
 - **Risk:** Composite metric noisy due to small validation subset relative to BLEU's sensitivity. **Mitigation:** `patience=5` (decision 2) gives enough buffer; if still spuriously stops, raise to 7 in a follow-up RF.
 - **Risk:** Switching `Trainer` → `Seq2SeqTrainer` changes behavior for smoke / pilot paths. **Mitigation:** the new code path is opt-in via `metrics.predict_with_generate=true`; smoke and pilot configs leave it off, get the old `Trainer`.
 - **Risk:** `load_best_model_at_end=True` requires `save_strategy` and `eval_strategy` to match — both must be `"steps"` with equal `save_steps` and `eval_steps`. **Mitigation:** the new config sets both to 1000 with strategy `"steps"`; the loader should validate this.
