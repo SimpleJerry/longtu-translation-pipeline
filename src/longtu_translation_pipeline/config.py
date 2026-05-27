@@ -67,6 +67,22 @@ class TrainingArgumentsConfig:
     eval_steps: int | None
     save_total_limit: int | None
     logging_steps: int | None
+    load_best_model_at_end: bool = False
+    metric_for_best_model: str | None = None
+    greater_is_better: bool | None = None
+    early_stopping_patience: int | None = None
+    early_stopping_threshold: float = 0.0
+    lr_scheduler_type: str | None = None
+
+
+@dataclass(frozen=True)
+class MetricsConfig:
+    enabled: bool = False
+    composite_weight_bleu: float = 0.5
+    composite_weight_preservation_nospace: float = 0.5
+    predict_with_generate: bool = False
+    generation_max_length: int = 400
+    generation_num_beams: int = 1
 
 
 @dataclass(frozen=True)
@@ -84,6 +100,7 @@ class TrainingConfig:
     tokenization: TokenizationConfig
     training: TrainingArgumentsConfig
     dry_run: DryRunConfig
+    metrics: MetricsConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -179,11 +196,18 @@ def load_training_config(path: str | Path, base_dir: str | Path | None = None) -
     tokenization_section = require_mapping(data, "tokenization", config_path)
     training_section = require_mapping(data, "training", config_path)
     dry_run_section = require_mapping(data, "dry_run", config_path)
+    metrics_section = data.get("metrics")
 
     train_ratio = require_float(split_section, "train_ratio", config_path)
     validation_ratio = require_float(split_section, "validation_ratio", config_path)
     test_ratio = require_float(split_section, "test_ratio", config_path)
     validate_split_ratios(train_ratio, validation_ratio, test_ratio, config_path)
+
+    metrics_config: MetricsConfig | None = None
+    if metrics_section is not None:
+        if not isinstance(metrics_section, dict):
+            raise ValueError(f"metrics must be a JSON object: {config_path}")
+        metrics_config = load_metrics_config(metrics_section, config_path)
 
     return TrainingConfig(
         path=config_path,
@@ -224,6 +248,7 @@ def load_training_config(path: str | Path, base_dir: str | Path | None = None) -
         dry_run=DryRunConfig(
             preview_rows=require_non_negative_int(dry_run_section, "preview_rows", config_path),
         ),
+        metrics=metrics_config,
     )
 
 
@@ -365,6 +390,34 @@ def load_training_arguments_config(data: JsonObject, path: Path) -> TrainingArgu
         eval_steps=optional_positive_int(data, "eval_steps", path),
         save_total_limit=optional_positive_int(data, "save_total_limit", path),
         logging_steps=optional_positive_int(data, "logging_steps", path),
+        load_best_model_at_end=optional_bool(data, "load_best_model_at_end", path, default=False),
+        metric_for_best_model=optional_str(data, "metric_for_best_model", path),
+        greater_is_better=optional_bool(data, "greater_is_better", path),
+        early_stopping_patience=optional_positive_int(data, "early_stopping_patience", path),
+        early_stopping_threshold=optional_non_negative_float(
+            data, "early_stopping_threshold", path, default=0.0
+        ),
+        lr_scheduler_type=optional_str(data, "lr_scheduler_type", path),
+    )
+
+
+def load_metrics_config(data: JsonObject, path: Path) -> MetricsConfig:
+    weight_bleu = optional_non_negative_float(data, "composite_weight_bleu", path, default=0.5)
+    weight_pres = optional_non_negative_float(
+        data, "composite_weight_preservation_nospace", path, default=0.5
+    )
+    if weight_bleu + weight_pres <= 0:
+        raise ValueError(
+            "composite_weight_bleu + composite_weight_preservation_nospace must be > 0: "
+            f"{path}"
+        )
+    return MetricsConfig(
+        enabled=optional_bool(data, "enabled", path, default=False),
+        composite_weight_bleu=weight_bleu,
+        composite_weight_preservation_nospace=weight_pres,
+        predict_with_generate=optional_bool(data, "predict_with_generate", path, default=False),
+        generation_max_length=optional_positive_int(data, "generation_max_length", path, default=400),
+        generation_num_beams=optional_positive_int(data, "generation_num_beams", path, default=1),
     )
 
 
@@ -485,6 +538,31 @@ def optional_positive_float(
     if key not in data:
         return default
     return require_positive_float(data, key, path)
+
+
+def optional_bool(
+    data: JsonObject,
+    key: str,
+    path: Path,
+    default: bool | None = None,
+) -> bool | None:
+    if key not in data:
+        return default
+    return require_bool(data, key, path)
+
+
+def optional_str(
+    data: JsonObject,
+    key: str,
+    path: Path,
+    default: str | None = None,
+) -> str | None:
+    if key not in data:
+        return default
+    value = data[key]
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{key} must be a non-empty string: {path}")
+    return value
 
 
 def optional_non_negative_float(
