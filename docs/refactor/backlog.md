@@ -728,7 +728,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-007-P4: New Held-Out Test Report on Early-Stop Best Checkpoint
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `scripts/run_inference.py --generate-test`, `scripts/evaluate_translation.py`, ignored `data/review/inference/test/run-full-earlystop-v1/`, ignored `data/review/evaluation/test_report/run-full-earlystop-v1/`
 - **Background / Why:** RF-006-P13 Step 6b/6c selected the genuine best checkpoint by full-validation re-ranking (NOT the trainer's `load_best_model_at_end` auto-best). The selected checkpoint is **`checkpoint-48000`** (Branch (ii): on full 6,626-row validation, 48000 beat the trainer auto-best 44000 by composite 0.0033 > ε≈0.003, and beat/tied 49000 within ε so the earlier 48000 won the tie-break; note val_mini=1000 had mis-ranked 48000 as worst of the tail — the full-val re-eval corrected it). This task runs the held-out test split against checkpoint-48000 to produce the new project headline number. RF-007-P3 stays as the historical baseline; this entry supersedes it as the current published result.
 - **Concrete Scope:** Run `--generate-test --model-path <run>\checkpoint-48000`, run `evaluate_translation.py`, write the report under `data/review/evaluation/test_report/run-full-earlystop-v1/checkpoint-48000/`. Record comparison vs full-val (48000, from RF-006-P13 Step 6b) and vs RF-007-P3 (ckpt-9000 of `run-full-10k-llm-segments-v1`) on all metrics (BLEU, glossary preservation exact + nospace, empty_candidate_rows). **Do NOT resolve `best_model_checkpoint` from trainer_state.json** — that points to 44000, which Step 6c overrode; use 48000.
@@ -736,4 +736,36 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** If checkpoint-48000 turns out test-time worse than RF-007-P3 ckpt-9000, document the gap and decide whether to (a) keep RF-007-P3 as the production number, (b) revisit the composite weighting, or (c) accept the trade-off — but do NOT re-pick a different checkpoint on the basis of the test number (leakage). Corpus + training method both differ from RF-007-P3, so the comparison is "current model vs historical baseline", not a controlled ablation.
 - **Acceptance Criteria:** Test report directory exists with the four standard files; `report_manifest.json` records the resolved best checkpoint and segments_sha256; backlog Notes carry the side-by-side comparison with RF-007-P3; one of the three decision branches (a/b/c) is explicitly recorded; no files added to Git beyond this entry.
 - **Recommended Test Commands:** `venv\Scripts\python.exe scripts\run_inference.py --generate-test --run-dir <run dir> --model-path <best checkpoint>`; `venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint <best checkpoint>`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`.
-- **Notes:** Owned by [T-A6](task-briefs/T-A6.md). RF-006-P13 is DONE (`89b3e2d`); Step 6c selected `checkpoint-48000` via Branch (ii). Brief written 2026-05-28. Pending execution (single test-set run).
+- **Notes:** Owned by [T-A6](task-briefs/T-A6.md). RF-006-P13 is DONE (`89b3e2d`); Step 6c selected `checkpoint-48000` via Branch (ii). Completed 2026-05-28 by T-A6.
+
+  **Final test report (single run, checkpoint-48000, no iteration):**
+
+  | Metric | Test (ckpt-48000) | Full-val (ckpt-48000, RF-006-P13 Step 6b) | Δ (test − val) |
+  |---|---|---|---|
+  | BLEU (whitespace) | 0.319163 | 0.325044 | −0.0059 |
+  | glossary_preservation_rate (exact) | 0.949476 | 0.948013 | +0.0015 |
+  | glossary_preservation_rate_nospace | 0.952844 | 0.951727 | +0.0011 |
+  | empty_candidate_rows | 0 | 0 | 0 |
+
+  - Selected checkpoint: `fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-full-earlystop-v1\checkpoint-48000`
+  - `data/segments.csv` SHA256 at run time: `30D5C299828C10235AEE357E9333740913E55C291C5B07A45C0739E41818EA97` (matches `run_manifest.json`)
+  - Test rows: 6,626; sample review rows: 50
+  - BLEU brevity penalty: 1.000000; glossary terms matched exact: 2,537 / 2,672; nospace: 2,546 / 2,672
+  - Sanity check: test and full-val are in the same ballpark (BLEU difference −0.006, preservation difference < 0.002). Preservation is marginally higher on test than val; BLEU is marginally lower — both differences are within expected sampling variation. No overfit signal; result is consistent with the RF-006-P13 validation picture. ✓
+
+  **Comparison vs RF-007-P3 historical baseline (ckpt-9000, `run-full-10k-llm-segments-v1`):**
+
+  | Metric | RF-007-P4 (ckpt-48000, this entry) | RF-007-P3 (ckpt-9000, historical) | Δ |
+  |---|---|---|---|
+  | BLEU (whitespace) | 0.319163 | 0.1979 | +0.1213 (+61.3%) |
+  | glossary_preservation_rate (exact) | 0.949476 | 0.7754 | +0.1741 (+22.5%) |
+  | glossary_preservation_rate_nospace | 0.952844 | 0.7975 | +0.1553 (+19.5%) |
+  | empty_candidate_rows | 0 | 0 | 0 |
+
+  ⚠ RF-007-P3 used a different corpus SHA256 (`1462B2E1…`, pre-OpenAI-Batch-Mode cleaning) and the old fixed-10k training method (0.19 epochs). RF-007-P4 uses corpus `30D5C299…` (post-OpenAI-Batch-Mode cleaning) and early-stopping training (3.7 epochs). This comparison is **"current model vs historical baseline"**, not a controlled ablation — the improvement reflects both the larger training budget and the cleaner corpus.
+
+  **Decision branch:** (c) — RF-007-P4 is substantially better than RF-007-P3 across all metrics. RF-007-P4 supersedes RF-007-P3 as the current published result.
+
+  Report artifacts (Git-ignored): `data/review/evaluation/test_report/run-full-earlystop-v1/checkpoint-48000/` — `evaluation_summary.csv`, `glossary_preservation_rows.csv`, `sample_review.csv`, `report_manifest.json`. Test generation CSV: `data/review/inference/test/run-full-earlystop-v1/test_generated.csv`.
+
+  > **RF-007-P4 supersedes RF-007-P3 as the current published result. Any future change to `data/segments.csv` SHA256 invalidates this report.**
