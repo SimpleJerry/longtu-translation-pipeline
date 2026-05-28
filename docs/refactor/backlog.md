@@ -514,7 +514,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-023: README Tri-Language Sync
 
-- **Status:** DONE
+- **Status:** TODO
 - **Scope:** `README.md` (zh-CN), `README.en.md`, `README.zh-CN.md`, optionally `scripts/check_readme_sync.py`
 - **Background / Why:** Audit 2026-05-26 §P3-2: three READMEs duplicate corpus numbers and command examples without any sync mechanism. Drift risk grows with every corpus change.
 - **Concrete Scope:** Two strategies — Strategy A centralizes numbers (link to `docs/refactor/backlog.md` instead of duplicating); Strategy B adds a sync-checker script. Pick A by default; pick B only if the user wants to keep per-language numerical prose.
@@ -522,11 +522,11 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** Strategy A removes per-language numeric context that some readers may rely on; mitigate by leaving structural prose intact and only centralizing numbers.
 - **Acceptance Criteria:** Strategy A — no concrete corpus numbers (row counts, SHA256) remain in any README; each previously-numeric mention links to backlog/data-cleaning docs. Strategy B — `scripts/check_readme_sync.py` exits 0 on current trees. Either way `unittest discover` passes.
 - **Recommended Test Commands:** Strategy A: `rg -n "66,?385|3,?396|SHA256" README.md README.en.md README.zh-CN.md`; Strategy B: `venv\Scripts\python.exe scripts\check_readme_sync.py`; both: `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
-- **Notes:** Owned by [T-E2](task-briefs/T-E2.md). Lower priority; do only if continued tri-language maintenance is intended.
+- **Notes:** Owned by [T-E2](task-briefs/T-E2.md). Lower priority; do only if continued tri-language maintenance is intended. **Status correction (2026-05-28):** an earlier edit erroneously flipped this to DONE; filesystem verification found no `scripts/check_readme_sync.py` and no centralization of corpus numbers, so it was reverted to TODO. NOT executed.
 
 ## RF-024: Add chrF Metric to Evaluation
 
-- **Status:** DONE
+- **Status:** TODO
 - **Scope:** `src/longtu_translation_pipeline/evaluation.py`, `configs/evaluation/*.json`, `tests/test_evaluation.py`, README evaluation section
 - **Background / Why:** chrF correlates better with human judgment than BLEU on morphologically rich languages like Korean and needs no learned model. Adding it expands evaluation diagnostics without changing the existing BLEU / glossary preservation contract.
 - **Concrete Scope:** Add `compute_chrf` (and optionally `compute_chrf_plus`); extend `EvaluationResult` and `format_evaluation_summary`; add config toggle; backfill at least one historical generation CSV report.
@@ -534,11 +534,11 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** Pure-Python chrF implementation must match an authoritative reference within tolerance; if using `sacrebleu`, pin the version and add to `requirements.txt`.
 - **Acceptance Criteria:** `evaluation_summary.csv` has a chrF row; `compute_chrf` is unit-tested (3+ assertions); historical backfill report exists under `data/review/evaluation/.../chrf-backfill/`; BLEU and glossary numbers unchanged.
 - **Recommended Test Commands:** `venv\Scripts\python.exe -m unittest tests.test_evaluation -v`; `venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint <pilot or latest>`; `Get-Content "data\review\evaluation\generation_report\evaluation_summary.csv"`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
-- **Notes:** Owned by [T-F1](task-briefs/T-F1.md). Can run immediately (does not block on Track A).
+- **Notes:** Owned by [T-F1](task-briefs/T-F1.md). Can run immediately (does not block on Track A). **Status correction (2026-05-28):** an earlier edit erroneously flipped this to DONE; filesystem verification found no `compute_chrf` in `evaluation.py`, so it was reverted to TODO. NOT executed.
 
 ## RF-025: Add Optional COMET Metric
 
-- **Status:** DONE
+- **Status:** TODO
 - **Scope:** new `src/longtu_translation_pipeline/comet_metric.py`, `evaluation.py`, `requirements-training.txt`, `configs/evaluation/generation_report.json`, `tests/test_evaluation.py`, `docs/refactor/decisions.md`
 - **Background / Why:** COMET (unbabel-comet) is a learned reference-based MT metric that correlates better than BLEU/chrF with human judgment for mid-resource pairs like zh→ko. It is optional because of model size and dependency weight.
 - **Concrete Scope:** Add COMET as an opt-in metric (default off). Pin `unbabel-comet` in `requirements-training.txt`. Use lazy import + module-level model caching so the rest of the package is not affected. Mock the call in tests. Record the contract change in `decisions.md`.
@@ -546,11 +546,11 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** Large dependency, ~1.5GB model download on first use; runtime dominated by COMET on CPU.
 - **Acceptance Criteria:** Default config has `comet_enabled=false` and reports look identical to before this RF; with the flag on, a COMET row appears in `evaluation_summary.csv` and `report_manifest.json`; tests do not download the model.
 - **Recommended Test Commands:** `venv\Scripts\python.exe -m unittest tests.test_evaluation -v`; `venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint <ckpt>`; (with custom flagged config) confirm COMET row appears; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
-- **Notes:** Owned by [T-F2](task-briefs/T-F2.md). Optional research extension; depends on at least one generation CSV from T-A3.
+- **Notes:** Owned by [T-F2](task-briefs/T-F2.md). Optional research extension; depends on at least one generation CSV from T-A3. **Status correction (2026-05-28):** an earlier edit erroneously flipped this to DONE; filesystem verification found no `src/longtu_translation_pipeline/comet_metric.py`, so it was reverted to TODO. NOT executed.
 
 ## RF-026: NLLB-1.3B / 3.3B Base Model Experiment
 
-- **Status:** DONE
+- **Status:** TODO
 - **Scope:** `configs/training/full_10k_nllb_1.3b.json` (new), optional `_3.3b.json`, `configs/inference/nllb_1.3b.json` (new), training runs against the same RF-015 corpus
 - **Background / Why:** After RF-007-P3 establishes a 600M baseline, larger NLLB variants (1.3B, 3.3B) are the next obvious quality lever. Keeping the same segments / split / seed / marker shape allows direct comparison.
 - **Concrete Scope:** Clone `full_10k.json` to a 1.3B profile; run full 10k training, validation, and test; record side-by-side comparison vs. RF-007-P3 baseline. Optionally repeat for 3.3B if VRAM allows.
@@ -558,11 +558,11 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** VRAM requirements grow; gradient accumulation or LoRA may be needed for 1.3B+ on smaller GPUs; document deviations.
 - **Acceptance Criteria:** New run directory under `fine-tuned-models/nllb-200-1.3B/zh2ko/runs/` with matching `segments_sha256`; side-by-side test report comparison recorded in this entry; 600M baseline untouched.
 - **Recommended Test Commands:** `venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k_nllb_1.3b.json --nllb-smoke-test --smoke-rows 2`; `$env:HF_HOME="...; venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k_nllb_1.3b.json --train --run-name run-full-10k-nllb-1.3b-v1`; `Get-Content "<run>\run_manifest.json"`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`.
-- **Notes:** Owned by [T-F3](task-briefs/T-F3.md). Pending RF-007-P3.
+- **Notes:** Owned by [T-F3](task-briefs/T-F3.md). Pending RF-007-P3 (now DONE — unblocked). **Status correction (2026-05-28):** an earlier edit erroneously flipped this to DONE; filesystem verification found no `configs/training/full_10k_nllb_1.3b.json` and no `fine-tuned-models/nllb-200-1.3B/` run directory, so it was reverted to TODO. NOT executed.
 
 ## RF-027: Back-Translation Data Augmentation
 
-- **Status:** DONE
+- **Status:** TODO
 - **Scope:** new `scripts/generate_back_translation.py`, new `configs/training/full_10k_with_backtrans.json`, ignored `data/segments_synth_backtrans.csv`, manifest schema extension to record synthetic source SHA256
 - **Background / Why:** Back-translation augments training data with synthetic zh→ko pairs derived from a ko corpus translated by a ko→zh model. Done with strict isolation it can lift quality; done carelessly it leaks synthetic content into validation/test.
 - **Concrete Scope:** Generate a synthetic file outside `data/segments.csv`; extend training to append it to the train split only (after the deterministic 8:1:1 split is computed on real data); record both real and synthetic SHA256 in the manifest; verify validation/test splits are bit-identical to the baseline run.
@@ -570,11 +570,11 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** Synthetic rows leaking into validation or test invalidate the test report; the verification step that compares val/test SHA256 to baseline is non-negotiable.
 - **Acceptance Criteria:** Synthetic file outside `data/segments.csv`; no synth row appears in validation or test splits (verified by SHA256 equality with baseline splits); manifest records both SHA256s; backlog Notes carry comparison vs. RF-007-P3 baseline.
 - **Recommended Test Commands:** `Get-FileHash <baseline>\splits\validation.csv,<synth>\splits\validation.csv -Algorithm SHA256`; `Get-FileHash <baseline>\splits\test.csv,<synth>\splits\test.csv -Algorithm SHA256`; leak-check script in the brief; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`.
-- **Notes:** Owned by [T-F4](task-briefs/T-F4.md). Pending RF-007-P3.
+- **Notes:** Owned by [T-F4](task-briefs/T-F4.md). Pending RF-007-P3 (now DONE — unblocked). **Status correction (2026-05-28):** an earlier edit erroneously flipped this to DONE; filesystem verification found no `scripts/generate_back_translation.py`, so it was reverted to TODO. NOT executed.
 
 ## RF-028: Inference Parameter Sweep
 
-- **Status:** DONE
+- **Status:** TODO
 - **Scope:** new `scripts/sweep_inference_params.py`, new `configs/inference/sweep_v1.json`, ignored `data/review/inference/sweeps/`
 - **Background / Why:** After RF-007-P3 selects a checkpoint, the cheapest remaining lever is inference hyperparameters (beam width, length penalty, no_repeat_ngram_size, sampling). A small grid sweep on validation can reveal a better operating point without retraining.
 - **Concrete Scope:** Add a sweep script that takes a JSON grid, generates per-grid-point validation translations, evaluates, and writes a comparison CSV. Run the winning config once on the test split for the final number.
@@ -582,7 +582,7 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** Iterating the grid on the test split is data leakage; the contract is strict — sweep on validation, run the winning config on test once.
 - **Acceptance Criteria:** `sweep_results.csv` lists at least 6 grid points with all configured metrics; winning validation config identified; one-shot test report on the winner recorded; comparison vs. baseline inference config in this entry.
 - **Recommended Test Commands:** `venv\Scripts\python.exe scripts\sweep_inference_params.py --run-dir <run> --model-path <ckpt> --split validation --grid configs\inference\sweep_v1.json --output-dir data\review\inference\sweeps\v1`; `Get-Content "data\review\inference\sweeps\v1\sweep_results.csv"`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`.
-- **Notes:** Owned by [T-F5](task-briefs/T-F5.md). Pending RF-007-P3 (selected checkpoint).
+- **Notes:** Owned by [T-F5](task-briefs/T-F5.md). Pending RF-007-P3 (now DONE — selected checkpoint-48000). **Status correction (2026-05-28):** an earlier edit erroneously flipped this to DONE; filesystem verification found no `scripts/sweep_inference_params.py` and no `configs/inference/sweep_v1.json`, so it was reverted to TODO. NOT executed.
 
 ## RF-029: LLM Cleanup Batch API + Strict JSON Schema
 
