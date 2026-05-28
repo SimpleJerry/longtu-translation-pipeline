@@ -207,7 +207,7 @@ venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\defa
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate-test --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-full-10k-corrected-v1
 ```
 
-To evaluate an existing translation-result CSV, use the RF-007 evaluation entry point. Input uses the historical notebook output columns: `source`, `references`, and `candidates`. BLEU defaults to Korean whitespace tokenization, and glossary preservation strips `<start>...<end>` markers from candidate text before checking Korean term presence. Empty generated `candidates` are reported as `empty_candidate_rows` instead of stopping the report.
+To evaluate an existing translation-result CSV, use the RF-007 evaluation entry point. Input uses the historical notebook output columns: `source`, `references`, and `candidates`. BLEU defaults to Korean whitespace tokenization, and glossary preservation strips `<start>...<end>` markers from candidate text before checking Korean term presence. RF-024 adds chrF (character n-gram F-score, max_n=6, beta=2), which correlates better with human judgment than BLEU on morphologically rich languages like Korean. Empty generated `candidates` are reported as `empty_candidate_rows` instead of stopping the report.
 The inference entry point now applies the same `data/glossary.csv` `<start>...<end>` terminology markers to source text before tokenization, while generated CSVs still keep the raw source text for review. RF-007 reports both exact and no-space glossary preservation: exact shows formatting consistency, and no-space avoids treating Korean spacing differences as true terminology misses.
 
 ```powershell

@@ -87,6 +87,13 @@ class GlossaryPreservationResult:
 
 
 @dataclass(frozen=True)
+class ChrfResult:
+    score: float
+    max_n: int
+    beta: float
+
+
+@dataclass(frozen=True)
 class EvaluationResult:
     input_path: Path
     row_count: int
@@ -94,6 +101,7 @@ class EvaluationResult:
     rows: list[TranslationRow]
     bleu: BleuResult
     glossary: GlossaryPreservationResult
+    chrf: ChrfResult
 
 
 def evaluate_translation(config: EvaluationConfig, input_override: str | Path | None = None) -> EvaluationResult:
@@ -119,6 +127,11 @@ def evaluate_translation(config: EvaluationConfig, input_override: str | Path | 
         smooth_value=config.bleu.smooth_value,
     )
     glossary = compute_glossary_preservation(rows, terms)
+    chrf_cfg = config.chrf
+    if chrf_cfg.enabled:
+        chrf = compute_chrf(references, candidates, max_n=chrf_cfg.max_n, beta=chrf_cfg.beta)
+    else:
+        chrf = ChrfResult(score=0.0, max_n=chrf_cfg.max_n, beta=chrf_cfg.beta)
     return EvaluationResult(
         input_path=input_path,
         row_count=len(rows),
@@ -126,6 +139,7 @@ def evaluate_translation(config: EvaluationConfig, input_override: str | Path | 
         rows=rows,
         bleu=bleu,
         glossary=glossary,
+        chrf=chrf,
     )
 
 
@@ -260,6 +274,59 @@ def compute_brevity_penalty(candidate_length: int, reference_length: int) -> flo
     return math.exp(1 - reference_length / candidate_length)
 
 
+def compute_chrf(
+    references: Sequence[str],
+    candidates: Sequence[str],
+    max_n: int = 6,
+    beta: float = 2.0,
+) -> ChrfResult:
+    """Compute corpus-level chrF (character n-gram F-score, Popović 2015).
+
+    Precision and recall are averaged over n-gram orders 1..max_n using
+    aggregated corpus counts, then combined via F_beta.  Spaces are stripped
+    before counting, matching the standard chrF convention.
+    """
+    if len(references) != len(candidates):
+        raise ValueError("references and candidates must have the same length")
+    if not references:
+        raise ValueError("At least one reference/candidate pair is required")
+
+    total_match = [0] * max_n
+    total_ref = [0] * max_n
+    total_hyp = [0] * max_n
+
+    for ref, hyp in zip(references, candidates):
+        ref_chars = [c for c in ref if not c.isspace()]
+        hyp_chars = [c for c in hyp if not c.isspace()]
+        for n in range(1, max_n + 1):
+            idx = n - 1
+            ref_ngrams: Counter[tuple[str, ...]] = Counter(
+                tuple(ref_chars[i : i + n]) for i in range(max(0, len(ref_chars) - n + 1))
+            )
+            hyp_ngrams: Counter[tuple[str, ...]] = Counter(
+                tuple(hyp_chars[i : i + n]) for i in range(max(0, len(hyp_chars) - n + 1))
+            )
+            matches = sum(min(count, ref_ngrams.get(ng, 0)) for ng, count in hyp_ngrams.items())
+            total_match[idx] += matches
+            total_ref[idx] += sum(ref_ngrams.values())
+            total_hyp[idx] += sum(hyp_ngrams.values())
+
+    valid_orders = [i for i in range(max_n) if total_ref[i] > 0 or total_hyp[i] > 0]
+    if not valid_orders:
+        return ChrfResult(score=0.0, max_n=max_n, beta=beta)
+
+    precisions = [total_match[i] / total_hyp[i] if total_hyp[i] > 0 else 0.0 for i in range(max_n)]
+    recalls = [total_match[i] / total_ref[i] if total_ref[i] > 0 else 0.0 for i in range(max_n)]
+
+    mean_precision = sum(precisions[i] for i in valid_orders) / len(valid_orders)
+    mean_recall = sum(recalls[i] for i in valid_orders) / len(valid_orders)
+
+    denom = beta * beta * mean_precision + mean_recall
+    score = (1 + beta * beta) * mean_precision * mean_recall / denom if denom > 0.0 else 0.0
+
+    return ChrfResult(score=score, max_n=max_n, beta=beta)
+
+
 def compute_glossary_preservation(
     rows: Sequence[TranslationRow],
     terms: Sequence[GlossaryTerm],
@@ -375,6 +442,7 @@ def require_columns(path: Path, fieldnames: Sequence[str] | None, columns: Itera
 def format_evaluation_summary(result: EvaluationResult) -> str:
     glossary = result.glossary
     bleu = result.bleu
+    chrf = result.chrf
     return "\n".join(
         [
             "Evaluation summary",
@@ -384,6 +452,9 @@ def format_evaluation_summary(result: EvaluationResult) -> str:
             f"bleu={bleu.score:.6f}",
             f"bleu_tokenization={bleu.tokenization}",
             f"bleu_brevity_penalty={bleu.brevity_penalty:.6f}",
+            f"chrf={chrf.score:.6f}",
+            f"chrf_max_n={chrf.max_n}",
+            f"chrf_beta={chrf.beta}",
             f"glossary_preservation_rate={glossary.preservation_rate:.6f}",
             f"glossary_preservation_rate_exact={glossary.preservation_rate_exact:.6f}",
             f"glossary_preservation_rate_nospace={glossary.preservation_rate_nospace:.6f}",
@@ -570,6 +641,7 @@ def write_report_manifest(
         "row_count": result.row_count,
         "empty_candidate_rows": result.empty_candidate_rows,
         "bleu": f"{result.bleu.score:.6f}",
+        "chrf": f"{result.chrf.score:.6f}",
         "glossary_preservation_rate": f"{result.glossary.preservation_rate:.6f}",
         "glossary_preservation_rate_exact": f"{result.glossary.preservation_rate_exact:.6f}",
         "glossary_preservation_rate_nospace": f"{result.glossary.preservation_rate_nospace:.6f}",
@@ -582,6 +654,7 @@ def write_report_manifest(
 def summary_rows(result: EvaluationResult) -> list[tuple[str, str]]:
     glossary = result.glossary
     bleu = result.bleu
+    chrf = result.chrf
     return [
         ("input", str(result.input_path)),
         ("rows", str(result.row_count)),
@@ -591,6 +664,9 @@ def summary_rows(result: EvaluationResult) -> list[tuple[str, str]]:
         ("bleu_reference_length", str(bleu.reference_length)),
         ("bleu_candidate_length", str(bleu.candidate_length)),
         ("bleu_brevity_penalty", f"{bleu.brevity_penalty:.6f}"),
+        ("chrf", f"{chrf.score:.6f}"),
+        ("chrf_max_n", str(chrf.max_n)),
+        ("chrf_beta", f"{chrf.beta:.1f}"),
         ("glossary_preservation_rate", f"{glossary.preservation_rate:.6f}"),
         ("glossary_preservation_rate_exact", f"{glossary.preservation_rate_exact:.6f}"),
         ("glossary_preservation_rate_nospace", f"{glossary.preservation_rate_nospace:.6f}"),

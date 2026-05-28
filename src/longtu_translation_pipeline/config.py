@@ -7,7 +7,7 @@ importing model libraries. Real model loading is deferred to a later phase.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -177,12 +177,20 @@ class EvaluationOutputConfig:
 
 
 @dataclass(frozen=True)
+class ChrfConfig:
+    enabled: bool
+    max_n: int
+    beta: float
+
+
+@dataclass(frozen=True)
 class EvaluationConfig:
     path: Path
     input: EvaluationInputConfig
     glossary: EvaluationGlossaryConfig
     bleu: BleuConfig
     output: EvaluationOutputConfig
+    chrf: ChrfConfig = field(default_factory=lambda: ChrfConfig(enabled=True, max_n=6, beta=2.0))
 
 
 def load_training_config(path: str | Path, base_dir: str | Path | None = None) -> TrainingConfig:
@@ -310,10 +318,23 @@ def load_evaluation_config(path: str | Path, base_dir: str | Path | None = None)
     glossary_section = require_mapping(data, "glossary", config_path)
     bleu_section = require_mapping(data, "bleu", config_path)
     output_section = require_mapping(data, "output", config_path)
+    chrf_section = data.get("chrf")
 
     tokenization = require_str(bleu_section, "tokenization", config_path)
     if tokenization not in {"whitespace", "char"}:
         raise ValueError(f"bleu.tokenization must be 'whitespace' or 'char': {config_path}")
+
+    chrf_config: ChrfConfig
+    if chrf_section is not None:
+        if not isinstance(chrf_section, dict):
+            raise ValueError(f"chrf must be a JSON object: {config_path}")
+        chrf_config = ChrfConfig(
+            enabled=optional_bool(chrf_section, "enabled", config_path, default=True),  # type: ignore[arg-type]
+            max_n=optional_positive_int(chrf_section, "max_n", config_path, default=6),  # type: ignore[arg-type]
+            beta=optional_positive_float(chrf_section, "beta", config_path, default=2.0),  # type: ignore[arg-type]
+        )
+    else:
+        chrf_config = ChrfConfig(enabled=True, max_n=6, beta=2.0)
 
     return EvaluationConfig(
         path=config_path,
@@ -337,6 +358,7 @@ def load_evaluation_config(path: str | Path, base_dir: str | Path | None = None)
             report_dir=resolve_config_path(require_str(output_section, "report_dir", config_path), path_base),
             write_reports=require_bool(output_section, "write_reports", config_path),
         ),
+        chrf=chrf_config,
     )
 
 

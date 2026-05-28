@@ -207,7 +207,7 @@ venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\defa
 venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate-test --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-full-10k-corrected-v1
 ```
 
-如需评估已有翻译结果 CSV，使用 RF-007 评估入口。输入默认采用 notebook 旧输出列名：`source`、`references`、`candidates`。BLEU 默认按韩文空格词分词，glossary preservation 会去除候选译文中的 `<start>...<end>` marker 后检查韩文术语是否出现。模型生成的空 `candidates` 会作为评估结果中的 `empty_candidate_rows` 记录，而不是让报告中断。
+如需评估已有翻译结果 CSV，使用 RF-007 评估入口。输入默认采用 notebook 旧输出列名：`source`、`references`、`candidates`。BLEU 默认按韩文空格词分词，glossary preservation 会去除候选译文中的 `<start>...<end>` marker 后检查韩文术语是否出现。RF-024 新增 chrF（字符 n-gram F-score，max_n=6，beta=2），在韩文等形态丰富语言上与人工判断的相关性优于 BLEU。模型生成的空 `candidates` 会作为评估结果中的 `empty_candidate_rows` 记录，而不是让报告中断。
 推理入口默认会先用 `data/glossary.csv` 对输入 source 应用与训练一致的 `<start>...<end>` 术语 marker，但生成 CSV 仍保留原始 source 以便 review。RF-007 会同时报告 exact 与 no-space glossary preservation：exact 用于观察格式一致性，no-space 用于避免把韩文空格差异误判成真正术语缺失。
 
 ```powershell

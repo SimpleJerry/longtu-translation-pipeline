@@ -15,6 +15,7 @@ from longtu_translation_pipeline.config import load_evaluation_config  # noqa: E
 from longtu_translation_pipeline.evaluation import (  # noqa: E402
     GlossaryTerm,
     TranslationRow,
+    compute_chrf,
     compute_corpus_bleu,
     compute_glossary_preservation,
     evaluate_translation,
@@ -217,6 +218,68 @@ class EvaluationTest(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "No translation rows found"):
                 evaluate_translation(load_evaluation_config(config_path))
+
+    def test_chrf_is_one_for_exact_match(self) -> None:
+        result = compute_chrf(["abc def ghi"], ["abc def ghi"])
+
+        self.assertAlmostEqual(result.score, 1.0)
+
+    def test_chrf_is_zero_for_completely_different_strings(self) -> None:
+        # "abc" has no character n-grams in common with "xyz"
+        result = compute_chrf(["aaa"], ["zzz"])
+
+        self.assertAlmostEqual(result.score, 0.0)
+
+    def test_chrf_partial_match_matches_reference_value(self) -> None:
+        # ref="abc def" (chars a,b,c,d,e,f), hyp="abc" (chars a,b,c)
+        # n=1: P=1.0 R=0.5 | n=2: P=1.0 R=0.4 | n=3: P=1.0 R=0.25
+        # n=4,5,6: hyp has no n-grams, P=0 R=0 (ref has n-grams so valid orders)
+        # mean_P=0.5, mean_R=(0.5+0.4+0.25)/6≈0.1917, beta=2
+        # verified against manual formula
+        result = compute_chrf(["abc def"], ["abc"])
+
+        self.assertGreater(result.score, 0.0)
+        self.assertLess(result.score, 1.0)
+        self.assertAlmostEqual(result.score, 0.21863, places=4)
+
+    def test_chrf_partial_is_between_zero_and_exact(self) -> None:
+        exact = compute_chrf(["abc def"], ["abc def"])
+        partial = compute_chrf(["abc def"], ["abc"])
+        empty = compute_chrf(["abc def"], [""])
+
+        self.assertLess(empty.score, partial.score)
+        self.assertLess(partial.score, exact.score)
+
+    def test_chrf_result_carries_params(self) -> None:
+        result = compute_chrf(["abc"], ["abc"], max_n=3, beta=1.0)
+
+        self.assertEqual(result.max_n, 3)
+        self.assertAlmostEqual(result.beta, 1.0)
+
+    def test_chrf_appears_in_evaluation_summary_csv(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_path = tmp_path / "generated.csv"
+            glossary_path = tmp_path / "glossary.csv"
+            config_path = tmp_path / "evaluation.json"
+            report_dir = tmp_path / "report"
+            write_csv(
+                input_path,
+                ["segment_id", "source", "references", "candidates"],
+                [{"segment_id": "1", "source": "abc", "references": "def ghi", "candidates": "def"}],
+            )
+            write_csv(glossary_path, ["term_id", "zh-CN", "ko"], [])
+            write_config(config_path, input_path, glossary_path)
+
+            result = evaluate_translation(load_evaluation_config(config_path))
+            write_evaluation_reports(result, report_dir)
+
+            summary = read_csv(report_dir / "evaluation_summary.csv")
+            metrics = {row["metric"] for row in summary}
+
+        self.assertIn("chrf", metrics)
+        chrf_val = next(row["value"] for row in summary if row["metric"] == "chrf")
+        self.assertGreater(float(chrf_val), 0.0)
 
     def test_empty_candidate_is_reported_not_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

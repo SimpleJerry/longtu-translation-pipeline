@@ -526,7 +526,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-024: Add chrF Metric to Evaluation
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `src/longtu_translation_pipeline/evaluation.py`, `configs/evaluation/*.json`, `tests/test_evaluation.py`, README evaluation section
 - **Background / Why:** chrF correlates better with human judgment than BLEU on morphologically rich languages like Korean and needs no learned model. Adding it expands evaluation diagnostics without changing the existing BLEU / glossary preservation contract.
 - **Concrete Scope:** Add `compute_chrf` (and optionally `compute_chrf_plus`); extend `EvaluationResult` and `format_evaluation_summary`; add config toggle; backfill at least one historical generation CSV report.
@@ -534,7 +534,15 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** Pure-Python chrF implementation must match an authoritative reference within tolerance; if using `sacrebleu`, pin the version and add to `requirements.txt`.
 - **Acceptance Criteria:** `evaluation_summary.csv` has a chrF row; `compute_chrf` is unit-tested (3+ assertions); historical backfill report exists under `data/review/evaluation/.../chrf-backfill/`; BLEU and glossary numbers unchanged.
 - **Recommended Test Commands:** `venv\Scripts\python.exe -m unittest tests.test_evaluation -v`; `venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint <pilot or latest>`; `Get-Content "data\review\evaluation\generation_report\evaluation_summary.csv"`; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
-- **Notes:** Owned by [T-F1](task-briefs/T-F1.md). Can run immediately (does not block on Track A). **Status correction (2026-05-28):** an earlier edit erroneously flipped this to DONE; filesystem verification found no `compute_chrf` in `evaluation.py`, so it was reverted to TODO. NOT executed.
+- **Notes:** Owned by [T-F1](task-briefs/T-F1.md). Implemented 2026-05-28 as Option A (diagnostic only, no training changes). Pure-Python chrF (max_n=6, beta=2), no sacrebleu dependency. 210 tests pass.
+
+  **Backfill results (checkpoint-48000, run-full-earlystop-v1):**
+  - test set (6626 rows): chrF=0.5825, BLEU=0.3192, preservation_nospace=0.9528
+  - validation set (6626 rows): chrF=0.5851, BLEU=0.3226, preservation_nospace=0.9528
+
+  **3-checkpoint chrF ranking:** Only one validation CSV preserved per run (not per checkpoint). Separate per-checkpoint CSVs for 44000/49000 were not retained. 3-checkpoint chrF ranking comparison留给 T-F5 的 sweep 顺带产出.
+
+  **Ranking conclusion (single checkpoint):** chrF=0.5825 on test is consistent with BLEU direction (both confirm reasonable translation quality for checkpoint-48000). No conflict with the prior BLEU+preservation composite selection — chrF is a confirmatory diagnostic, no early-stopping change needed.
 
 ## RF-025: Add Optional COMET Metric
 
