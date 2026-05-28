@@ -598,7 +598,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-006-P13: Early-Stopping Formal Training with Composite Metric
 
-- **Status:** DOING
+- **Status:** DONE
 - **Scope:** `src/longtu_translation_pipeline/config.py`, `src/longtu_translation_pipeline/training.py`, new `src/longtu_translation_pipeline/training_metrics.py`, new `configs/training/full_earlystop.json`, `tests/test_training_pipeline.py`, ignored `fine-tuned-models/.../runs/run-full-earlystop-v1/`
 - **Background / Why:** RF-006-P11 (`run-full-10k-llm-segments-v1`) used `max_steps=10000`, which equals 0.189 epoch on the 53,015-row train split. At step 10000 `eval_loss` was still decreasing (0.0729→0.0672 from step 5000) and validation BLEU still rising (0.1917→0.1969 from 7000 to 10000) — strong evidence the model is under-fit. The arbitrary step ceiling has no machinery to detect either under-fit or over-fit. This task adds principled early stopping driven by a composite quality metric so future training auto-stops when actually plateaued.
 - **Concrete Scope:** Switch the formal training path from `Trainer` to `Seq2SeqTrainer`; add `EarlyStoppingCallback`, `load_best_model_at_end=True`, `metric_for_best_model="eval_composite"`. Implement a `compute_metrics` factory in a new `training_metrics.py` module that decodes generated token IDs, strips glossary markers, and reuses `compute_corpus_bleu` and `compute_glossary_preservation` from `evaluation.py` to produce `eval_bleu`, `eval_glossary_preservation_exact`, `eval_glossary_preservation_nospace`, and `eval_composite = 0.5·BLEU + 0.5·preservation_nospace`. **In-loop eval uses a 1,000-row deterministic subset of `splits/validation.csv` (`metrics.eval_subset_rows=1000`)** because the full 6,626-row validation set takes ~38 min per eval (cost-prohibitive over a 10-epoch ceiling). The remaining 5,626 validation rows are reserved for **post-hoc top-K (3) full-eval** after early stopping triggers. **In-loop `generation_max_length=256`** (down from 400) — verified on test_generated.csv that p99.9 of ko candidate tokens = 225, so 256 truncates only ~0.06% of in-loop rows; the 400 cap stays in `configs/inference/default.json` for post-hoc / T-A6 / final inference. New profile `configs/training/full_earlystop.json` carries `num_train_epochs=10` ceiling (no `max_steps`), `per_device_train_batch_size=4`, `lr_scheduler_type="cosine"`, `eval_steps=save_steps=1000` (returned to 1000 after introducing `eval_subset_rows`), `early_stopping_patience=5`, `early_stopping_threshold=0.0`, `predict_with_generate=true`, `generation_max_length=256`, `eval_subset_rows=1000`. All other hyperparameters identical to `full_10k.json` for partial comparability. The 8:1:1 split contract (seed=42) is preserved — no changes to splits.
@@ -622,6 +622,109 @@ This file is the single source of truth for systematic refactor work. README fil
   **Code increment committed 2026-05-28**: `b759563` (`Add eval subset and reduce generation_max_length for in-loop eval`). All 204 tests pass (203 → 204, +`test_eval_dataset_is_subsetted_when_eval_subset_rows_configured`). Final config: `generation_max_length=256`, `eval_subset_rows=1000`, `eval_steps=save_steps=1000`.
 
   **Training run `run-full-earlystop-v1` started manually by user on 2026-05-28.** After training completes, run the post-hoc top-K full-validation (T-A5 brief Step 6b), record the in-loop eval curve + post-hoc full-val table + branch decision in this Notes block, then set Status → DONE.
+
+  ---
+
+  **Training run completed — RF-006-P13 results (recorded by T-A5 Step 6b/6c, 2026-05-28)**
+
+  **Run summary:**
+  - Run name: `run-full-earlystop-v1`
+  - Run dir: `fine-tuned-models/nllb-200-distilled-600M/zh2ko/runs/run-full-earlystop-v1/`
+  - `segments_sha256`: `30D5C299828C10235AEE357E9333740913E55C291C5B07A45C0739E41818EA97`
+  - Training started: `2026-05-28T12:10:35` (from `run_manifest.json`); wall-clock end time not recorded.
+  - Device: NVIDIA GeForce RTX 4070 Ti SUPER; torch=2.12.0+cu132, transformers=5.9.0
+  - Final global step: 49000 (epoch ≈ 3.697); early stopping triggered.
+  - `best_global_step`: 44000; `best_metric` (eval_composite, in-loop): 0.6992663
+  - `best_model_checkpoint`: `checkpoint-44000` (auto-loaded via `load_best_model_at_end=True`)
+  - Saved checkpoints (save_total_limit=3): {44000, 48000, 49000}
+
+  **Independent early-stop verification:**
+  - Eval composite peaks at step 44000 (0.6993). Subsequent 5 evals all below the peak:
+    45000 (0.6942), 46000 (0.6970), 47000 (0.6922), 48000 (0.6898), 49000 (0.6977).
+  - patience counter reached 5 at step 49000 → training stopped.
+  - Math check: best_step (44000) + patience (5) × eval_steps (1000) = 49000 ✓
+  - eval_loss is NOT monotonically decreasing (slight upticks at 27000, 32000, 40000-41000); the best checkpoint was correctly selected by eval_composite, not eval_loss. ✓
+  - Background report verified: best_global_step=44000, best_metric=0.6993, early stop at 49000 — all match. ✓
+
+  **In-loop eval curve** (val_mini = first 1000 rows of `splits/validation.csv`, max_length=256, greedy):
+
+  | step | epoch | eval_loss | eval_bleu | pres_exact | pres_nospace | composite |
+  |------|-------|-----------|-----------|------------|--------------|-----------|
+  | 1000 | 0.075 | 5.9055 | 0.0046 | 0.0048 | 0.0048 | 0.0047 |
+  | 2000 | 0.151 | 0.7261 | 0.0984 | 0.2530 | 0.2578 | 0.1781 |
+  | 3000 | 0.226 | 0.0796 | 0.2055 | 0.6265 | 0.6554 | 0.4305 |
+  | 4000 | 0.302 | 0.0670 | 0.2617 | 0.7012 | 0.7277 | 0.4947 |
+  | 5000 | 0.377 | 0.0613 | 0.2770 | 0.7518 | 0.7759 | 0.5265 |
+  | 6000 | 0.453 | 0.0575 | 0.2811 | 0.7711 | 0.8000 | 0.5406 |
+  | 7000 | 0.528 | 0.0550 | 0.3055 | 0.8024 | 0.8289 | 0.5672 |
+  | 8000 | 0.604 | 0.0527 | 0.3100 | 0.8241 | 0.8506 | 0.5803 |
+  | 9000 | 0.679 | 0.0509 | 0.3278 | 0.8361 | 0.8602 | 0.5940 |
+  | 10000 | 0.754 | 0.0495 | 0.3332 | 0.8337 | 0.8627 | 0.5979 |
+  | 11000 | 0.830 | 0.0488 | 0.3394 | 0.8530 | 0.8843 | 0.6119 |
+  | 12000 | 0.905 | 0.0473 | 0.3422 | 0.8651 | 0.8940 | 0.6181 |
+  | 13000 | 0.981 | 0.0465 | 0.3567 | 0.8651 | 0.8940 | 0.6253 |
+  | 14000 | 1.056 | 0.0459 | 0.3648 | 0.8723 | 0.9012 | 0.6330 |
+  | 15000 | 1.132 | 0.0457 | 0.3586 | 0.8819 | 0.9108 | 0.6347 |
+  | 16000 | 1.207 | 0.0448 | 0.3704 | 0.8771 | 0.9060 | 0.6382 |
+  | 17000 | 1.283 | 0.0442 | 0.3652 | 0.8843 | 0.9133 | 0.6392 |
+  | 18000 | 1.358 | 0.0436 | 0.3790 | 0.8795 | 0.9108 | 0.6449 |
+  | 19000 | 1.434 | 0.0428 | 0.3587 | 0.8819 | 0.9108 | 0.6348 |
+  | 20000 | 1.509 | 0.0422 | 0.3803 | 0.8867 | 0.9181 | 0.6492 |
+  | 21000 | 1.584 | 0.0421 | 0.3851 | 0.8843 | 0.9157 | 0.6504 |
+  | 22000 | 1.660 | 0.0412 | 0.3756 | 0.8916 | 0.9205 | 0.6480 |
+  | 23000 | 1.735 | 0.0412 | 0.3854 | 0.8892 | 0.9181 | 0.6517 |
+  | 24000 | 1.811 | 0.0405 | 0.3776 | 0.8964 | 0.9253 | 0.6514 |
+  | 25000 | 1.886 | 0.0403 | 0.3916 | 0.9012 | 0.9301 | 0.6609 |
+  | 26000 | 1.962 | 0.0399 | 0.4198 | 0.9012 | 0.9301 | 0.6749 |
+  | 27000 | 2.037 | 0.0400 | 0.3985 | 0.9036 | 0.9325 | 0.6655 |
+  | 28000 | 2.113 | 0.0398 | 0.4144 | 0.9012 | 0.9325 | 0.6735 |
+  | 29000 | 2.188 | 0.0396 | 0.4045 | 0.9084 | 0.9373 | 0.6709 |
+  | 30000 | 2.263 | 0.0392 | 0.4243 | 0.9036 | 0.9325 | 0.6784 |
+  | 31000 | 2.339 | 0.0389 | 0.4150 | 0.9036 | 0.9325 | 0.6738 |
+  | 32000 | 2.414 | 0.0390 | 0.4148 | 0.9060 | 0.9349 | 0.6749 |
+  | 33000 | 2.490 | 0.0387 | 0.4151 | 0.9133 | 0.9422 | 0.6786 |
+  | 34000 | 2.565 | 0.0383 | 0.4243 | 0.9108 | 0.9398 | 0.6820 |
+  | 35000 | 2.641 | 0.0381 | 0.4296 | 0.9084 | 0.9373 | 0.6835 |
+  | 36000 | 2.716 | 0.0377 | 0.4408 | 0.9084 | 0.9373 | 0.6891 |
+  | 37000 | 2.792 | 0.0376 | 0.4394 | 0.9108 | 0.9398 | 0.6896 |
+  | 38000 | 2.867 | 0.0374 | 0.4289 | 0.9133 | 0.9422 | 0.6855 |
+  | 39000 | 2.943 | 0.0371 | 0.4022 | 0.9229 | 0.9518 | 0.6770 |
+  | 40000 | 3.018 | 0.0374 | 0.4402 | 0.9205 | 0.9494 | 0.6948 |
+  | 41000 | 3.093 | 0.0374 | 0.4356 | 0.9229 | 0.9518 | 0.6937 |
+  | 42000 | 3.169 | 0.0372 | 0.4368 | 0.9205 | 0.9494 | 0.6931 |
+  | 43000 | 3.244 | 0.0371 | 0.4412 | 0.9253 | 0.9542 | 0.6977 |
+  | **44000** | **3.320** | **0.0367** | **0.4443** | **0.9253** | **0.9542** | **0.6993** ← best_global_step |
+  | 45000 | 3.395 | 0.0367 | 0.4341 | 0.9253 | 0.9542 | 0.6942 | patience=1 |
+  | 46000 | 3.471 | 0.0366 | 0.4375 | 0.9277 | 0.9566 | 0.6970 | patience=2 |
+  | 47000 | 3.546 | 0.0365 | 0.4301 | 0.9253 | 0.9542 | 0.6922 | patience=3 |
+  | 48000 | 3.622 | 0.0364 | 0.4349 | 0.9157 | 0.9446 | 0.6898 | patience=4 |
+  | 49000 | 3.697 | 0.0363 | 0.4389 | 0.9277 | 0.9566 | 0.6977 | patience=5 → STOP |
+
+  All values sourced directly from `checkpoint-49000/trainer_state.json`. composite = 0.5·eval_bleu + 0.5·eval_glossary_preservation_nospace (matches trainer's `metric_for_best_model="eval_composite"`). No discrepancies found between draft and JSON.
+
+  **Step 6b — Post-hoc full-validation table** (6626 rows, max_length=400, greedy, `configs/inference/default.json`):
+
+  | Checkpoint | BLEU | pres_exact | pres_nospace | empty_candidate_rows | composite (0.5·BLEU+0.5·nospace) |
+  |---|---|---|---|---|---|
+  | checkpoint-44000 | 0.318918 | 0.948013 | 0.951355 | 0 | 0.635137 |
+  | **checkpoint-48000** | **0.325044** | **0.948013** | **0.951727** | **0** | **0.638386** ← full-val winner |
+  | checkpoint-49000 | 0.322597 | 0.950241 | 0.952841 | 0 | 0.637719 |
+
+  Report artifacts (Git-ignored): `data/review/evaluation/validation_report/run-full-earlystop-v1/checkpoint-{44000,48000,49000}/` — each contains `evaluation_summary.csv`, `glossary_preservation_rows.csv`, `sample_review.csv`, `report_manifest.json`.
+
+  **Step 6c — Decision: Branch (ii)** — Another top-K checkpoint (48000) scores higher on full validation than the trainer's auto-selected best (44000). Gap: 0.638386 − 0.635137 = 0.003249 (just above ε≈0.003). Between 48000 and 49000, the gap is only 0.0007 (within ε), so tie-break applies: prefer earlier checkpoint (less overfit risk) → 48000 confirmed. **T-A6 uses `checkpoint-48000`.**
+
+  Note on in-loop vs full-val discrepancy: the 1000-row in-loop subset ranked checkpoint-44000 first (0.6993) and checkpoint-48000 fourth (0.6898). On full 6626 rows the order reverses: 48000 (0.6384) > 49000 (0.6377) > 44000 (0.6351). The BLEU gap is large (in-loop BLEU ≈ 0.44 vs full-val ≈ 0.32) because the first 1000 validation rows are shorter/simpler than the full distribution. Preservation metrics are more stable across sample sizes and change by < 0.01 between in-loop and full-val. This is expected behavior for a 1000-row subset and does not indicate a problem with the training run.
+
+  **Comparison vs RF-006-P11 baseline** (full 6626-row validation, same split seed 42 — both use `splits/validation.csv` from `run_manifest.json`):
+
+  | Run | Checkpoint | BLEU | pres_nospace | composite | corpus_sha256 |
+  |---|---|---|---|---|---|
+  | RF-006-P11 (`run-full-10k-llm-segments-v1`) | checkpoint-9000 | 0.1959 | 0.7917 | 0.4938 | 1462B2E1… |
+  | **RF-006-P13 (`run-full-earlystop-v1`)** | **checkpoint-48000** | **0.3250** | **0.9517** | **0.6384** | 30D5C299… |
+  | Delta | | +0.1291 (+65.9%) | +0.1600 (+20.2%) | +0.1446 (+29.3%) | |
+
+  Caveat: RF-006-P11 and RF-006-P13 were trained on different corpora (SHA256 differ). The improvement reflects both longer training (0.19 epochs → 3.7 epochs) and the updated post-OpenAI-Batch-Mode cleaned corpus. A pure methodology ablation would require rerunning RF-006-P11 on the 30D5C299 corpus.
 
 ## RF-007-P4: New Held-Out Test Report on Early-Stop Best Checkpoint
 
