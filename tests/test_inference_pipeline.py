@@ -26,10 +26,12 @@ from longtu_translation_pipeline.inference import (  # noqa: E402
     read_test_records,
     read_validation_records,
     InferenceRecord,
+    PreparedInferenceRecord,
     prepare_inference_records,
     resolve_latest_run_checkpoint,
     resolve_manifest_path,
     require_manifest_string,
+    run_generation_batches,
     ValidationGenerationResult,
     write_generation_csv,
     write_validation_generation_manifest,
@@ -423,6 +425,114 @@ class InferencePipelineTest(unittest.TestCase):
         self.assertIn("test_split=fine-tuned-models", formatted)
         self.assertIn("generation_manifest=data", formatted)
         self.assertIn("output_columns=segment_id,source,references,candidates", formatted)
+
+
+    def test_decode_params_default_to_greedy_when_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_path = tmp_path / "s.csv"
+            output_path = tmp_path / "out.csv"
+            glossary_path = tmp_path / "g.csv"
+            config_path = tmp_path / "inference.json"
+            write_csv(input_path, ["segment_id", "zh-CN", "ko"], [])
+            write_csv(glossary_path, ["term_id", "zh-CN", "ko"], [])
+            config_path.write_text(
+                json.dumps({
+                    "input": {"path": str(input_path), "text_column": "zh-CN", "reference_column": "ko", "id_column": "segment_id"},
+                    "language": {"source_code": "zho_Hans", "target_code": "kor_Hang"},
+                    "model": {"path": "fine-tuned-models/test", "tokenizer_name": "facebook/nllb-200-distilled-600M"},
+                    "glossary": {"path": str(glossary_path), "source_terminology_markers": False},
+                    "output": {"path": str(output_path), "strip_glossary_markers": True},
+                    "generation": {"batch_size": 4, "max_length": 64},
+                    "dry_run": {"preview_rows": 1},
+                }),
+                encoding="utf-8",
+            )
+            config = load_inference_config(config_path)
+
+        self.assertEqual(config.generation.num_beams, 1)
+        self.assertEqual(config.generation.length_penalty, 1.0)
+        self.assertEqual(config.generation.no_repeat_ngram_size, 0)
+
+    def test_decode_params_loaded_from_generation_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_path = tmp_path / "s.csv"
+            output_path = tmp_path / "out.csv"
+            glossary_path = tmp_path / "g.csv"
+            config_path = tmp_path / "inference.json"
+            write_csv(input_path, ["segment_id", "zh-CN", "ko"], [])
+            write_csv(glossary_path, ["term_id", "zh-CN", "ko"], [])
+            config_path.write_text(
+                json.dumps({
+                    "input": {"path": str(input_path), "text_column": "zh-CN", "reference_column": "ko", "id_column": "segment_id"},
+                    "language": {"source_code": "zho_Hans", "target_code": "kor_Hang"},
+                    "model": {"path": "fine-tuned-models/test", "tokenizer_name": "facebook/nllb-200-distilled-600M"},
+                    "glossary": {"path": str(glossary_path), "source_terminology_markers": False},
+                    "output": {"path": str(output_path), "strip_glossary_markers": True},
+                    "generation": {"batch_size": 4, "max_length": 64, "num_beams": 5, "length_penalty": 1.2, "no_repeat_ngram_size": 3},
+                    "dry_run": {"preview_rows": 1},
+                }),
+                encoding="utf-8",
+            )
+            config = load_inference_config(config_path)
+
+        self.assertEqual(config.generation.num_beams, 5)
+        self.assertAlmostEqual(config.generation.length_penalty, 1.2)
+        self.assertEqual(config.generation.no_repeat_ngram_size, 3)
+
+    def test_decode_params_passed_to_model_generate(self) -> None:
+        from unittest.mock import MagicMock
+
+        mock_tensor = MagicMock()
+        mock_tensor.to.return_value = mock_tensor
+        encoded = {"input_ids": mock_tensor, "attention_mask": mock_tensor}
+
+        mock_tokenizer = MagicMock()
+        mock_tokenizer.return_value = encoded
+        mock_tokenizer.batch_decode.return_value = ["번역 결과"]
+
+        mock_param = MagicMock()
+        mock_param.device = "cpu"
+        mock_model = MagicMock()
+        mock_model.parameters.return_value = iter([mock_param])
+        mock_model.generate.return_value = MagicMock()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_path = tmp_path / "s.csv"
+            output_path = tmp_path / "out.csv"
+            glossary_path = tmp_path / "g.csv"
+            config_path = tmp_path / "inference.json"
+            write_csv(input_path, ["segment_id", "zh-CN", "ko"], [])
+            write_csv(glossary_path, ["term_id", "zh-CN", "ko"], [])
+            config_path.write_text(
+                json.dumps({
+                    "input": {"path": str(input_path), "text_column": "zh-CN", "reference_column": "ko", "id_column": "segment_id"},
+                    "language": {"source_code": "zho_Hans", "target_code": "kor_Hang"},
+                    "model": {"path": "fine-tuned-models/test", "tokenizer_name": "facebook/nllb-200-distilled-600M"},
+                    "glossary": {"path": str(glossary_path), "source_terminology_markers": False},
+                    "output": {"path": str(output_path), "strip_glossary_markers": True},
+                    "generation": {"batch_size": 4, "max_length": 64, "num_beams": 4, "length_penalty": 1.1, "no_repeat_ngram_size": 3},
+                    "dry_run": {"preview_rows": 1},
+                }),
+                encoding="utf-8",
+            )
+            config = load_inference_config(config_path)
+
+        records = [PreparedInferenceRecord(
+            record=InferenceRecord(record_id="1", text="挑战BOSS", reference="보스 도전"),
+            generation_text="挑战BOSS",
+            source_terms_marked=0,
+        )]
+        run_generation_batches(config, mock_tokenizer, mock_model, records, 256098)
+
+        mock_model.generate.assert_called_once()
+        _, kwargs = mock_model.generate.call_args
+        self.assertEqual(kwargs["num_beams"], 4)
+        self.assertAlmostEqual(kwargs["length_penalty"], 1.1)
+        self.assertEqual(kwargs["no_repeat_ngram_size"], 3)
+        self.assertEqual(kwargs["forced_bos_token_id"], 256098)
 
 
 def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:

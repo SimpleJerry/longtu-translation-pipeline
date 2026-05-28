@@ -573,6 +573,9 @@ def run_generation_batches(
             **encoded,
             forced_bos_token_id=forced_bos_token_id,
             max_length=config.generation.max_length,
+            num_beams=config.generation.num_beams,
+            length_penalty=config.generation.length_penalty,
+            no_repeat_ngram_size=config.generation.no_repeat_ngram_size,
         )
         decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
         for prepared_record, candidate in zip(batch_records, decoded):

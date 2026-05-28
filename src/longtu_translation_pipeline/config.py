@@ -134,6 +134,9 @@ class InferenceOutputConfig:
 class GenerationConfig:
     batch_size: int
     max_length: int
+    num_beams: int = 1
+    length_penalty: float = 1.0
+    no_repeat_ngram_size: int = 0
 
 
 @dataclass(frozen=True)
@@ -302,6 +305,9 @@ def load_inference_config(path: str | Path, base_dir: str | Path | None = None) 
         generation=GenerationConfig(
             batch_size=require_positive_int(generation_section, "batch_size", config_path),
             max_length=require_positive_int(generation_section, "max_length", config_path),
+            num_beams=optional_positive_int(generation_section, "num_beams", config_path, default=1) or 1,
+            length_penalty=optional_non_negative_float(generation_section, "length_penalty", config_path, default=1.0),
+            no_repeat_ngram_size=optional_non_negative_int(generation_section, "no_repeat_ngram_size", config_path, default=0),
         ),
         dry_run=DryRunConfig(
             preview_rows=require_non_negative_int(dry_run_section, "preview_rows", config_path),
@@ -601,3 +607,14 @@ def optional_non_negative_float(
     if value < 0:
         raise ValueError(f"{key} must be a non-negative number: {path}")
     return value
+
+
+def optional_non_negative_int(
+    data: JsonObject,
+    key: str,
+    path: Path,
+    default: int = 0,
+) -> int:
+    if key not in data:
+        return default
+    return require_non_negative_int(data, key, path)
