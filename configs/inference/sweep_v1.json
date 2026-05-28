@@ -1,0 +1,5 @@
+{
+  "num_beams": [1, 4, 5],
+  "length_penalty": [1.0, 1.1, 1.2],
+  "no_repeat_ngram_size": [0, 3]
+}
