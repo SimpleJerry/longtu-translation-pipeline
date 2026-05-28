@@ -36,8 +36,8 @@ Track A  (sequential, critical path — first 4 done as historical baseline)
       └─> T-A2 (RF-006-P11 re-train 10k)              [DONE]
               └─> T-A3 (RF-006-P12 validation report) [DONE]
                       └─> T-A4 (RF-007-P3 final held-out test report) [DONE — historical baseline]
-                              └─> T-A5 (RF-006-P13 early-stopping training, composite metric)  [PENDING]
-                                      └─> T-A6 (RF-007-P4 new held-out test on best checkpoint) [PENDING]
+                              └─> T-A5 (RF-006-P13 early-stopping training, composite metric)  [DONE — stop@49000, best=ckpt-48000 via Step 6b full-val re-rank]
+                                      └─> T-A6 (RF-007-P4 held-out test on checkpoint-48000) [PENDING — brief ready]
 
 Track B  (parallel, engineering hardening — audit P1)
   T-B1 (RF-017 extract llm_common.py)       # recommended before T-A1
