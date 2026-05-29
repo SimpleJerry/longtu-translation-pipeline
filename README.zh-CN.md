@@ -25,7 +25,16 @@
 | Glossary preservation (no-space) | 0.954 |
 | Glossary preservation (exact) | 0.950 |
 
-相对最初 under-fit 的 10k-step 基线（BLEU ≈ 0.198，preservation ≈ 0.80）有大幅提升；其中大部分来自把"拍脑袋的固定步数"换成多 epoch 早停，beam-search 解码在最后又小幅加成。精确的语料行数和 SHA256 会随每次清洗 pass 变化，因此不在此重复，而是记录在 [docs/refactor/backlog.md](docs/refactor/backlog.md)。
+**能力阶梯**（相同 test split，全程 beam=4 解码 —— 每个阶段均在其最优配置下运行）：
+
+| 阶段 | BLEU | chrF | Preservation (no-space) |
+| --- | --- | --- | --- |
+| Zero-shot NLLB-600M *（真正基线 —— 原始中文输入，无 marker）* | 0.009 | 0.226 | 0.323 |
+| Fine-tuned `checkpoint-48000`，beam=4 **（本模型，marker 启用）** | **0.325** | **0.590** | **0.954** |
+
+*（中途诊断：10k under-fit fine-tuned run，BLEU ≈ 0.198 —— 仅用于确认欠拟合方向，非基线。）*
+
+微调 + 数据清洗带来的净增益：同档 beam=4 解码下 **+0.316 BLEU（~34×）**；glossary preservation 从 ~32% 升至 ~95%。Zero-shot 基础模型能生成听起来流畅的韩文，但完全无法命中游戏专有术语和角色名称，微调与数据清洗共同解释了全部差距。精确的语料行数和 SHA256 会随每次清洗 pass 变化，因此不在此重复，而是记录在 [docs/refactor/backlog.md](docs/refactor/backlog.md)。
 
 ## 当前范围
 

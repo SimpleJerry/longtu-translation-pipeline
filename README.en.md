@@ -25,7 +25,16 @@ This repository now holds a complete, reproducible zh-CN → ko fine-tuning pipe
 | Glossary preservation (no-space) | 0.954 |
 | Glossary preservation (exact) | 0.950 |
 
-This is a large gain over the first under-fit 10k-step baseline (BLEU ≈ 0.198, preservation ≈ 0.80); most of it came from replacing an arbitrary fixed step count with multi-epoch early stopping, plus a small final lift from beam-search decoding. Exact corpus row counts and SHA256 fingerprints live in [docs/refactor/backlog.md](docs/refactor/backlog.md) rather than being duplicated here, since they change with every cleaning pass.
+**Capability ladder** (same test split, beam=4 throughout — each stage run in its best-practice configuration):
+
+| Stage | BLEU | chrF | Preservation (no-space) |
+| --- | --- | --- | --- |
+| Zero-shot NLLB-600M *(true baseline — raw Chinese source, no markers)* | 0.009 | 0.226 | 0.323 |
+| Fine-tuned `checkpoint-48000`, beam=4 **(this model, markers enabled)** | **0.325** | **0.590** | **0.954** |
+
+*(Intermediate diagnostic: 10k under-fit fine-tuned run, BLEU ≈ 0.198 — used only to confirm underfitting direction, not a baseline.)*
+
+Net gain from fine-tuning + data cleaning: **+0.316 BLEU (~34×)** at the same beam=4 decode; glossary preservation rises from ~32% to ~95%. The zero-shot base model generates fluent-sounding Korean but completely misses game-specific terminology and character names; fine-tuning and data cleaning together account for the full gap. Exact corpus row counts and SHA256 fingerprints live in [docs/refactor/backlog.md](docs/refactor/backlog.md) rather than being duplicated here, since they change with every cleaning pass.
 
 ## Current Scope
 

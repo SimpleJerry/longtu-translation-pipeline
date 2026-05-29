@@ -818,6 +818,8 @@ This file is the single source of truth for systematic refactor work. README fil
 
   > ⚠ **Greedy inference result superseded by RF-028**: beam=4 on test split yields BLEU 0.324958 (+0.0058, +1.82% vs this greedy baseline). `configs/inference/default.json` updated to `num_beams=4`. See RF-028.
 
+  > ⚠ **RF-007-P3/10k is an intermediate diagnostic, not the true zero-shot baseline.** RF-007-P3 (ckpt-9000) came from a 10k-step under-fit fine-tuned run; it indicates underfitting direction, not the pre-fine-tuning performance. The true baseline — zero-shot NLLB-600M before any fine-tuning — is recorded in RF-007-P5.
+
 ## RF-007-P5: Zero-Shot Base-Model Baseline
 
 - **Status:** DONE

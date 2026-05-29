@@ -25,7 +25,16 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 | Glossary preservation (no-space) | 0.954 |
 | Glossary preservation (exact) | 0.950 |
 
-이는 처음의 under-fit 10k-step 베이스라인(BLEU ≈ 0.198, preservation ≈ 0.80) 대비 큰 향상이며, 대부분은 임의의 고정 step 수를 다중 epoch early stopping으로 바꾼 데서 나왔고 beam-search 디코딩이 마지막에 소폭 더했습니다. 정확한 말뭉치 행 수와 SHA256은 매 정제 pass마다 바뀌므로 여기서 중복하지 않고 [docs/refactor/backlog.md](docs/refactor/backlog.md)에 기록합니다.
+**능력 단계표** (동일한 test split, 전 단계 beam=4 — 각 단계는 해당 최선 설정으로 실행):
+
+| 단계 | BLEU | chrF | Preservation (no-space) |
+| --- | --- | --- | --- |
+| Zero-shot NLLB-600M *(진짜 기준선 — raw 중국어 입력, marker 없음)* | 0.009 | 0.226 | 0.323 |
+| Fine-tuned `checkpoint-48000`, beam=4 **(이 모델, marker 활성화)** | **0.325** | **0.590** | **0.954** |
+
+*(중간 진단: 10k under-fit fine-tuned run, BLEU ≈ 0.198 — 과소적합 방향 확인용이며 기준선이 아닙니다.)*
+
+파인튜닝 + 데이터 정제의 순 효과: 동일한 beam=4 디코딩 기준 **+0.316 BLEU (~34×)**; glossary preservation이 ~32%에서 ~95%로 상승했습니다. Zero-shot 기반 모델은 유창하게 들리는 한국어를 생성하지만 게임 특유 용어와 캐릭터 이름을 완전히 놓칩니다. 파인튜닝과 데이터 정제가 합쳐서 전체 차이를 설명합니다. 정확한 말뭉치 행 수와 SHA256은 매 정제 pass마다 바뀌므로 여기서 중복하지 않고 [docs/refactor/backlog.md](docs/refactor/backlog.md)에 기록합니다.
 
 ## 현재 범위
 
