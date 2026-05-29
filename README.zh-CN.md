@@ -30,12 +30,12 @@
 
 | 阶段 | BLEU | chrF | Preservation (no-space) |
 | --- | --- | --- | --- |
-| Zero-shot NLLB-600M *（微调前基线 —— 无 marker）* | 0.009 | 0.226 | 0.323 |
+| Base NLLB-600M *（微调前基线 —— 无 marker）* | 0.009 | 0.226 | 0.323 |
 | Fine-tuned `checkpoint-48000`，beam=4 **（当前模型）** | **0.325** | **0.590** | **0.954** |
 
-![性能对比：Zero-shot vs. Fine-tuned](docs/figures/capability_comparison.png)
+![性能对比：Base vs. Fine-tuned NLLB-200](docs/figures/capability_comparison.png)
 
-微调 + 数据清洗带来的净增益：同档 beam=4 解码下 **+0.316 BLEU（~34×）**；glossary preservation 从 ~32% 升至 ~95%。Zero-shot 基础模型能生成听起来流畅的韩文，但完全无法命中游戏专有术语和角色名称，微调与数据清洗共同解释了全部差距。
+微调 + 数据清洗带来的净增益：同档 beam=4 解码下 **+0.316 BLEU（~34×）**；glossary preservation 从 ~32% 升至 ~95%。Base 模型能生成听起来流畅的韩文，但完全无法命中游戏专有术语和角色名称，微调与数据清洗共同解释了全部差距。
 
 ## 当前范围
 

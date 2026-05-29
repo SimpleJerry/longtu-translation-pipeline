@@ -30,12 +30,12 @@
 
 | 단계 | BLEU | chrF | Preservation (no-space) |
 | --- | --- | --- | --- |
-| Zero-shot NLLB-600M *(파인튜닝 전 기준선 — marker 없음)* | 0.009 | 0.226 | 0.323 |
+| Base NLLB-600M *(파인튜닝 전 기준선 — marker 없음)* | 0.009 | 0.226 | 0.323 |
 | Fine-tuned `checkpoint-48000`, beam=4 **(현재 모델)** | **0.325** | **0.590** | **0.954** |
 
-![Zero-shot vs. Fine-tuned 성능 비교](docs/figures/capability_comparison.png)
+![Base vs. Fine-tuned NLLB-200 성능 비교](docs/figures/capability_comparison.png)
 
-파인튜닝 + 데이터 정제의 순 효과: 동일한 beam=4 디코딩 기준 **+0.316 BLEU (~34×)**; glossary preservation이 ~32%에서 ~95%로 상승했습니다. Zero-shot 기반 모델은 유창하게 들리는 한국어를 생성하지만 게임 특유 용어와 캐릭터 이름을 완전히 놓칩니다. 파인튜닝과 데이터 정제가 합쳐서 전체 차이를 설명합니다.
+파인튜닝 + 데이터 정제의 순 효과: 동일한 beam=4 디코딩 기준 **+0.316 BLEU (~34×)**; glossary preservation이 ~32%에서 ~95%로 상승했습니다. Base 모델은 유창하게 들리는 한국어를 생성하지만 게임 특유 용어와 캐릭터 이름을 완전히 놓칩니다. 파인튜닝과 데이터 정제가 합쳐서 전체 차이를 설명합니다.
 
 ## 현재 범위
 

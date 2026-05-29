@@ -30,12 +30,12 @@ This repository holds a complete, reproducible zh-CN → ko fine-tuning pipeline
 
 | Stage | BLEU | chrF | Preservation (no-space) |
 | --- | --- | --- | --- |
-| Zero-shot NLLB-600M *(pre-fine-tuning baseline — no markers)* | 0.009 | 0.226 | 0.323 |
+| Base NLLB-600M *(pre-fine-tuning baseline — no markers)* | 0.009 | 0.226 | 0.323 |
 | Fine-tuned `checkpoint-48000`, beam=4 **(current model)** | **0.325** | **0.590** | **0.954** |
 
-![Performance comparison: Zero-shot vs. Fine-tuned](docs/figures/capability_comparison.png)
+![Performance comparison: Base vs. Fine-tuned NLLB-200](docs/figures/capability_comparison.png)
 
-Net gain from fine-tuning + data cleaning: **+0.316 BLEU (~34×)** at the same beam=4 decode; glossary preservation rises from ~32% to ~95%. The zero-shot base model generates fluent-sounding Korean but completely misses game-specific terminology and character names; fine-tuning and data cleaning together account for the full gap.
+Net gain from fine-tuning + data cleaning: **+0.316 BLEU (~34×)** at the same beam=4 decode; glossary preservation rises from ~32% to ~95%. The base model generates fluent-sounding Korean but completely misses game-specific terminology and character names; fine-tuning and data cleaning together account for the full gap.
 
 ## Current Scope
 
