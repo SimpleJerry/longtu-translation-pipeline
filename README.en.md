@@ -1,20 +1,21 @@
-﻿# LongtuKorea Translation Model
+﻿# LONGTU KOREA Inc. — Game Localization Translation Pipeline
 
 [한국어](README.md) | [English](README.en.md) | [中文](README.zh-CN.md)
 
-This repository contains LongtuKorea's experimental game localization machine translation workflow. The current focus is NLLB-based fine-tuning for Simplified Chinese (`zh-CN`) to Korean (`ko`), with glossary matching, translation generation, BLEU evaluation, and terminology preservation checks.
+This repository reproduces the game localization translation pipeline developed by the author during his tenure as a Systems Engineer at LONGTU KOREA Inc. (㈜룽투코리아; since renamed to STACO LINK Co., Ltd. / ㈜스타코링크). The original form was a collection of Jupyter Notebook files — mostly intermediate experiment artifacts. These were gradually reconstructed using Claude Code and Codex into the reproducible pipeline you see today.
 
-This README documents the repository as it exists today. The project is still closer to a research notebook workspace than a packaged production codebase.
+The background: LONGTU KOREA Inc. (now STACO LINK Co., Ltd.) operated games in the Korean market and faced a continuous demand to localize large volumes of Chinese-language game text into Korean. Translation outsourcing costs ran into tens of millions of KRW per year. The goal of this project was to fine-tune an NLLB model on the company's proprietary game corpus and supplement the output with lightweight human proofreading, thereby automating a significant portion of the localization workflow.
+
+The repository centers on an NLLB-based fine-tuning pipeline for Simplified Chinese (`zh-CN`) to Korean (`ko`), covering glossary matching, translation generation, BLEU evaluation, and terminology preservation checks.
 
 ## Project Status & Results
 
-This repository now holds a complete, reproducible zh-CN → ko fine-tuning pipeline **and** a trained, evaluated model. The work was a long incremental refactor (RF-001 through RF-029):
+This repository holds a complete, reproducible zh-CN → ko fine-tuning pipeline and a trained, evaluated model.
 
-- **Data governance** (RF-001/002/004/009/010) — removed IDE/Excel artifacts from Git, converted raw spreadsheets to reviewable CSVs, archived 2023 notebooks, and reduced a multi-language corpus to two committed bilingual files.
-- **Glossary cleaning** (RF-010/011/012/014) — local semantic pipeline (Stanza / jieba / kiwipiepy / wordfreq / `BAAI/bge-m3`), strict 1:1 enforcement, glossary↔segment cross-consistency, and an optional cloud LLM delete-only pass.
-- **Segment cleaning** (RF-005/011/013/015/029) — markup/wrapper normalization, structural splitting, target-language-contamination removal, the single `<start>...<end>` terminology-marker standard, a strict glossary-consistency training gate, and a full-corpus cloud LLM pass (OpenAI Batch API).
-- **Training & evaluation** (RF-006/007) — a config-driven NLLB train/inference/evaluate CLI with deterministic 8:1:1 splits (seed 42); BLEU + glossary-preservation (exact & no-space) + chrF reporting; and an early-stopping loop that auto-selects the best checkpoint on a composite quality metric.
-- **Engineering hardening & tests** (RF-016–022) — shared LLM client module, dependency consolidation, public-API slimming, notebook archival, and unit-test backfill for the cleanup pipelines.
+- **Data cleaning** — systematic cleanup of a Chinese-Korean parallel corpus and game glossary. This includes local semantic pipeline (Stanza / jieba / kiwipiepy / wordfreq / `BAAI/bge-m3`) glossary cleaning, segment cleaning with markup/wrapper normalization and target-language-contamination removal, and glossary-segment cross-consistency checks. A full-corpus cloud LLM pass (OpenAI Batch API) provided final quality validation.
+- **Fine-tuning & training** — fine-tuned `facebook/nllb-200-distilled-600M` on the game localization corpus, using a deterministic 8:1:1 split (seed 42) and early stopping to automatically select the best checkpoint on a composite quality metric.
+- **Evaluation** — measured BLEU + chrF + glossary preservation (exact & no-space) on the held-out test split.
+- **Inference** — built an inference CLI that translates new Chinese text to Korean using the trained checkpoint and exports results to CSV.
 
 **Current model.** `checkpoint-48000` from the early-stopping run, decoded with beam search (`num_beams=4`). Held-out test split (seed 42, unseen during training and checkpoint selection):
 
@@ -25,16 +26,16 @@ This repository now holds a complete, reproducible zh-CN → ko fine-tuning pipe
 | Glossary preservation (no-space) | 0.954 |
 | Glossary preservation (exact) | 0.950 |
 
-**Capability ladder** (same test split, beam=4 throughout — each stage run in its best-practice configuration):
+**Capability ladder** (same test split, beam=4 throughout):
 
 | Stage | BLEU | chrF | Preservation (no-space) |
 | --- | --- | --- | --- |
-| Zero-shot NLLB-600M *(true baseline — raw Chinese source, no markers)* | 0.009 | 0.226 | 0.323 |
-| Fine-tuned `checkpoint-48000`, beam=4 **(this model, markers enabled)** | **0.325** | **0.590** | **0.954** |
+| Zero-shot NLLB-600M *(pre-fine-tuning baseline — no markers)* | 0.009 | 0.226 | 0.323 |
+| Fine-tuned `checkpoint-48000`, beam=4 **(current model)** | **0.325** | **0.590** | **0.954** |
 
-*(Intermediate diagnostic: 10k under-fit fine-tuned run, BLEU ≈ 0.198 — used only to confirm underfitting direction, not a baseline.)*
+![Performance comparison: Zero-shot vs. Fine-tuned](docs/figures/capability_comparison.png)
 
-Net gain from fine-tuning + data cleaning: **+0.316 BLEU (~34×)** at the same beam=4 decode; glossary preservation rises from ~32% to ~95%. The zero-shot base model generates fluent-sounding Korean but completely misses game-specific terminology and character names; fine-tuning and data cleaning together account for the full gap. Exact corpus row counts and SHA256 fingerprints live in [docs/refactor/backlog.md](docs/refactor/backlog.md) rather than being duplicated here, since they change with every cleaning pass.
+Net gain from fine-tuning + data cleaning: **+0.316 BLEU (~34×)** at the same beam=4 decode; glossary preservation rises from ~32% to ~95%. The zero-shot base model generates fluent-sounding Korean but completely misses game-specific terminology and character names; fine-tuning and data cleaning together account for the full gap.
 
 ## Current Scope
 
@@ -45,6 +46,18 @@ Net gain from fine-tuning + data cleaning: **+0.316 BLEU (~34×)** at the same b
 - Keep T&N+R and code-id code/tag protection only as historical experiments, not as the current mainline.
 - Export translation results to Excel/CSV and evaluate BLEU and glossary preservation.
 
+## Technical Background
+
+**Terminology marker (`<start>...<end>`) method.** To preserve game-specific terminology during translation, the pipeline uses source-side terminology injection. This approach is based on Dinu et al. (ACL 2019), *"Training Neural Machine Translation to Apply Terminology Constraints"*, where source-side glossary matches are wrapped with special token pairs and the model is trained on data where the target already contains the required term. The model learns a soft constraint — it reproduces glossary terms naturally from context rather than having tokens forcibly inserted at decode time (hard constrained decoding), which would risk disrupting fluency. A single marker shape is used to minimize tokenizer vocabulary expansion.
+
+**Evaluation metrics.** BLEU (Papineni et al., 2002) measures n-gram precision and is the standard MT metric. Per Google Cloud Translate's [BLEU score interpretation guide](https://cloud.google.com/translate/docs/advanced/bleu-scores), a score of 0.30–0.40 (30–40%) corresponds to "Understandable to good translations" — the current model's 0.325 sits in this range. Korean's whitespace tokenization can underrepresent morpheme-level quality, so chrF (character n-gram F-score, Popović 2015) is reported alongside: character-level scoring correlates more strongly with human judgment for morphologically rich languages where surface word forms vary heavily by grammatical context. Glossary preservation is a domain-specific metric that directly checks whether glossary terms appear in the translation. Reporting both exact-match and no-space variants separates true term omissions from harmless spacing inconsistencies.
+
+**Avoiding overfitting.**
+
+1. **Early stopping** — a composite score (BLEU + chrF + glossary preservation) is monitored on the validation split; training halts when improvement stalls and the best checkpoint is automatically selected.
+2. **Deterministic 8:1:1 data split** — fixed with seed 42; the test split is used exactly once for final reporting and never for checkpoint selection, preventing information leakage.
+3. **Data quality gate** — noisy rows (contaminated translations, inconsistent terminology, structural fragments) act as overfitting signals, so only data passing the strict gate enters training.
+
 ## Repository Layout
 
 ```text
@@ -52,6 +65,8 @@ Net gain from fine-tuning + data cleaning: **+0.316 BLEU (~34×)** at the same b
 ├── README.md
 ├── README.en.md
 ├── README.zh-CN.md
+├── AGENTS.md
+├── .env.example
 ├── requirements.txt
 ├── requirements-training.txt
 ├── data/
@@ -66,18 +81,22 @@ Net gain from fine-tuning + data cleaning: **+0.316 BLEU (~34×)** at the same b
 │   ├── segments/
 │   └── training/
 ├── scripts/
+│   ├── cleanup_common.py
+│   ├── llm_common.py
 │   ├── glossary_semantic_pipeline.py
 │   ├── glossary_llm_cleanup_pipeline.py
 │   ├── evaluate_translation.py
 │   ├── segments_cleaning_pipeline.py
 │   ├── segments_llm_cleanup_pipeline.py
 │   ├── segments_glossary_cross_cleaning_pipeline.py
+│   ├── sweep_inference_params.py
 │   ├── run_inference.py
 │   └── train_model.py
 ├── src/
 │   └── longtu_translation_pipeline/
+├── tests/
+├── logs/
 ├── notebooks/
-│   ├── main/
 │   ├── analysis/
 │   └── archive/2023-legacy/
 └── docs/
@@ -96,10 +115,14 @@ Net gain from fine-tuning + data cleaning: **+0.316 BLEU (~34×)** at the same b
 | `configs/glossary/` | Seeds, lexicons, and rules for glossary cleanup. |
 | `configs/segments/` | Structured-string splitting, term/entity seeds, and semantic thresholds for segment cleanup. |
 | `configs/cross_cleaning/` | Thresholds for glossary/segments cross-consistency cleanup. |
-| `configs/training/default.json` | RF-006 phase 1 training config for data paths, language codes, model name, output directory, and basic training parameters. |
-| `configs/training/full_10k.json` | First full-data 10k training profile with explicit step, checkpoint, eval, and optimizer settings. |
-| `configs/inference/default.json` | RF-006 phase 1 inference config for model path, input/output paths, language codes, and generation parameters. |
-| `configs/evaluation/default.json` | RF-007 evaluation config for translation-result CSVs, glossary path, BLEU settings, and local report output. |
+| `configs/training/default.json` | Smoke/dry-run training config for data paths, language codes, model name, output directory, and basic parameters. |
+| `configs/training/full_10k.json` | Full-data 10k-step training profile with explicit step, checkpoint, eval, and optimizer settings. |
+| `configs/training/full_earlystop.json` | Early-stopping training profile; produced the current final model (`checkpoint-48000`). |
+| `configs/inference/default.json` | Inference config for model path, input/output paths, language codes, and generation parameters. |
+| `configs/evaluation/default.json` | Evaluation config for translation-result CSVs, glossary path, BLEU settings, and local report output. |
+| `scripts/cleanup_common.py` | Shared utility functions used by segment and glossary cleanup pipelines. |
+| `scripts/llm_common.py` | Shared OpenAI-compatible Chat Completions API client module. |
+| `scripts/sweep_inference_params.py` | CLI for sweeping inference parameters (beam width, etc.) to find the best decoding configuration. |
 | `scripts/glossary_semantic_pipeline.py` | Local glossary semantic cleanup pipeline using Stanza, jieba, kiwipiepy, wordfreq, and `BAAI/bge-m3`. |
 | `scripts/glossary_llm_cleanup_pipeline.py` | Cloud OpenAI-compatible aggressive glossary cleanup entry point; it can only delete terms and writes local ignored review output. |
 | `scripts/evaluate_translation.py` | Translation evaluation CLI for BLEU and glossary preservation; it does not load models. |
@@ -109,156 +132,95 @@ Net gain from fine-tuning + data cleaning: **+0.316 BLEU (~34×)** at the same b
 | `scripts/train_model.py` | Training CLI for config dry-run, local tiny-tokenizer smoke, real tokenizer + tiny Trainer smoke, real NLLB model one-step smoke, pilot training, and formal run-directory training. |
 | `scripts/run_inference.py` | Inference CLI for config dry-run and real checkpoint-based sample generation. |
 | `src/longtu_translation_pipeline/text_protection.py` | Testable pure-function module for terminology marker protection. |
+| `src/longtu_translation_pipeline/training_metrics.py` | Composite quality metric calculation and best-checkpoint selection logic used during training. |
 | `src/longtu_translation_pipeline/config.py` | Dataclass parsing and validation for training/inference JSON configs. |
 | `src/longtu_translation_pipeline/training.py` | Importable training-data preparation and Trainer wiring API. |
 | `src/longtu_translation_pipeline/inference.py` | Importable inference-input planning dry-run API. |
 | `src/longtu_translation_pipeline/evaluation.py` | Importable BLEU and glossary-preservation evaluation API. |
-| `notebooks/main/` | Main training, preprocessing, generation, and evaluation experiment notebooks. |
 | `notebooks/analysis/` | Auxiliary analysis notebooks, such as train/eval loss visualization. |
-| `notebooks/archive/2023-legacy/` | Archived 2023 legacy experiments; not deleted in the first pass. |
+| `notebooks/archive/2023-legacy/` | Archived 2023 original experiment notebooks. |
 | `docs/notebooks/inventory.md` | Notebook timeline, purpose, dependency status, and keep/archive/delete guidance. |
 | `docs/data-cleaning.md` | Data-cleaning rule notes with examples for style tags, structured strings, short fragments, target contamination, and the strict gate. |
-| `requirements-training.txt` | RF-006 training smoke-test and future training-chain dependencies. |
+| `requirements-training.txt` | Training-chain dependencies: transformers, accelerate, sentencepiece, and CUDA PyTorch. |
 
 ## Environment
 
-A Python virtual environment on Windows or Linux is recommended. `requirements.txt` currently records dependencies that are already used by local semantic-cleaning workflows plus CUDA 13.2 PyTorch. Base CLIs, dry runs, tests, and RF-007 evaluation are mostly standard-library and do not imply that every workflow needs the full dependency set. `requirements-training.txt` records the RF-006 training smoke-test and future training-chain dependencies, including `transformers`, `tokenizers`, `accelerate`, `sentencepiece`, and their direct runtime dependencies; `datasets` is not part of the current minimal chain yet.
+A Python virtual environment on Windows or Linux is recommended.
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-jupyter lab
+pip install -r requirements.txt           # data cleaning and evaluation
+pip install -r requirements-training.txt  # add for training/inference (includes CUDA 13.2 PyTorch)
 ```
 
-To run RF-006-P2 and later training/inference-chain commands, also install the training-chain dependencies. First install `requirements.txt`, then `requirements-training.txt`:
-
-```powershell
-python -m pip install -r requirements-training.txt   # only if you need training
-```
-
-Notes:
-
-- Stanza Chinese/Korean models and Hugging Face embedding caches live under the local virtual environment and are not committed.
-- Legacy BLEU notebooks used `nltk.translate.bleu_score`; the current RF-007 evaluation CLI uses a pure-Python implementation and does not require `nltk`.
-- Large models, fine-tuned outputs, translation results, raw data, and local model caches are excluded by `.gitignore`.
+Stanza language models, Hugging Face caches, fine-tuned outputs, and raw data are all excluded by `.gitignore`.
 
 ## Basic Workflow
 
-The training data entry points committed to this repository are final CSVs:
+The training data entry points are two final CSVs. Raw Excel/CSV files are not committed.
 
-- `data/segments.csv`
-- `data/glossary.csv`
+- `data/segments.csv` — Chinese-Korean parallel corpus
+- `data/glossary.csv` — game glossary
 
-Sensitive raw Excel/CSV files are not committed. `data/glossary.csv` is iteratively cleaned by the local semantic cleanup pipeline, and audit files are generated under local `data/review/` but ignored by Git.
-`data/segments.csv` provides current product-corpus evidence for glossary cleanup, but it is not the only criterion or a sufficient keep signal.
-The pipeline also uses local word frequency, POS shape, embeddings, and game-domain signals to separate common words from game terms.
-Both final CSVs are intentionally bilingual: non-Chinese/Korean training columns are removed from the committed corpus.
-
-To rerun glossary cleanup, download the Stanza models first:
+**Glossary cleanup** — download Stanza models first, then run the local pipeline.
 
 ```powershell
 $env:STANZA_RESOURCES_DIR="D:\longtu-translation-pipeline\venv\stanza_resources"
 venv\Scripts\python.exe -c "import stanza; stanza.download('zh', model_dir=r'D:\longtu-translation-pipeline\venv\stanza_resources'); stanza.download('ko', model_dir=r'D:\longtu-translation-pipeline\venv\stanza_resources')"
-```
-
-Then run the local pipeline:
-
-```powershell
 $env:HF_HOME="D:\longtu-translation-pipeline\venv\hf_cache"
-$env:STANZA_RESOURCES_DIR="D:\longtu-translation-pipeline\venv\stanza_resources"
 venv\Scripts\python.exe scripts\glossary_semantic_pipeline.py
 ```
 
-The default rule directory is `configs/glossary/`, which contains seed files, lexicons, and `rules.json`; pass `--config-dir`, `--game-seeds`, and `--common-noun-seeds` to use alternatives.
-
-If local rules can no longer separate ordinary words from company game terms well enough, use the cloud LLM delete-only cleanup. It sends the current `data/glossary.csv` term pairs to an OpenAI-compatible Chat Completions API; the model may only keep or delete terms, never rewrite Korean, add terms, or merge terms. Audit output is written locally under `data/review/llm_glossary_cleanup/` and is not committed.
+When local rules are no longer sufficient, add a cloud LLM delete-only pass.
 
 ```powershell
-$env:OPENAI_API_KEY="<your-key>"
-$env:LLM_MODEL="<your-model>"
-# Optional: $env:OPENAI_BASE_URL="https://api.openai.com/v1"
+$env:OPENAI_API_KEY="<your-key>"; $env:LLM_MODEL="<your-model>"
 venv\Scripts\python.exe scripts\glossary_llm_cleanup_pipeline.py --apply
 ```
 
-After an LLM cleanup run, rerun the strict gate and training dry-run before starting training.
-
-To inspect or iterate segment cleanup, run a dry run first:
+**Segment cleanup** — always dry-run first, apply after review. `--strict-check` must pass before training.
 
 ```powershell
 venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
-```
-
-This pipeline first strips presentation tags such as `<c=...>` and unwraps symmetric outer wrappers, then removes high-confidence non-segment fragments and Korean-side target-language contamination before using Stanza, jieba, kiwipiepy, and `BAAI/bge-m3` to score term/entity-like segments. Placeholder rows are kept by default and only audited for mismatch unless the target side already triggers the strict contamination rule. The command does not rewrite `data/segments.csv`; it only writes local audit CSVs under `data/review/segments/`. Use `--apply` only after manual review. See `docs/data-cleaning.md` for examples of each cleanup type.
-
-For a full LLM review of `segments.csv`, use the cloud segment cleanup entry point. The LLM sees only the raw Chinese/Korean row, placeholders, and matched glossary terms; local pre-judgment flags such as contamination or structured-string hints are kept for post-response validation and audit. The LLM may suggest row deletion or a Korean rewrite, but only locally validated Korean rewrites are applied to the corpus. Validation checks non-empty Hangul output, no Chinese contamination, placeholder preservation, exact/no-space glossary preservation, length ratio, and repeated-output patterns. Audit files are written under local `data/review/llm_segments_cleanup/` and are not committed.
-
-```powershell
-$env:OPENAI_API_KEY="<your-key>"
-$env:LLM_MODEL="<your-model>"
-venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --dry-run
-```
-
-Use `--apply` only after reviewing the local outputs. Any full LLM segment cleanup invalidates old training runs, splits, and reports, so rerun strict-check and the training dry-run afterward.
-
-To check glossary/segment terminology consistency, run a dry run first and apply only after review:
-
-```powershell
-venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --dry-run
-venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --apply
-```
-
-The cross-cleaning pass only removes high-confidence glossary noise or segment rows that conflict with strong glossary terms. It does not rewrite Korean translations; removed rows are exported under local `data/review/segments_glossary_cross/`.
-Its basic flow is: scan `segments.csv` with longest-first, non-overlapping Chinese glossary matches; check whether the Korean side preserves the glossary translation with exact and no-space exact matching; aggregate preserved/missing evidence per term using thresholds from `configs/cross_cleaning/rules.json`; classify terms as glossary noise, strong glossary terms, or review items; then remove only high-confidence glossary noise and segment rows that miss strong retained terms.
-Before training, use the stricter gate when every remaining glossary term must be preserved in every matching segment:
-
-```powershell
-venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --strict-dry-run
+venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --apply
 venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --strict-check
 ```
 
-Strict mode first selects the enforceable glossary from the real `segments.csv` translations: terms with no missing evidence are retained, strong game-domain terms need enough preserved evidence and a bounded missing rate, and empirically stable terms need high preserved count/rate. Terms that are not enforceable and still have mismatches are removed from the glossary. After that, segment rows are removed only if they still match an enforceable glossary term but do not preserve its Korean form. `--strict-check` only validates the current data and exits with failure on any missing term. Use `--strict-apply` only after reviewing the local strict outputs.
-Before full training or final test reporting, `--strict-check` must pass.
+For a full LLM review pass:
 
-The training/inference/evaluation entry points are config-driven and have been run end to end through a final model (see Project Status & Results above). Dry-run reads config, validates data, and plans deterministic train/validation/test counts. RF-006-P7 writes fixed split artifacts and `run_manifest.json` under ignored `fine-tuned-models/.../runs/run-*`; RF-006-P10 corrects formal experiments to an 8:1:1 split with seed `42`. Validation is used for training-time eval and checkpoint observation only. Final performance reports must use the held-out test split. RF-006-P8 generates translation CSVs from the fixed validation split, and `--generate-test` generates final-evaluation CSVs from the fixed test split. The smoke/pilot commands below remain available as fast engineering-chain checks; the current model run is `run-full-earlystop-v1`.
+```powershell
+$env:OPENAI_API_KEY="<your-key>"; $env:LLM_MODEL="<your-model>"
+venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --dry-run
+# after review: --apply
+```
+
+See [docs/data-cleaning.md](docs/data-cleaning.md) for detailed examples and rules for each cleanup type.
+
+**Training** — uses `full_earlystop.json` (deterministic 8:1:1 split, seed 42, early stopping).
+
+```powershell
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_earlystop.json --train --run-name <run-name>
+```
+
+Quick smoke/dry-run checks:
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --smoke-test
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --nllb-smoke-test --smoke-rows 2
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --real-model-smoke-test --smoke-rows 2
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --pilot-train --pilot-rows 64 --max-steps 4 --save-steps 2
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --train --limit-rows 128 --max-steps 4 --save-steps 2 --save-total-limit 2 --logging-steps 1
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --train --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-name --resume-from-checkpoint latest --max-steps 6 --save-steps 2 --save-total-limit 2 --logging-steps 1
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --train --run-name run-full-10k-corrected-v1
-venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
-venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate --model-path fine-tuned-models\nllb-200-distilled-600M\zh2ko\pilot\run-20260525-093832\checkpoint-4 --sample-rows 8
-venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate-validation --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-name
-venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate-test --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-full-10k-corrected-v1
 ```
 
-To evaluate an existing translation-result CSV, use the RF-007 evaluation entry point. Input uses the historical notebook output columns: `source`, `references`, and `candidates`. BLEU defaults to Korean whitespace tokenization, and glossary preservation strips `<start>...<end>` markers from candidate text before checking Korean term presence. RF-024 adds chrF (character n-gram F-score, max_n=6, beta=2), which correlates better with human judgment than BLEU on morphologically rich languages like Korean. Empty generated `candidates` are reported as `empty_candidate_rows` instead of stopping the report.
-The inference entry point now applies the same `data/glossary.csv` `<start>...<end>` terminology markers to source text before tokenization, while generated CSVs still keep the raw source text for review. RF-007 reports both exact and no-space glossary preservation: exact shows formatting consistency, and no-space avoids treating Korean spacing differences as true terminology misses.
+**Inference** — point to the training run directory.
 
 ```powershell
-venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\default.json --input translation_result.csv
-venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint fine-tuned-models\nllb-200-distilled-600M\zh2ko\pilot\run-20260525-093832\checkpoint-4
-venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --input data\review\inference\test\run-full-10k-corrected-v1\test_generated.csv --report-dir data\review\evaluation\test_report\run-full-10k-corrected-v1 --checkpoint fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-full-10k-corrected-v1\checkpoint-10000
+venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate-test --run-dir <run-dir>
 ```
 
-Training notebooks convert language columns to NLLB language codes:
+**Evaluation** — reports BLEU, chrF, and glossary preservation in one pass.
 
-```text
-zh-CN -> zho_Hans
-zh-TW -> zho_Hant
-en    -> eng_Latn
-ja    -> jpn_Jpan
-ko    -> kor_Hang
+```powershell
+venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --input <generated-csv>
 ```
-
-Notebooks are retained as experiment records. T&N+R notebooks are now deprecated historical experiments; see `docs/notebooks/inventory.md` for each notebook's purpose, order, and dependency status.
-
-Current terminology protection logic now lives in `src/longtu_translation_pipeline/text_protection.py`. The module uses only the single `<start>...<end>` marker shape; the old dual-term marker and code-id protection are deprecated from the current engineering mainline. Notebooks are not rewritten to import it in this pass; they remain experiment records.
 
 ## Larger Models (1.3B / 3.3B)
 
@@ -274,9 +236,7 @@ On the 16 GB GPU used here, **1.3B full fine-tuning does not fit** without memor
 
 Sources: parameter counts and the ~17.6 GB on-disk 3.3B checkpoint are from the Hugging Face model cards ([600M](https://huggingface.co/facebook/nllb-200-distilled-600M), [1.3B](https://huggingface.co/facebook/nllb-200-distilled-1.3B), [3.3B](https://huggingface.co/facebook/nllb-200-3.3B)); VRAM figures are this project's measured 600M run (`run_manifest.json`) plus standard AdamW memory accounting (~16 bytes/parameter for weights + gradients + optimizer state).
 
-## Architecture and Refactor Notes
-
-Long-term refactor tasks are not maintained in README files. See:
+## Reference Documents
 
 - [Refactor backlog](docs/refactor/backlog.md)
 - [Follow-up tasks (parallel track map)](docs/refactor/follow-up-tasks.md)

@@ -1,20 +1,21 @@
-﻿# LongtuKorea Translation Model
+﻿# 龙图韩国游戏本地化翻译管道
 
 [한국어](README.md) | [English](README.en.md) | [中文](README.zh-CN.md)
 
-这是 LongtuKorea 的游戏本地化机器翻译实验仓库。当前重点是基于 NLLB 的简体中文（`zh-CN`）到韩语（`ko`）微调流程，同时覆盖术语匹配、翻译结果生成、BLEU 评估与术语保留率检查。
+本仓库是作者在㈜룽투코리아（LONGTU KOREA Inc.，龙图韩国，现更名为 STACO LINK Co., Ltd. / ㈜스타코링크）担任系统工程师期间所从事的游戏本地化翻译管道工作的复现。原始形态是一批 Jupyter Notebook 文件，大多数是实验过程中产生的中间文件。此后通过 Claude Code 与 Codex 逐步对旧有工程进行重构，整理成现在这个可复现的管道。
 
-这份 README 用来梳理当前仓库的真实状态。它还不是一个已经工程化封装好的生产项目，更接近“数据处理脚本 + 研究 notebook”的实验工作区。
+项目背景如下：龙图韩国（LONGTU KOREA Inc.，现 STACO LINK Co., Ltd.）在韩国市场运营游戏时，面临大量将中文文本本地化为韩文的需求，每年的翻译外包费用高达数千万韩元。本项目的目标是基于公司掌握的游戏语料对 NLLB 模型进行微调，辅以少量人工校对，从而实现翻译自动化，节省翻译成本。
+
+本仓库当前重点是基于 NLLB 的简体中文（`zh-CN`）到韩语（`ko`）微调流程，同时覆盖术语匹配、翻译结果生成、BLEU 评估与术语保留率检查。
 
 ## 项目状态与成果
 
-本仓库现在同时包含一条可复现的 zh-CN → ko 微调管道**和**一个已训练、已评估的模型。整个过程是一轮长的渐进式重构（RF-001 ~ RF-029）：
+本仓库同时包含一条可复现的 zh-CN → ko 微调管道和一个已训练、已评估的模型。
 
-- **数据治理** (RF-001/002/004/009/010) —— 从 Git 移除 IDE/Excel 产物，把 raw 表格转成可审阅的 CSV，归档 2023 notebook，把多语言宽表收敛为两个入库的中韩双语文件。
-- **Glossary 清洗** (RF-010/011/012/014) —— 本地 semantic pipeline（Stanza / jieba / kiwipiepy / wordfreq / `BAAI/bge-m3`）、strict 1:1 强制、glossary↔segment 交叉一致性、可选的云端 LLM delete-only pass。
-- **Segment 清洗** (RF-005/011/013/015/029) —— markup/wrapper 归一化、结构化拆分、目标语言污染删除、单形 `<start>...<end>` 术语 marker 标准、strict glossary 一致性训练门禁、全量云端 LLM pass（OpenAI Batch API）。
-- **训练与评估** (RF-006/007) —— 使用确定性 8:1:1 划分（seed 42）的 config 驱动 NLLB 训练/推理/评估 CLI；BLEU + glossary preservation（exact & no-space）+ chrF 报告；按复合质量指标自动选最佳 checkpoint 的 early-stopping 循环。
-- **工程加固与测试** (RF-016–022) —— 公共 LLM client 模块、依赖收敛、公开 API 收敛、notebook 归档、清洗 pipeline 单测补齐。
+- **数据清洗** —— 对中韩并行语料和游戏术语表进行了系统性清洗。包括：基于本地 semantic pipeline（Stanza / jieba / kiwipiepy / wordfreq / `BAAI/bge-m3`）的 glossary 清洗、含 markup/wrapper 归一化与目标语言污染删除的 segment 清洗，以及 glossary-segment 交叉一致性检查。最终通过全量云端 LLM pass（OpenAI Batch API）对语料质量进行了额外验证。
+- **微调与训练** —— 基于 `facebook/nllb-200-distilled-600M` 对游戏本地化语料进行微调，使用确定性 8:1:1 划分（seed 42）和 early-stopping 自动选出复合质量指标最优的 checkpoint。
+- **评估** —— 在 held-out test split 上测量了 BLEU + chrF + glossary preservation（exact & no-space）。
+- **推理** —— 构建了推理 CLI，使用训练好的 checkpoint 将新中文文本翻译为韩文并导出为 CSV。
 
 **当前模型。** early-stopping run 的 `checkpoint-48000`，beam search（`num_beams=4`）解码。held-out test split（seed 42，训练和 checkpoint 选择中均未见过）：
 
@@ -25,16 +26,16 @@
 | Glossary preservation (no-space) | 0.954 |
 | Glossary preservation (exact) | 0.950 |
 
-**能力阶梯**（相同 test split，全程 beam=4 解码 —— 每个阶段均在其最优配置下运行）：
+**能力阶梯**（相同 test split，全程 beam=4 解码）：
 
 | 阶段 | BLEU | chrF | Preservation (no-space) |
 | --- | --- | --- | --- |
-| Zero-shot NLLB-600M *（真正基线 —— 原始中文输入，无 marker）* | 0.009 | 0.226 | 0.323 |
-| Fine-tuned `checkpoint-48000`，beam=4 **（本模型，marker 启用）** | **0.325** | **0.590** | **0.954** |
+| Zero-shot NLLB-600M *（微调前基线 —— 无 marker）* | 0.009 | 0.226 | 0.323 |
+| Fine-tuned `checkpoint-48000`，beam=4 **（当前模型）** | **0.325** | **0.590** | **0.954** |
 
-*（中途诊断：10k under-fit fine-tuned run，BLEU ≈ 0.198 —— 仅用于确认欠拟合方向，非基线。）*
+![性能对比：Zero-shot vs. Fine-tuned](docs/figures/capability_comparison.png)
 
-微调 + 数据清洗带来的净增益：同档 beam=4 解码下 **+0.316 BLEU（~34×）**；glossary preservation 从 ~32% 升至 ~95%。Zero-shot 基础模型能生成听起来流畅的韩文，但完全无法命中游戏专有术语和角色名称，微调与数据清洗共同解释了全部差距。精确的语料行数和 SHA256 会随每次清洗 pass 变化，因此不在此重复，而是记录在 [docs/refactor/backlog.md](docs/refactor/backlog.md)。
+微调 + 数据清洗带来的净增益：同档 beam=4 解码下 **+0.316 BLEU（~34×）**；glossary preservation 从 ~32% 升至 ~95%。Zero-shot 基础模型能生成听起来流畅的韩文，但完全无法命中游戏专有术语和角色名称，微调与数据清洗共同解释了全部差距。
 
 ## 当前范围
 
@@ -45,6 +46,18 @@
 - T&N+R 和 code-id code/tag 保护只作为历史实验保留，不再作为当前主线。
 - 将翻译结果导出为 Excel/CSV，并评估 BLEU 与术语保留率。
 
+## 技术背景
+
+**术语 marker（`<start>...<end>`）方法论。** 为在翻译中保留游戏专有术语，管道采用源端术语注入（source-side terminology injection）方案。该方案基于 Dinu et al.（ACL 2019）*"Training Neural Machine Translation to Apply Terminology Constraints"*：在源中文文本中，将与 glossary 匹配的部分用 `<start>...<end>` 特殊 token 对包裹，并以此形式进行训练。这样模型通过上下文学习到一种软约束，能在目标韩文中自然复现对应术语，而不需要在解码阶段强制插入 token（hard constrained decoding），从而不损伤翻译流畅度。采用单一 marker 形式是为了将 tokenizer 词表扩展控制在最小范围。
+
+**评估指标。** BLEU（Papineni et al., 2002）是基于 n-gram 精确率的标准 MT 指标。根据 Google Cloud Translate 的 [BLEU 分数解读指南](https://cloud.google.com/translate/docs/advanced/bleu-scores)，0.30~0.40 区间对应"可理解到良好的翻译（Understandable to good translations）"，本模型的 0.325 属于该区间。对于形态丰富的韩语，空格级分词会低估实际翻译质量，因此同时报告 chrF（字符级 n-gram F-score，Popović 2015）作为补充指标，chrF 在词形变化丰富的语言中与人类判断的相关性更高。Glossary preservation 是领域专有指标，直接检测译文中是否出现术语表条目，同时报告精确匹配（exact）和去空格匹配（no-space），以区分真正的术语遗漏与无害的空格差异。
+
+**过拟合防控。**
+
+1. **Early stopping** —— 在 validation split 上监测 BLEU + chrF + glossary preservation 复合分数，无改善时提前终止训练并自动选出最优 checkpoint。
+2. **确定性 8:1:1 数据划分** —— 以 seed 42 固定 train/validation/test 分割，test split 仅用于最终报告，不参与 checkpoint 选择，防止信息泄漏。
+3. **数据质量门禁** —— 污染行、不一致术语等噪声会成为过拟合信号，因此只有通过 strict gate 的语料才进入训练。
+
 ## 仓库结构
 
 ```text
@@ -52,6 +65,8 @@
 ├── README.md
 ├── README.en.md
 ├── README.zh-CN.md
+├── AGENTS.md
+├── .env.example
 ├── requirements.txt
 ├── requirements-training.txt
 ├── data/
@@ -66,18 +81,22 @@
 │   ├── segments/
 │   └── training/
 ├── scripts/
+│   ├── cleanup_common.py
+│   ├── llm_common.py
 │   ├── glossary_semantic_pipeline.py
 │   ├── glossary_llm_cleanup_pipeline.py
 │   ├── evaluate_translation.py
 │   ├── segments_cleaning_pipeline.py
 │   ├── segments_llm_cleanup_pipeline.py
 │   ├── segments_glossary_cross_cleaning_pipeline.py
+│   ├── sweep_inference_params.py
 │   ├── run_inference.py
 │   └── train_model.py
 ├── src/
 │   └── longtu_translation_pipeline/
+├── tests/
+├── logs/
 ├── notebooks/
-│   ├── main/
 │   ├── analysis/
 │   └── archive/2023-legacy/
 └── docs/
@@ -96,10 +115,14 @@
 | `configs/glossary/` | glossary 清洗的 seed、词表和规则配置。 |
 | `configs/segments/` | segments 清洗的结构化字符串拆分、term/entity seed 和语义阈值配置。 |
 | `configs/cross_cleaning/` | glossary 与 segments 交叉一致性清洗的阈值配置。 |
-| `configs/training/default.json` | RF-006 第一阶段训练配置，声明数据路径、语言码、模型名、输出目录和基础训练参数。 |
-| `configs/training/full_10k.json` | 首轮 full-data 10k 训练 profile，显式声明步数、checkpoint、eval 和优化器参数。 |
-| `configs/inference/default.json` | RF-006 第一阶段推理配置，声明模型路径、输入/输出路径、语言码和生成参数。 |
-| `configs/evaluation/default.json` | RF-007 评估配置，声明翻译结果 CSV、glossary、BLEU 口径和本地报告目录。 |
+| `configs/training/default.json` | smoke/dry-run 用基础训练配置，声明数据路径、语言码、模型名、输出目录和基础参数。 |
+| `configs/training/full_10k.json` | Full-data 10k step 训练 profile，显式声明步数、checkpoint、eval 和优化器参数。 |
+| `configs/training/full_earlystop.json` | Early-stopping 训练 profile，生成了当前最终模型（`checkpoint-48000`）。 |
+| `configs/inference/default.json` | 推理配置，声明模型路径、输入/输出路径、语言码和生成参数。 |
+| `configs/evaluation/default.json` | 评估配置，声明翻译结果 CSV、glossary、BLEU 口径和本地报告目录。 |
+| `scripts/cleanup_common.py` | segment/glossary 清洗 pipeline 共用的通用工具函数。 |
+| `scripts/llm_common.py` | OpenAI-compatible Chat Completions API 调用的公共 client 模块。 |
+| `scripts/sweep_inference_params.py` | 扫描 beam width 等推理参数以寻找最优解码配置的 CLI。 |
 | `scripts/glossary_semantic_pipeline.py` | 本地 glossary semantic 清洗 pipeline，使用 Stanza、jieba、kiwipiepy、wordfreq 与 `BAAI/bge-m3`。 |
 | `scripts/glossary_llm_cleanup_pipeline.py` | 云端 OpenAI-compatible glossary 激进清洗入口，只允许删除术语并写本地 ignored review。 |
 | `scripts/evaluate_translation.py` | 翻译结果评估 CLI，计算 BLEU 与 glossary preservation，不加载模型。 |
@@ -109,156 +132,95 @@
 | `scripts/train_model.py` | 训练 CLI；支持配置 dry-run、本地 tiny tokenizer smoke、真实 tokenizer + tiny Trainer smoke、真实 NLLB 模型 1-step smoke、pilot training 和正式 run 目录训练。 |
 | `scripts/run_inference.py` | 推理 CLI；支持配置 dry-run 和基于真实 checkpoint 的小样本 generation。 |
 | `src/longtu_translation_pipeline/text_protection.py` | 可测试的术语 marker 保护纯函数模块。 |
+| `src/longtu_translation_pipeline/training_metrics.py` | 训练期间复合质量指标计算与最优 checkpoint 选择逻辑。 |
 | `src/longtu_translation_pipeline/config.py` | 训练/推理 JSON 配置的 dataclass 解析和校验。 |
 | `src/longtu_translation_pipeline/training.py` | 可导入的训练数据准备和 Trainer 链路 API。 |
 | `src/longtu_translation_pipeline/inference.py` | 可导入的推理输入计划 dry-run API。 |
 | `src/longtu_translation_pipeline/evaluation.py` | 可导入的 BLEU 与 glossary preservation 评估 API。 |
-| `notebooks/main/` | 主线训练、预处理、生成和评估实验 notebook。 |
 | `notebooks/analysis/` | 辅助分析 notebook，例如训练 loss 可视化。 |
-| `notebooks/archive/2023-legacy/` | 2023 年旧实验归档，第一轮不直接删除。 |
+| `notebooks/archive/2023-legacy/` | 2023 年原始实验归档。 |
 | `docs/notebooks/inventory.md` | Notebook 时间线、用途、依赖状态和保留/归档/删除建议。 |
 | `docs/data-cleaning.md` | 数据清洗规则说明，包含样式 tag、结构化字符串、短碎片、目标语言污染和 strict gate 示例。 |
-| `requirements-training.txt` | RF-006 训练 smoke / 后续训练链路依赖。 |
+| `requirements-training.txt` | 训练链路依赖，包含 transformers、accelerate、sentencepiece 与 CUDA PyTorch。 |
 
 ## 运行环境
 
-建议使用 Windows 或 Linux 的 Python 虚拟环境。`requirements.txt` 当前记录已经实际落地使用的本地 semantic cleaning 依赖与 CUDA 13.2 版本 PyTorch；基础 CLI、dry-run、测试和 RF-007 evaluation 主要使用标准库，不代表所有场景都必须安装完整依赖。`requirements-training.txt` 记录 RF-006 训练 smoke / 后续训练链路依赖，目前包含 `transformers`、`tokenizers`、`accelerate`、`sentencepiece` 及其直接运行依赖；`datasets` 尚未进入当前最小链路。
+建议使用 Windows 或 Linux 的 Python 虚拟环境。
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-jupyter lab
+pip install -r requirements.txt           # 数据清洗与评估
+pip install -r requirements-training.txt  # 训练/推理时额外安装（含 CUDA 13.2 PyTorch）
 ```
 
-如需运行 RF-006-P2 及之后的训练/推理链路命令，再安装训练链路依赖。先安装 `requirements.txt`，再安装 `requirements-training.txt`：
-
-```powershell
-python -m pip install -r requirements-training.txt   # 仅在需要训练时安装
-```
-
-注意：
-
-- Stanza 中文/韩文模型、Hugging Face embedding 缓存放在本地虚拟环境目录下，不提交到 Git。
-- 旧 BLEU notebook 曾使用 `nltk.translate.bleu_score`；当前 RF-007 evaluation CLI 使用纯 Python 实现，不需要 `nltk`。
-- 大模型、微调输出、翻译结果、raw 数据和本地模型缓存已通过 `.gitignore` 排除。
+Stanza 语言模型、Hugging Face 缓存、微调产物和 raw 数据均通过 `.gitignore` 排除在 Git 之外。
 
 ## 基本流程
 
-仓库中的训练数据入口是最终 CSV：
+训练数据入口是两个最终 CSV。Raw Excel/CSV 文件不提交到仓库。
 
-- `data/segments.csv`
-- `data/glossary.csv`
+- `data/segments.csv` —— 中韩并行语料
+- `data/glossary.csv` —— 游戏术语表
 
-raw Excel/CSV 文件包含敏感业务数据，不提交到仓库。`data/glossary.csv` 基于本地 semantic pipeline 继续迭代清洗；对应审计文件会生成到本地 `data/review/`，但不提交到 Git。
-`data/segments.csv` 为 glossary 清洗提供当前产品语料证据，但不是术语保留的唯一标准或充分条件。
-pipeline 还会结合本地词频、词性、embedding 和游戏域信号区分普通词与游戏术语。
-最终提交的两个 CSV 都是中韩双语语料，非中韩训练列不再保留在最终 corpus 中。
-
-如需重跑 glossary 清洗，先下载 Stanza 模型：
+**Glossary 清洗** —— 先下载 Stanza 模型，再运行本地 pipeline。
 
 ```powershell
 $env:STANZA_RESOURCES_DIR="D:\longtu-translation-pipeline\venv\stanza_resources"
 venv\Scripts\python.exe -c "import stanza; stanza.download('zh', model_dir=r'D:\longtu-translation-pipeline\venv\stanza_resources'); stanza.download('ko', model_dir=r'D:\longtu-translation-pipeline\venv\stanza_resources')"
-```
-
-然后运行本地 pipeline：
-
-```powershell
 $env:HF_HOME="D:\longtu-translation-pipeline\venv\hf_cache"
-$env:STANZA_RESOURCES_DIR="D:\longtu-translation-pipeline\venv\stanza_resources"
 venv\Scripts\python.exe scripts\glossary_semantic_pipeline.py
 ```
 
-默认规则目录是 `configs/glossary/`，其中包含 seed、词表和 `rules.json`；可用 `--config-dir`、`--game-seeds` 与 `--common-noun-seeds` 指定替代文件。
-
-如果本地规则已经难以继续区分普通词和公司游戏术语，可以使用云端 LLM 进行 delete-only 激进清洗。该流程会把当前 `data/glossary.csv` 的术语对发送到 OpenAI-compatible Chat Completions API；LLM 只能判断保留或删除，不允许改写韩文、不新增、不合并。审计文件写入本地 `data/review/llm_glossary_cleanup/`，不提交到 Git。
+本地规则不足时，可追加云端 LLM delete-only 清洗。
 
 ```powershell
-$env:OPENAI_API_KEY="<your-key>"
-$env:LLM_MODEL="<your-model>"
-# 可选：$env:OPENAI_BASE_URL="https://api.openai.com/v1"
+$env:OPENAI_API_KEY="<your-key>"; $env:LLM_MODEL="<your-model>"
 venv\Scripts\python.exe scripts\glossary_llm_cleanup_pipeline.py --apply
 ```
 
-LLM 清洗后仍需重新运行 strict gate 和训练 dry-run，确认术语表删除没有破坏训练前门禁。
-
-如需检查或迭代正文语料清洗，先运行 dry-run：
+**Segment 清洗** —— 先 dry-run 确认，再 apply。训练前必须通过 strict-check。
 
 ```powershell
 venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
-```
-
-该 pipeline 会先剥离 `<c=...>` 等表现层样式标签并解开对称外层包装，再删除高置信非句段碎片和 ko 侧目标语言污染，然后使用 Stanza、jieba、kiwipiepy 和 `BAAI/bge-m3` 判断 term/entity-like segment；placeholder 行默认保留，只做 mismatch 审计，除非目标侧已经触发强污染规则。该命令不会改写 `data/segments.csv`，只会在本地 `data/review/segments/` 下生成审计 CSV。人工确认后再使用 `--apply` 重写最终语料。各类清洗的例子见 `docs/data-cleaning.md`。
-
-如果需要让 LLM 全量复核 `segments.csv`，可使用云端 segments 清洗入口。LLM 只看到原始中韩文本、placeholder 和命中的 glossary term；target contamination、结构化字符串、长度比例等本地预判只在模型返回后用于校验和审计，不作为提示喂给模型。该流程允许 LLM 建议删除行或改写 `ko`，但只有通过本地校验的韩文改写才会写入主语料；校验包括非空、有韩文、无中文污染、placeholder 保留、glossary term exact/no-space 保留、长度比例和重复输出检查。审计文件写入本地 `data/review/llm_segments_cleanup/`，不提交到 Git。
-
-```powershell
-$env:OPENAI_API_KEY="<your-key>"
-$env:LLM_MODEL="<your-model>"
-venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --dry-run
-```
-
-确认 review 后才使用 `--apply`。全量 LLM 清洗会让旧训练 run、split 和 report 全部作废，必须重新执行 strict-check 和 training dry-run。
-
-如需检查 glossary 与 segments 的术语一致性，先 dry-run，再在确认后 apply：
-
-```powershell
-venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --dry-run
-venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --apply
-```
-
-交叉清洗只自动删除高置信 glossary 噪声或强术语冲突 segment，不自动改写韩文译文；删除内容会写入本地 `data/review/segments_glossary_cross/`。
-它的基本步骤是：先用最长优先、非重叠的中文术语匹配扫描 `segments.csv`；再用 exact 和 no-space exact 检查韩文是否保留术语表译法；然后按 `configs/cross_cleaning/rules.json` 中的阈值统计每个 term 的 preserved/missing 证据，将 term 分为 glossary 噪声、强术语或待复核；最后只删除高置信 glossary 噪声和命中强术语但未按表翻译的 segment 行。
-训练前可使用更严格的门禁模式，要求所有 remaining glossary 术语在所有 segment 中都按表保留：
-
-```powershell
-venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --strict-dry-run
+venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --apply
 venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --strict-check
 ```
 
-严格模式会先根据真实 `segments.csv` 翻译选择可强制执行的 glossary：无缺失的 term 直接保留，强游戏域 term 需要足够 preserved evidence 且 missing rate 低于阈值，经验稳定 term 需要高 preserved count/rate；不满足条件且存在 mismatch 的 term 会从 glossary 移除。随后，仍命中可强制执行 glossary 但韩文未按表保留的 segment 会被删除。`--strict-check` 只检查当前数据，发现任意缺失即返回失败；确认 review 后再使用 `--strict-apply`。
-full training 或最终 test report 前，`--strict-check` 必须通过。
+如需 LLM 全量复核：
 
-训练/推理/评估入口为配置驱动，并已端到端跑出最终模型（见上文「项目状态与成果」）：dry-run 只做配置读取、数据校验和确定性的 train/validation/test 计划。RF-006-P7 会在 ignored 的 `fine-tuned-models/.../runs/run-*` 下写入固定 split artifact 和 `run_manifest.json`；RF-006-P10 将正式实验修正为 seed `42` 的 8:1:1 划分。validation 只用于训练期间 eval 和 checkpoint 观察，最终性能报告必须使用独立 test split。RF-006-P8 基于固定 validation split 生成翻译 CSV，`--generate-test` 基于固定 test split 生成最终评估 CSV。下方 smoke/pilot 命令仍可作为快速工程链路验证；当前模型 run 为 `run-full-earlystop-v1`。
+```powershell
+$env:OPENAI_API_KEY="<your-key>"; $env:LLM_MODEL="<your-model>"
+venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --dry-run
+# 确认 review 后：--apply
+```
+
+各类清洗的详细规则和示例见 [docs/data-cleaning.md](docs/data-cleaning.md)。
+
+**训练** —— 使用 `full_earlystop.json`（确定性 8:1:1 划分，seed 42，early-stopping）。
+
+```powershell
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_earlystop.json --train --run-name <run-name>
+```
+
+快速 smoke/dry-run 验证：
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --smoke-test
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --nllb-smoke-test --smoke-rows 2
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --real-model-smoke-test --smoke-rows 2
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --pilot-train --pilot-rows 64 --max-steps 4 --save-steps 2
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --train --limit-rows 128 --max-steps 4 --save-steps 2 --save-total-limit 2 --logging-steps 1
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --train --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-name --resume-from-checkpoint latest --max-steps 6 --save-steps 2 --save-total-limit 2 --logging-steps 1
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k.json --train --run-name run-full-10k-corrected-v1
-venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --dry-run
-venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate --model-path fine-tuned-models\nllb-200-distilled-600M\zh2ko\pilot\run-20260525-093832\checkpoint-4 --sample-rows 8
-venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate-validation --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-name
-venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate-test --run-dir fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-full-10k-corrected-v1
 ```
 
-如需评估已有翻译结果 CSV，使用 RF-007 评估入口。输入默认采用 notebook 旧输出列名：`source`、`references`、`candidates`。BLEU 默认按韩文空格词分词，glossary preservation 会去除候选译文中的 `<start>...<end>` marker 后检查韩文术语是否出现。RF-024 新增 chrF（字符 n-gram F-score，max_n=6，beta=2），在韩文等形态丰富语言上与人工判断的相关性优于 BLEU。模型生成的空 `candidates` 会作为评估结果中的 `empty_candidate_rows` 记录，而不是让报告中断。
-推理入口默认会先用 `data/glossary.csv` 对输入 source 应用与训练一致的 `<start>...<end>` 术语 marker，但生成 CSV 仍保留原始 source 以便 review。RF-007 会同时报告 exact 与 no-space glossary preservation：exact 用于观察格式一致性，no-space 用于避免把韩文空格差异误判成真正术语缺失。
+**推理** —— 指定训练 run 目录。
 
 ```powershell
-venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\default.json --input translation_result.csv
-venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint fine-tuned-models\nllb-200-distilled-600M\zh2ko\pilot\run-20260525-093832\checkpoint-4
-venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --input data\review\inference\test\run-full-10k-corrected-v1\test_generated.csv --report-dir data\review\evaluation\test_report\run-full-10k-corrected-v1 --checkpoint fine-tuned-models\nllb-200-distilled-600M\zh2ko\runs\run-full-10k-corrected-v1\checkpoint-10000
+venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\default.json --generate-test --run-dir <run-dir>
 ```
 
-训练 notebook 中的语言列按 NLLB 语言代码转换：
+**评估** —— 一次性报告 BLEU、chrF 与 glossary preservation。
 
-```text
-zh-CN -> zho_Hans
-zh-TW -> zho_Hant
-en    -> eng_Latn
-ja    -> jpn_Jpan
-ko    -> kor_Hang
+```powershell
+venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --input <generated-csv>
 ```
-
-Notebook 保留为实验记录；T&N+R 相关 notebook 已视为 deprecated historical experiments。各 notebook 的用途、顺序和依赖状态见 `docs/notebooks/inventory.md`。
-
-当前术语保护逻辑已抽取到 `src/longtu_translation_pipeline/text_protection.py`。该模块只使用单段 `<start>...<end>` marker；旧双段术语 marker 和 code-id 保护已从当前工程主线中废弃。当前 notebook 尚未改写为 import 该模块；它们继续作为实验记录保留。
 
 ## 更大的模型 (1.3B / 3.3B)
 
@@ -274,9 +236,7 @@ NLLB-200 还提供更大的基座（`nllb-200-1.3B`、`nllb-200-3.3B`）。更�
 
 来源：参数量与 ~17.6 GB 的 3.3B 磁盘 checkpoint 大小来自 Hugging Face 模型卡（[600M](https://huggingface.co/facebook/nllb-200-distilled-600M)、[1.3B](https://huggingface.co/facebook/nllb-200-distilled-1.3B)、[3.3B](https://huggingface.co/facebook/nllb-200-3.3B)）；显存数字基于本项目 600M 实测（`run_manifest.json`）加标准 AdamW 显存估算（权重 + 梯度 + optimizer state 约 16 bytes/参数）。
 
-## 架构与重构入口
-
-长期重构待办不放在 README 中维护。请查看：
+## 参考文档
 
 - [重构 backlog](docs/refactor/backlog.md)
 - [后续任务（并行 track 索引）](docs/refactor/follow-up-tasks.md)
