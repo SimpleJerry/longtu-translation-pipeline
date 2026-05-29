@@ -1,0 +1,34 @@
+{
+  "input": {
+    "path": "data/segments.csv",
+    "text_column": "zh-CN",
+    "reference_column": "ko",
+    "id_column": "segment_id"
+  },
+  "language": {
+    "source_code": "zho_Hans",
+    "target_code": "kor_Hang"
+  },
+  "model": {
+    "path": "fine-tuned-models/nllb-200-distilled-600M/zh2ko",
+    "tokenizer_name": "facebook/nllb-200-distilled-600M"
+  },
+  "glossary": {
+    "path": "data/glossary.csv",
+    "source_terminology_markers": false
+  },
+  "output": {
+    "path": "data/review/inference/zeroshot/test_zeroshot_greedy.csv",
+    "strip_glossary_markers": true
+  },
+  "generation": {
+    "batch_size": 8,
+    "max_length": 400,
+    "num_beams": 1,
+    "length_penalty": 1.0,
+    "no_repeat_ngram_size": 0
+  },
+  "dry_run": {
+    "preview_rows": 3
+  }
+}
