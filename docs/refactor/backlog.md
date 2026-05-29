@@ -600,7 +600,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
   **Stage B (val_mini=1000, ckpt-48000):** beam=4 × lp ∈ {1.0,1.1,1.2} × nrng ∈ {0,3}. Result: lp=1.0 / nrng=0 clearly best. nrng=3 severely hurts BLEU (~−0.055, likely due to repetitive Korean game-text patterns). Selected: beam=4, lp=1.0, nrng=0.
 
-  **Stage C (full val 6626 rows, all 3 checkpoints):** beam ∈ {1,4,5}, lp=1.0, nrng=0. Results (†ckpt-49000 beam=5 pending re-run — VRAM OOM with 3 concurrent models; does not affect winner):
+  **Stage C (full val 6626 rows, all 3 checkpoints):** beam ∈ {1,4,5}, lp=1.0, nrng=0. Results:
 
   | checkpoint | beam | BLEU | chrF | pres\_nospace |
   |---|---|---|---|---|
@@ -612,7 +612,7 @@ This file is the single source of truth for systematic refactor work. README fil
   | 48000 | 5 | 0.327399 | 0.592682 | 0.952098 |
   | 49000 | 1 | 0.322597 | 0.585081 | 0.952841 |
   | 49000 | 4 | 0.324233 | 0.591648 | 0.953212 |
-  | 49000 | 5 | †pending | — | — |
+  | 49000 | 5 | 0.324640 | 0.591826 | 0.953212 |
 
   **B1 (chrF ranking):** chrF confirms ckpt-48000 is best at every beam value. B1 closed — no escalation needed.
 
