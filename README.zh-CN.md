@@ -6,6 +6,27 @@
 
 这份 README 用来梳理当前仓库的真实状态。它还不是一个已经工程化封装好的生产项目，更接近“数据处理脚本 + 研究 notebook”的实验工作区。
 
+## 项目状态与成果
+
+本仓库现在同时包含一条可复现的 zh-CN → ko 微调管道**和**一个已训练、已评估的模型。整个过程是一轮长的渐进式重构（RF-001 ~ RF-029）：
+
+- **数据治理** (RF-001/002/004/009/010) —— 从 Git 移除 IDE/Excel 产物，把 raw 表格转成可审阅的 CSV，归档 2023 notebook，把多语言宽表收敛为两个入库的中韩双语文件。
+- **Glossary 清洗** (RF-010/011/012/014) —— 本地 semantic pipeline（Stanza / jieba / kiwipiepy / wordfreq / `BAAI/bge-m3`）、strict 1:1 强制、glossary↔segment 交叉一致性、可选的云端 LLM delete-only pass。
+- **Segment 清洗** (RF-005/011/013/015/029) —— markup/wrapper 归一化、结构化拆分、目标语言污染删除、单形 `<start>...<end>` 术语 marker 标准、strict glossary 一致性训练门禁、全量云端 LLM pass（OpenAI Batch API）。
+- **训练与评估** (RF-006/007) —— 使用确定性 8:1:1 划分（seed 42）的 config 驱动 NLLB 训练/推理/评估 CLI；BLEU + glossary preservation（exact & no-space）+ chrF 报告；按复合质量指标自动选最佳 checkpoint 的 early-stopping 循环。
+- **工程加固与测试** (RF-016–022) —— 公共 LLM client 模块、依赖收敛、公开 API 收敛、notebook 归档、清洗 pipeline 单测补齐。
+
+**当前模型。** early-stopping run 的 `checkpoint-48000`，beam search（`num_beams=4`）解码。held-out test split（seed 42，训练和 checkpoint 选择中均未见过）：
+
+| 指标 | 分数 |
+| --- | --- |
+| BLEU（空格分词） | 0.325 |
+| chrF (max_n=6, β=2) | 0.590 |
+| Glossary preservation (no-space) | 0.954 |
+| Glossary preservation (exact) | 0.950 |
+
+相对最初 under-fit 的 10k-step 基线（BLEU ≈ 0.198，preservation ≈ 0.80）有大幅提升；其中大部分来自把"拍脑袋的固定步数"换成多 epoch 早停，beam-search 解码在最后又小幅加成。精确的语料行数和 SHA256 会随每次清洗 pass 变化，因此不在此重复，而是记录在 [docs/refactor/backlog.md](docs/refactor/backlog.md)。
+
 ## 当前范围
 
 - 仓库只保留最终训练语料和术语表，不提交敏感 raw Excel/CSV 输入。
@@ -190,7 +211,7 @@ venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --s
 严格模式会先根据真实 `segments.csv` 翻译选择可强制执行的 glossary：无缺失的 term 直接保留，强游戏域 term 需要足够 preserved evidence 且 missing rate 低于阈值，经验稳定 term 需要高 preserved count/rate；不满足条件且存在 mismatch 的 term 会从 glossary 移除。随后，仍命中可强制执行 glossary 但韩文未按表保留的 segment 会被删除。`--strict-check` 只检查当前数据，发现任意缺失即返回失败；确认 review 后再使用 `--strict-apply`。
 full training 或最终 test report 前，`--strict-check` 必须通过。
 
-训练/推理工程入口目前处于 RF-006 的 smoke-test / pilot / 正式 run 硬化阶段：dry-run 只做配置读取、数据校验和确定性的 train/validation/test 计划。RF-006-P7 会在 ignored 的 `fine-tuned-models/.../runs/run-*` 下写入固定 split artifact 和 `run_manifest.json`；RF-006-P10 将正式实验修正为 seed `42` 的 8:1:1 划分。validation 只用于训练期间 eval 和 checkpoint 观察，最终性能报告必须使用独立 test split。RF-006-P8 基于固定 validation split 生成翻译 CSV，`--generate-test` 基于固定 test split 生成最终评估 CSV。P4/P5/P6/P7/P8/P2 都是工程链路验证，直到显式启动 full training 之前不代表正式模型质量。
+训练/推理/评估入口为配置驱动，并已端到端跑出最终模型（见上文「项目状态与成果」）：dry-run 只做配置读取、数据校验和确定性的 train/validation/test 计划。RF-006-P7 会在 ignored 的 `fine-tuned-models/.../runs/run-*` 下写入固定 split artifact 和 `run_manifest.json`；RF-006-P10 将正式实验修正为 seed `42` 的 8:1:1 划分。validation 只用于训练期间 eval 和 checkpoint 观察，最终性能报告必须使用独立 test split。RF-006-P8 基于固定 validation split 生成翻译 CSV，`--generate-test` 基于固定 test split 生成最终评估 CSV。下方 smoke/pilot 命令仍可作为快速工程链路验证；当前模型 run 为 `run-full-earlystop-v1`。
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
@@ -229,6 +250,20 @@ ko    -> kor_Hang
 Notebook 保留为实验记录；T&N+R 相关 notebook 已视为 deprecated historical experiments。各 notebook 的用途、顺序和依赖状态见 `docs/notebooks/inventory.md`。
 
 当前术语保护逻辑已抽取到 `src/longtu_translation_pipeline/text_protection.py`。该模块只使用单段 `<start>...<end>` marker；旧双段术语 marker 和 code-id 保护已从当前工程主线中废弃。当前 notebook 尚未改写为 import 该模块；它们继续作为实验记录保留。
+
+## 更大的模型 (1.3B / 3.3B)
+
+NLLB-200 还提供更大的基座（`nllb-200-1.3B`、`nllb-200-3.3B`）。更大的 dense MT 模型通常质量更好（边际收益递减），但**并不保证**，而且我们**没有**在本项目微调后的 zh-CN → ko 任务上基准测试过 1.3B/3.3B —— 因此这里不给出预期质量提升的数字。但成本是可预测的：
+
+| | 600M（当前） | 1.3B | 3.3B |
+| --- | --- | --- | --- |
+| 参数量 | ~0.6B | ~1.3B (~2.1×) | ~3.3B (~5.4×) |
+| 推理延迟（dense，与参数量成正比） | 1× | ~2.1× | ~5.4× |
+| 全量微调显存（AdamW，混合精度） | 适配 16 GB（本项目在 RTX 4070 Ti SUPER 上用了 ~14.9 GB） | ~21 GB —— 超过 16 GB | ~53 GB —— 远超单张 16 GB GPU |
+
+在本项目使用的 16 GB GPU 上，不借助省显存技术（gradient checkpointing、8-bit optimizer、LoRA、offload）**1.3B 全量微调放不下**，而 **3.3B 需要更大显存或多卡**。叠加当前 `num_beams=4` 默认值（已是 greedy 的 ~4×），3.3B 推理成本约为最初 600M greedy 的 ~21×。
+
+来源：参数量与 ~17.6 GB 的 3.3B 磁盘 checkpoint 大小来自 Hugging Face 模型卡（[600M](https://huggingface.co/facebook/nllb-200-distilled-600M)、[1.3B](https://huggingface.co/facebook/nllb-200-distilled-1.3B)、[3.3B](https://huggingface.co/facebook/nllb-200-3.3B)）；显存数字基于本项目 600M 实测（`run_manifest.json`）加标准 AdamW 显存估算（权重 + 梯度 + optimizer state 约 16 bytes/参数）。
 
 ## 架构与重构入口
 

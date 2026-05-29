@@ -6,6 +6,27 @@ This repository contains LongtuKorea's experimental game localization machine tr
 
 This README documents the repository as it exists today. The project is still closer to a research notebook workspace than a packaged production codebase.
 
+## Project Status & Results
+
+This repository now holds a complete, reproducible zh-CN → ko fine-tuning pipeline **and** a trained, evaluated model. The work was a long incremental refactor (RF-001 through RF-029):
+
+- **Data governance** (RF-001/002/004/009/010) — removed IDE/Excel artifacts from Git, converted raw spreadsheets to reviewable CSVs, archived 2023 notebooks, and reduced a multi-language corpus to two committed bilingual files.
+- **Glossary cleaning** (RF-010/011/012/014) — local semantic pipeline (Stanza / jieba / kiwipiepy / wordfreq / `BAAI/bge-m3`), strict 1:1 enforcement, glossary↔segment cross-consistency, and an optional cloud LLM delete-only pass.
+- **Segment cleaning** (RF-005/011/013/015/029) — markup/wrapper normalization, structural splitting, target-language-contamination removal, the single `<start>...<end>` terminology-marker standard, a strict glossary-consistency training gate, and a full-corpus cloud LLM pass (OpenAI Batch API).
+- **Training & evaluation** (RF-006/007) — a config-driven NLLB train/inference/evaluate CLI with deterministic 8:1:1 splits (seed 42); BLEU + glossary-preservation (exact & no-space) + chrF reporting; and an early-stopping loop that auto-selects the best checkpoint on a composite quality metric.
+- **Engineering hardening & tests** (RF-016–022) — shared LLM client module, dependency consolidation, public-API slimming, notebook archival, and unit-test backfill for the cleanup pipelines.
+
+**Current model.** `checkpoint-48000` from the early-stopping run, decoded with beam search (`num_beams=4`). Held-out test split (seed 42, unseen during training and checkpoint selection):
+
+| Metric | Score |
+| --- | --- |
+| BLEU (whitespace) | 0.325 |
+| chrF (max_n=6, β=2) | 0.590 |
+| Glossary preservation (no-space) | 0.954 |
+| Glossary preservation (exact) | 0.950 |
+
+This is a large gain over the first under-fit 10k-step baseline (BLEU ≈ 0.198, preservation ≈ 0.80); most of it came from replacing an arbitrary fixed step count with multi-epoch early stopping, plus a small final lift from beam-search decoding. Exact corpus row counts and SHA256 fingerprints live in [docs/refactor/backlog.md](docs/refactor/backlog.md) rather than being duplicated here, since they change with every cleaning pass.
+
 ## Current Scope
 
 - Keep only final training corpora and glossary data in the repository; sensitive raw Excel/CSV inputs are not committed.
@@ -190,7 +211,7 @@ venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --s
 Strict mode first selects the enforceable glossary from the real `segments.csv` translations: terms with no missing evidence are retained, strong game-domain terms need enough preserved evidence and a bounded missing rate, and empirically stable terms need high preserved count/rate. Terms that are not enforceable and still have mismatches are removed from the glossary. After that, segment rows are removed only if they still match an enforceable glossary term but do not preserve its Korean form. `--strict-check` only validates the current data and exits with failure on any missing term. Use `--strict-apply` only after reviewing the local strict outputs.
 Before full training or final test reporting, `--strict-check` must pass.
 
-The training/inference engineering entry points are currently in the RF-006 smoke-test/pilot/formal-run hardening phase. Dry-run reads config, validates data, and plans deterministic train/validation/test counts. RF-006-P7 writes fixed split artifacts and `run_manifest.json` under ignored `fine-tuned-models/.../runs/run-*`; RF-006-P10 corrects formal experiments to an 8:1:1 split with seed `42`. Validation is used for training-time eval and checkpoint observation only. Final performance reports must use the held-out test split. RF-006-P8 generates translation CSVs from the fixed validation split, and `--generate-test` generates final-evaluation CSVs from the fixed test split. P4/P5/P6/P7/P8/P2 are engineering-chain checks until a full training run is explicitly started.
+The training/inference/evaluation entry points are config-driven and have been run end to end through a final model (see Project Status & Results above). Dry-run reads config, validates data, and plans deterministic train/validation/test counts. RF-006-P7 writes fixed split artifacts and `run_manifest.json` under ignored `fine-tuned-models/.../runs/run-*`; RF-006-P10 corrects formal experiments to an 8:1:1 split with seed `42`. Validation is used for training-time eval and checkpoint observation only. Final performance reports must use the held-out test split. RF-006-P8 generates translation CSVs from the fixed validation split, and `--generate-test` generates final-evaluation CSVs from the fixed test split. The smoke/pilot commands below remain available as fast engineering-chain checks; the current model run is `run-full-earlystop-v1`.
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
@@ -229,6 +250,20 @@ ko    -> kor_Hang
 Notebooks are retained as experiment records. T&N+R notebooks are now deprecated historical experiments; see `docs/notebooks/inventory.md` for each notebook's purpose, order, and dependency status.
 
 Current terminology protection logic now lives in `src/longtu_translation_pipeline/text_protection.py`. The module uses only the single `<start>...<end>` marker shape; the old dual-term marker and code-id protection are deprecated from the current engineering mainline. Notebooks are not rewritten to import it in this pass; they remain experiment records.
+
+## Larger Models (1.3B / 3.3B)
+
+NLLB-200 also ships larger bases — `nllb-200-1.3B` and `nllb-200-3.3B`. Larger dense MT models generally improve quality with diminishing returns, but this is **not guaranteed**, and we have **not** benchmarked 1.3B/3.3B on this project's fine-tuned zh-CN → ko task — so no expected quality-gain figure is given here. Cost, however, is predictable:
+
+| | 600M (current) | 1.3B | 3.3B |
+| --- | --- | --- | --- |
+| Parameters | ~0.6B | ~1.3B (~2.1×) | ~3.3B (~5.4×) |
+| Inference latency (dense, ∝ params) | 1× | ~2.1× | ~5.4× |
+| Full fine-tune VRAM (AdamW, mixed precision) | fits 16 GB (this project used ~14.9 GB on an RTX 4070 Ti SUPER) | ~21 GB — exceeds 16 GB | ~53 GB — far exceeds a single 16 GB GPU |
+
+On the 16 GB GPU used here, **1.3B full fine-tuning does not fit** without memory-saving techniques (gradient checkpointing, 8-bit optimizer, LoRA, or offload), and **3.3B needs a larger or multi-GPU setup**. Combined with the current `num_beams=4` default (already ~4× greedy), 3.3B inference would be on the order of ~21× the original 600M greedy cost.
+
+Sources: parameter counts and the ~17.6 GB on-disk 3.3B checkpoint are from the Hugging Face model cards ([600M](https://huggingface.co/facebook/nllb-200-distilled-600M), [1.3B](https://huggingface.co/facebook/nllb-200-distilled-1.3B), [3.3B](https://huggingface.co/facebook/nllb-200-3.3B)); VRAM figures are this project's measured 600M run (`run_manifest.json`) plus standard AdamW memory accounting (~16 bytes/parameter for weights + gradients + optimizer state).
 
 ## Architecture and Refactor Notes
 

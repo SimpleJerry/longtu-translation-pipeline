@@ -514,7 +514,7 @@ This file is the single source of truth for systematic refactor work. README fil
 
 ## RF-023: README Tri-Language Sync
 
-- **Status:** TODO
+- **Status:** DONE
 - **Scope:** `README.md` (zh-CN), `README.en.md`, `README.zh-CN.md`, optionally `scripts/check_readme_sync.py`
 - **Background / Why:** Audit 2026-05-26 §P3-2: three READMEs duplicate corpus numbers and command examples without any sync mechanism. Drift risk grows with every corpus change.
 - **Concrete Scope:** Two strategies — Strategy A centralizes numbers (link to `docs/refactor/backlog.md` instead of duplicating); Strategy B adds a sync-checker script. Pick A by default; pick B only if the user wants to keep per-language numerical prose.
@@ -522,7 +522,7 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** Strategy A removes per-language numeric context that some readers may rely on; mitigate by leaving structural prose intact and only centralizing numbers.
 - **Acceptance Criteria:** Strategy A — no concrete corpus numbers (row counts, SHA256) remain in any README; each previously-numeric mention links to backlog/data-cleaning docs. Strategy B — `scripts/check_readme_sync.py` exits 0 on current trees. Either way `unittest discover` passes.
 - **Recommended Test Commands:** Strategy A: `rg -n "66,?385|3,?396|SHA256" README.md README.en.md README.zh-CN.md`; Strategy B: `venv\Scripts\python.exe scripts\check_readme_sync.py`; both: `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
-- **Notes:** Owned by [T-E2](task-briefs/T-E2.md). Lower priority; do only if continued tri-language maintenance is intended. **Status correction (2026-05-28):** an earlier edit erroneously flipped this to DONE; filesystem verification found no `scripts/check_readme_sync.py` and no centralization of corpus numbers, so it was reverted to TODO. NOT executed.
+- **Notes:** Owned by [T-E2](task-briefs/T-E2.md). Done 2026-05-29 as project wrap-up (Strategy A — centralize via reference, no sync script). The three READMEs (`README.md` ko / `README.en.md` / `README.zh-CN.md`) got a tri-language overhaul: (1) added a "Project Status & Results" section near the top — RF-001~029 workload narrative plus the final held-out test metrics (BLEU 0.325 / chrF 0.590 / preservation_nospace 0.954 / preservation_exact 0.950 on `checkpoint-48000`, beam=4); (2) added a "Larger Models (1.3B / 3.3B)" section — qualitative quality direction + explicit "not benchmarked here" disclaimer + sourced cost numbers (HF model cards + `run_manifest.json` measured VRAM + AdamW memory accounting), no fabricated quality figure; (3) fixed the stale "RF-006 smoke/pilot hardening phase / full training not yet started" paragraph to reflect the completed `run-full-earlystop-v1` model. Volatile corpus row counts / SHA256 are referenced to `docs/refactor/backlog.md` rather than duplicated in the READMEs. No `scripts/check_readme_sync.py` was created — the body carried no duplicated corpus numbers to police.
 
 ## RF-024: Add chrF Metric to Evaluation
 
@@ -554,7 +554,7 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** Large dependency, ~1.5GB model download on first use; runtime dominated by COMET on CPU.
 - **Acceptance Criteria:** Default config has `comet_enabled=false` and reports look identical to before this RF; with the flag on, a COMET row appears in `evaluation_summary.csv` and `report_manifest.json`; tests do not download the model.
 - **Recommended Test Commands:** `venv\Scripts\python.exe -m unittest tests.test_evaluation -v`; `venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --checkpoint <ckpt>`; (with custom flagged config) confirm COMET row appears; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline diff --check`.
-- **Notes:** Owned by [T-F2](task-briefs/T-F2.md). Optional research extension; depends on at least one generation CSV from T-A3. **Status correction (2026-05-28):** an earlier edit erroneously flipped this to DONE; filesystem verification found no `src/longtu_translation_pipeline/comet_metric.py`, so it was reverted to TODO. NOT executed.
+- **Notes:** Owned by [T-F2](task-briefs/T-F2.md). Optional research extension; depends on at least one generation CSV from T-A3. **Status correction (2026-05-28):** an earlier edit erroneously flipped this to DONE; filesystem verification found no `src/longtu_translation_pipeline/comet_metric.py`, so it was reverted to TODO. NOT executed. **2026-05-29 decision: deferred.** COMET adds no model quality — it is only another reference-based eval metric, and the project already reports BLEU + chrF + glossary preservation. Not worth the ~1.5 GB model download + heavy dependency now. Revisit only if a learned metric is explicitly required.
 
 ## RF-026: NLLB-1.3B / 3.3B Base Model Experiment
 
@@ -566,7 +566,7 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** VRAM requirements grow; gradient accumulation or LoRA may be needed for 1.3B+ on smaller GPUs; document deviations.
 - **Acceptance Criteria:** New run directory under `fine-tuned-models/nllb-200-1.3B/zh2ko/runs/` with matching `segments_sha256`; side-by-side test report comparison recorded in this entry; 600M baseline untouched.
 - **Recommended Test Commands:** `venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k_nllb_1.3b.json --nllb-smoke-test --smoke-rows 2`; `$env:HF_HOME="...; venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_10k_nllb_1.3b.json --train --run-name run-full-10k-nllb-1.3b-v1`; `Get-Content "<run>\run_manifest.json"`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`.
-- **Notes:** Owned by [T-F3](task-briefs/T-F3.md). Pending RF-007-P3 (now DONE — unblocked). **Status correction (2026-05-28):** an earlier edit erroneously flipped this to DONE; filesystem verification found no `configs/training/full_10k_nllb_1.3b.json` and no `fine-tuned-models/nllb-200-1.3B/` run directory, so it was reverted to TODO. NOT executed.
+- **Notes:** Owned by [T-F3](task-briefs/T-F3.md). Pending RF-007-P3 (now DONE — unblocked). **Status correction (2026-05-28):** an earlier edit erroneously flipped this to DONE; filesystem verification found no `configs/training/full_10k_nllb_1.3b.json` and no `fine-tuned-models/nllb-200-1.3B/` run directory, so it was reverted to TODO. NOT executed. **2026-05-29 decision: deferred.** Cost/benefit documented in the README "Larger Models" section: 1.3B full fine-tune does not fit the 16 GB GPU used here (needs gradient checkpointing / 8-bit optimizer / LoRA / offload), 3.3B needs a larger or multi-GPU setup, and the expected quality gain on this fine-tuned zh→ko task is not reliably predictable from public benchmarks. Revisit only if more quality is needed and a bigger GPU is available.
 
 ## RF-027: Back-Translation Data Augmentation
 
@@ -578,7 +578,7 @@ This file is the single source of truth for systematic refactor work. README fil
 - **Risks:** Synthetic rows leaking into validation or test invalidate the test report; the verification step that compares val/test SHA256 to baseline is non-negotiable.
 - **Acceptance Criteria:** Synthetic file outside `data/segments.csv`; no synth row appears in validation or test splits (verified by SHA256 equality with baseline splits); manifest records both SHA256s; backlog Notes carry comparison vs. RF-007-P3 baseline.
 - **Recommended Test Commands:** `Get-FileHash <baseline>\splits\validation.csv,<synth>\splits\validation.csv -Algorithm SHA256`; `Get-FileHash <baseline>\splits\test.csv,<synth>\splits\test.csv -Algorithm SHA256`; leak-check script in the brief; `venv\Scripts\python.exe -m unittest discover -s tests`; `git -c safe.directory=D:/longtu-translation-pipeline status --short`.
-- **Notes:** Owned by [T-F4](task-briefs/T-F4.md). Pending RF-007-P3 (now DONE — unblocked). **Status correction (2026-05-28):** an earlier edit erroneously flipped this to DONE; filesystem verification found no `scripts/generate_back_translation.py`, so it was reverted to TODO. NOT executed.
+- **Notes:** Owned by [T-F4](task-briefs/T-F4.md). Pending RF-007-P3 (now DONE — unblocked). **Status correction (2026-05-28):** an earlier edit erroneously flipped this to DONE; filesystem verification found no `scripts/generate_back_translation.py`, so it was reverted to TODO. NOT executed. **2026-05-29 decision: deferred.** Marginal expected return after the early-stopping + beam-search gains already captured, against high effort (synthetic-data generation via a ko→zh model + strict val/test leakage isolation). Revisit only if a quality plateau needs breaking.
 
 ## RF-028: Inference Parameter Sweep
 

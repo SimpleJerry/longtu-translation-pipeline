@@ -6,6 +6,27 @@ LongtuKorea의 게임 현지화 번역 모델 실험 저장소입니다. 현재 
 
 이 문서는 현재 저장소의 실제 상태를 정리하기 위한 문서입니다. 아직 패키지화된 제품 코드라기보다 데이터 처리 스크립트와 연구용 notebook이 함께 있는 실험 저장소에 가깝습니다.
 
+## 프로젝트 현황 및 결과
+
+이 저장소는 이제 재현 가능한 zh-CN → ko 파인튜닝 파이프라인과 학습·평가가 끝난 모델을 모두 포함합니다. 작업은 긴 점진적 리팩터링(RF-001 ~ RF-029)이었습니다.
+
+- **데이터 거버넌스** (RF-001/002/004/009/010) — IDE/Excel 아티팩트를 Git에서 제거, raw 스프레드시트를 검토 가능한 CSV로 변환, 2023 notebook 아카이브, 다국어 말뭉치를 커밋되는 두 개의 이중언어 파일로 축소.
+- **Glossary 정제** (RF-010/011/012/014) — 로컬 semantic pipeline(Stanza / jieba / kiwipiepy / wordfreq / `BAAI/bge-m3`), strict 1:1 강제, glossary↔segment 교차 일관성, 선택적 cloud LLM delete-only pass.
+- **Segment 정제** (RF-005/011/013/015/029) — markup/wrapper 정규화, 구조 분리, target 언어 오염 제거, 단일 `<start>...<end>` 용어 marker 표준, strict glossary 일관성 학습 게이트, 전체 말뭉치 cloud LLM pass(OpenAI Batch API).
+- **학습 및 평가** (RF-006/007) — 결정적 8:1:1 split(seed 42)을 쓰는 config 기반 NLLB 학습/추론/평가 CLI; BLEU + glossary preservation(exact & no-space) + chrF 보고; composite 품질 지표로 best checkpoint를 자동 선택하는 early-stopping 루프.
+- **엔지니어링 하드닝 및 테스트** (RF-016–022) — 공용 LLM client 모듈, 의존성 정리, 공개 API 축소, notebook 아카이브, 정제 pipeline 단위 테스트 보강.
+
+**현재 모델.** early-stopping run의 `checkpoint-48000`, beam search(`num_beams=4`) 디코딩. held-out test split(seed 42, 학습 및 checkpoint 선택에서 미사용):
+
+| 지표 | 점수 |
+| --- | --- |
+| BLEU (공백 단위) | 0.325 |
+| chrF (max_n=6, β=2) | 0.590 |
+| Glossary preservation (no-space) | 0.954 |
+| Glossary preservation (exact) | 0.950 |
+
+이는 처음의 under-fit 10k-step 베이스라인(BLEU ≈ 0.198, preservation ≈ 0.80) 대비 큰 향상이며, 대부분은 임의의 고정 step 수를 다중 epoch early stopping으로 바꾼 데서 나왔고 beam-search 디코딩이 마지막에 소폭 더했습니다. 정확한 말뭉치 행 수와 SHA256은 매 정제 pass마다 바뀌므로 여기서 중복하지 않고 [docs/refactor/backlog.md](docs/refactor/backlog.md)에 기록합니다.
+
 ## 현재 범위
 
 - 저장소에는 최종 학습 말뭉치와 용어집만 보관하며, 민감한 raw Excel/CSV 입력은 커밋하지 않습니다.
@@ -190,7 +211,7 @@ venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --s
 Strict mode는 먼저 실제 `segments.csv` 번역을 기준으로 enforceable glossary를 고릅니다. 누락이 없는 term은 보존하고, 강한 게임 도메인 term은 충분한 preserved evidence와 제한된 missing rate가 필요하며, 경험적으로 안정적인 term은 높은 preserved count/rate가 필요합니다. 이 조건을 만족하지 못하고 mismatch가 있는 term은 glossary에서 제거합니다. 그 다음 enforceable glossary term을 포함하지만 한국어가 해당 번역을 보존하지 않는 segment 행만 삭제합니다. `--strict-check`는 현재 데이터를 검사만 하며 누락 용어가 있으면 실패합니다. 로컬 strict review를 확인한 뒤에만 `--strict-apply`를 사용합니다.
 Full training 또는 최종 test report 전에 `--strict-check`는 반드시 통과해야 합니다.
 
-학습/추론 engineering entry point는 현재 RF-006 smoke-test/pilot/formal-run hardening 단계입니다. dry-run은 설정 읽기, 데이터 검증, 결정적인 train/validation/test 계획만 수행합니다. RF-006-P7은 ignored `fine-tuned-models/.../runs/run-*` 아래에 고정 split artifact와 `run_manifest.json`을 작성합니다. RF-006-P10은 formal experiment split을 seed `42`의 8:1:1로 수정합니다. validation은 학습 중 eval/checkpoint 관찰에만 쓰고, 최종 성능 보고는 held-out test split만 사용합니다. RF-006-P8은 고정 validation split에서 translation CSV를 만들고, `--generate-test`는 고정 test split에서 최종 평가 CSV를 만듭니다. P4/P5/P6/P7/P8/P2는 full training을 명시적으로 시작하기 전까지 engineering chain 검증입니다.
+학습/추론/평가 entry point는 config 기반이며, 최종 모델까지 end-to-end로 실행되었습니다(위 "프로젝트 현황 및 결과" 참고). dry-run은 설정 읽기, 데이터 검증, 결정적인 train/validation/test 계획만 수행합니다. RF-006-P7은 ignored `fine-tuned-models/.../runs/run-*` 아래에 고정 split artifact와 `run_manifest.json`을 작성합니다. RF-006-P10은 formal experiment split을 seed `42`의 8:1:1로 수정합니다. validation은 학습 중 eval/checkpoint 관찰에만 쓰고, 최종 성능 보고는 held-out test split만 사용합니다. RF-006-P8은 고정 validation split에서 translation CSV를 만들고, `--generate-test`는 고정 test split에서 최종 평가 CSV를 만듭니다. 아래 smoke/pilot 명령은 빠른 engineering chain 검증용으로 계속 사용할 수 있습니다. 현재 모델 run은 `run-full-earlystop-v1`입니다.
 
 ```powershell
 venv\Scripts\python.exe scripts\train_model.py --config configs\training\default.json --dry-run
@@ -229,6 +250,20 @@ ko    -> kor_Hang
 Notebook은 실험 기록으로 보존합니다. T&N+R 관련 notebook은 deprecated historical experiments로 취급합니다. 각 notebook의 목적, 순서, 의존성 상태는 `docs/notebooks/inventory.md`를 참고하세요.
 
 현재 용어 보호 로직은 `src/longtu_translation_pipeline/text_protection.py`로 분리했습니다. 이 모듈은 단일 `<start>...<end>` marker만 사용하며, 기존 이중 용어 marker와 code-id 보호는 현재 engineering mainline에서 폐기되었습니다. 이번 단계에서는 notebook이 이 모듈을 import하도록 다시 쓰지 않고, 실험 기록으로 유지합니다.
+
+## 더 큰 모델 (1.3B / 3.3B)
+
+NLLB-200에는 더 큰 베이스(`nllb-200-1.3B`, `nllb-200-3.3B`)도 있습니다. 더 큰 dense MT 모델은 일반적으로 품질이 좋아지지만(체감 수익은 점차 감소) **보장되지는 않으며**, 본 프로젝트의 파인튜닝된 zh-CN → ko 작업에서 1.3B/3.3B를 **벤치마크하지 않았으므로** 예상 품질 향상 수치는 제시하지 않습니다. 다만 비용은 예측 가능합니다.
+
+| | 600M (현재) | 1.3B | 3.3B |
+| --- | --- | --- | --- |
+| 파라미터 | ~0.6B | ~1.3B (~2.1×) | ~3.3B (~5.4×) |
+| 추론 지연 (dense, 파라미터에 비례) | 1× | ~2.1× | ~5.4× |
+| 전체 파인튜닝 VRAM (AdamW, mixed precision) | 16 GB에 적합 (본 프로젝트는 RTX 4070 Ti SUPER에서 ~14.9 GB 사용) | ~21 GB — 16 GB 초과 | ~53 GB — 단일 16 GB GPU를 크게 초과 |
+
+여기서 사용한 16 GB GPU에서는 메모리 절약 기법(gradient checkpointing, 8-bit optimizer, LoRA, offload) 없이는 **1.3B 전체 파인튜닝이 들어가지 않으며**, **3.3B는 더 큰 GPU 또는 다중 GPU가 필요합니다**. 현재 `num_beams=4` 기본값(이미 greedy의 ~4×)과 합치면 3.3B 추론은 원래 600M greedy 비용의 약 ~21× 수준이 됩니다.
+
+출처: 파라미터 수와 ~17.6 GB 디스크 3.3B checkpoint 크기는 Hugging Face 모델 카드([600M](https://huggingface.co/facebook/nllb-200-distilled-600M), [1.3B](https://huggingface.co/facebook/nllb-200-distilled-1.3B), [3.3B](https://huggingface.co/facebook/nllb-200-3.3B))에서 가져왔고, VRAM 수치는 본 프로젝트의 600M 실측(`run_manifest.json`)과 표준 AdamW 메모리 산정(가중치 + 그래디언트 + optimizer state 기준 ~16 bytes/파라미터)에 근거합니다.
 
 ## 아키텍처와 리팩터링 문서
 
