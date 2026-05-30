@@ -91,18 +91,15 @@
 │   ├── segments_glossary_cross_cleaning_pipeline.py
 │   ├── sweep_inference_params.py
 │   ├── run_inference.py
-│   └── train_model.py
+│   ├── train_model.py
+│   └── plot_training_loss.py
 ├── src/
 │   └── longtu_translation_pipeline/
 ├── tests/
 ├── logs/
-├── notebooks/
-│   ├── analysis/
-│   └── archive/2023-legacy/
 └── docs/
     ├── data-cleaning.md
-    ├── notebooks/inventory.md
-    └── refactor/
+    └── notebooks/inventory.md
 ```
 
 ## 주요 파일
@@ -131,15 +128,14 @@
 | `scripts/segments_glossary_cross_cleaning_pipeline.py` | glossary/segments 교차 정제 CLI이며 고신뢰 용어 충돌 행을 제거하고 로컬 review를 생성합니다. |
 | `scripts/train_model.py` | 설정 dry-run, 로컬 tiny tokenizer smoke, 실제 tokenizer + tiny Trainer smoke, 실제 NLLB model 1-step smoke, pilot training, formal run-directory training을 지원하는 학습 CLI입니다. |
 | `scripts/run_inference.py` | 추론 CLI입니다. 설정 dry-run과 실제 checkpoint 기반 sample generation을 지원합니다. |
+| `scripts/plot_training_loss.py` | `trainer_state.json`으로부터 훈련/평가 손실 곡선을 그리는 CLI입니다. `--output`으로 파일 저장 가능합니다. |
 | `src/longtu_translation_pipeline/text_protection.py` | 테스트 가능한 용어 marker 보호 pure-function 모듈입니다. |
 | `src/longtu_translation_pipeline/training_metrics.py` | 학습 중 복합 품질 지표 계산 및 best checkpoint 선택 로직입니다. |
 | `src/longtu_translation_pipeline/config.py` | 학습/추론 JSON 설정을 dataclass로 파싱하고 검증합니다. |
 | `src/longtu_translation_pipeline/training.py` | import 가능한 학습 데이터 준비 및 Trainer 연결 API입니다. |
 | `src/longtu_translation_pipeline/inference.py` | import 가능한 추론 입력 계획 dry-run API입니다. |
 | `src/longtu_translation_pipeline/evaluation.py` | import 가능한 BLEU와 glossary preservation 평가 API입니다. |
-| `notebooks/analysis/` | train/eval loss 시각화 같은 보조 분석 notebook입니다. |
-| `notebooks/archive/2023-legacy/` | 2023년 원본 실험 archive입니다. |
-| `docs/notebooks/inventory.md` | Notebook의 시간순 흐름, 목적, 의존성 상태, 보존/archive/삭제 제안입니다. |
+| `docs/notebooks/inventory.md` | 2023년 실험 Notebook의 시간순 흐름, 목적 및 퇴역 기록입니다. 원본 Notebook 파일은 git 태그 `notebooks-retire`로 조회할 수 있습니다. |
 | `docs/architecture/data-cleaning-pipeline.md` | 스타일 태그, 구조화 문자열, 짧은 조각, target 오염, strict gate 예시를 포함한 데이터 정제 규칙 설명입니다. |
 | `requirements-training.txt` | 학습 chain 의존성. transformers, accelerate, sentencepiece, CUDA PyTorch를 포함합니다. |
 

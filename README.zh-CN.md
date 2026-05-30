@@ -91,18 +91,15 @@
 │   ├── segments_glossary_cross_cleaning_pipeline.py
 │   ├── sweep_inference_params.py
 │   ├── run_inference.py
-│   └── train_model.py
+│   ├── train_model.py
+│   └── plot_training_loss.py
 ├── src/
 │   └── longtu_translation_pipeline/
 ├── tests/
 ├── logs/
-├── notebooks/
-│   ├── analysis/
-│   └── archive/2023-legacy/
 └── docs/
     ├── data-cleaning.md
-    ├── notebooks/inventory.md
-    └── refactor/
+    └── notebooks/inventory.md
 ```
 
 ## 关键文件
@@ -131,15 +128,14 @@
 | `scripts/segments_glossary_cross_cleaning_pipeline.py` | glossary/segments 交叉清洗 CLI，删除高置信术语冲突训练行并输出本地 review。 |
 | `scripts/train_model.py` | 训练 CLI；支持配置 dry-run、本地 tiny tokenizer smoke、真实 tokenizer + tiny Trainer smoke、真实 NLLB 模型 1-step smoke、pilot training 和正式 run 目录训练。 |
 | `scripts/run_inference.py` | 推理 CLI；支持配置 dry-run 和基于真实 checkpoint 的小样本 generation。 |
+| `scripts/plot_training_loss.py` | 从 `trainer_state.json` 绘制训练/评估损失曲线的 CLI；传入 `--output` 可保存为文件。 |
 | `src/longtu_translation_pipeline/text_protection.py` | 可测试的术语 marker 保护纯函数模块。 |
 | `src/longtu_translation_pipeline/training_metrics.py` | 训练期间复合质量指标计算与最优 checkpoint 选择逻辑。 |
 | `src/longtu_translation_pipeline/config.py` | 训练/推理 JSON 配置的 dataclass 解析和校验。 |
 | `src/longtu_translation_pipeline/training.py` | 可导入的训练数据准备和 Trainer 链路 API。 |
 | `src/longtu_translation_pipeline/inference.py` | 可导入的推理输入计划 dry-run API。 |
 | `src/longtu_translation_pipeline/evaluation.py` | 可导入的 BLEU 与 glossary preservation 评估 API。 |
-| `notebooks/analysis/` | 辅助分析 notebook，例如训练 loss 可视化。 |
-| `notebooks/archive/2023-legacy/` | 2023 年原始实验归档。 |
-| `docs/notebooks/inventory.md` | Notebook 时间线、用途、依赖状态和保留/归档/删除建议。 |
+| `docs/notebooks/inventory.md` | 2023 年实验 Notebook 的时间线、用途与退役记录。如需查阅原始 Notebook 文件，请检出 git 标签 `notebooks-retire`。 |
 | `docs/architecture/data-cleaning-pipeline.md` | 数据清洗规则说明，包含样式 tag、结构化字符串、短碎片、目标语言污染和 strict gate 示例。 |
 | `requirements-training.txt` | 训练链路依赖，包含 transformers、accelerate、sentencepiece 与 CUDA PyTorch。 |
 

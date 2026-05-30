@@ -91,18 +91,15 @@ Net gain from fine-tuning + data cleaning: **+0.316 BLEU (~34×)** at the same b
 │   ├── segments_glossary_cross_cleaning_pipeline.py
 │   ├── sweep_inference_params.py
 │   ├── run_inference.py
-│   └── train_model.py
+│   ├── train_model.py
+│   └── plot_training_loss.py
 ├── src/
 │   └── longtu_translation_pipeline/
 ├── tests/
 ├── logs/
-├── notebooks/
-│   ├── analysis/
-│   └── archive/2023-legacy/
 └── docs/
     ├── data-cleaning.md
-    ├── notebooks/inventory.md
-    └── refactor/
+    └── notebooks/inventory.md
 ```
 
 ## Key Files
@@ -131,15 +128,14 @@ Net gain from fine-tuning + data cleaning: **+0.316 BLEU (~34×)** at the same b
 | `scripts/segments_glossary_cross_cleaning_pipeline.py` | Glossary/segments cross-cleaning CLI for high-confidence terminology conflicts with local review output. |
 | `scripts/train_model.py` | Training CLI for config dry-run, local tiny-tokenizer smoke, real tokenizer + tiny Trainer smoke, real NLLB model one-step smoke, pilot training, and formal run-directory training. |
 | `scripts/run_inference.py` | Inference CLI for config dry-run and real checkpoint-based sample generation. |
+| `scripts/plot_training_loss.py` | CLI that plots training and evaluation loss curves from a `trainer_state.json`; pass `--output` to save to a file. |
 | `src/longtu_translation_pipeline/text_protection.py` | Testable pure-function module for terminology marker protection. |
 | `src/longtu_translation_pipeline/training_metrics.py` | Composite quality metric calculation and best-checkpoint selection logic used during training. |
 | `src/longtu_translation_pipeline/config.py` | Dataclass parsing and validation for training/inference JSON configs. |
 | `src/longtu_translation_pipeline/training.py` | Importable training-data preparation and Trainer wiring API. |
 | `src/longtu_translation_pipeline/inference.py` | Importable inference-input planning dry-run API. |
 | `src/longtu_translation_pipeline/evaluation.py` | Importable BLEU and glossary-preservation evaluation API. |
-| `notebooks/analysis/` | Auxiliary analysis notebooks, such as train/eval loss visualization. |
-| `notebooks/archive/2023-legacy/` | Archived 2023 original experiment notebooks. |
-| `docs/notebooks/inventory.md` | Notebook timeline, purpose, dependency status, and keep/archive/delete guidance. |
+| `docs/notebooks/inventory.md` | Timeline, purpose, and retirement record for the 2023 experiment notebooks. To view the original notebook files, check out the git tag `notebooks-retire`. |
 | `docs/architecture/data-cleaning-pipeline.md` | Data-cleaning rule notes with examples for style tags, structured strings, short fragments, target contamination, and the strict gate. |
 | `requirements-training.txt` | Training-chain dependencies: transformers, accelerate, sentencepiece, and CUDA PyTorch. |
 

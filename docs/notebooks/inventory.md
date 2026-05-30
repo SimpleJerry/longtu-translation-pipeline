@@ -1,5 +1,10 @@
 # Notebook 清单
 
+> **2026-05-31 退役**：全部 Notebook 已从工作树删除。`train_eval_loss_picture.ipynb` 的功能由 `scripts/plot_training_loss.py` 替代。历史实验记录可通过标签 `notebooks-retire` 查阅，例如：
+> ```
+> git show notebooks-retire:notebooks/analysis/train_eval_loss_picture.ipynb
+> ```
+
 本文档记录当前Notebook集合、各Notebook的存在理由及在重构工作中的处理建议。本文档首要目的是建立清单：历史实验在任何删除决定之前均需先归档。
 
 ## 时间线概要
