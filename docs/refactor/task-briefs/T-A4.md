@@ -24,10 +24,8 @@ validation-curve evidence in T-A3, then run test once.
 
 ## Shared context (read these first)
 
-- [docs/refactor/decisions.md](../decisions.md) §2026-05-25 "Formal
-  Experiments Use Held-Out Test Splits", §2026-05-26 "Generation
-  Evaluation Reports Are Local Engineering Artifacts" (re-confirms
-  that even the test report stays under ignored `data/review/`)
+- [ADR-0023](../../decisions/adr/ADR-0023-formal-experiments-use-held-out-test-splits.md) — Formal Experiments Use Held-Out Test Splits (8:1:1, seed=42)
+- [ADR-0017](../../decisions/adr/ADR-0017-generation-evaluation-reports-are-local-artifacts.md) — Generation Evaluation Reports Are Local Engineering Artifacts (re-confirms that even the test report stays under ignored `data/review/`)
 - [docs/refactor/backlog.md](../backlog.md) RF-006-P10 — test split
   generation flow, RF-007-P2 — sample-review + manifest
 

@@ -22,9 +22,7 @@ This task adds an unmistakable marker that `default.json` is a
 ## Shared context (read these first)
 
 - [docs/refactor/audit-2026-05-26.md](../audit-2026-05-26.md) §P1-3
-- [docs/refactor/decisions.md](../decisions.md) §2026-05-25 "Full
-  Training Uses Explicit Profiles" — locks the rule that `--train`
-  must use an explicit `max_steps` profile
+- [ADR-0022](../../decisions/adr/ADR-0022-full-training-uses-explicit-profiles.md) — Full Training Uses Explicit Profiles (locks the rule that `--train` must use an explicit `max_steps` profile)
 
 ## Files to read first
 

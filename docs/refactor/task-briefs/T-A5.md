@@ -45,9 +45,7 @@ preservation), so that:
 
 ## Shared context (read these first)
 
-- [docs/refactor/decisions.md](../decisions.md) — pay attention to the
-  newly added section on early stopping methodology; the existing
-  decisions on seed 42 / split 8:1:1 / marker shape still hold
+- [ADR-0031](../../decisions/adr/ADR-0031-formal-training-uses-early-stopping-on-composite-metric.md) — Formal Training Uses Early Stopping On Composite Metric (the newly added early stopping methodology; see also [ADR-0023](../../decisions/adr/ADR-0023-formal-experiments-use-held-out-test-splits.md) for seed 42 / split 8:1:1 / marker shape)
 - [docs/refactor/backlog.md](../backlog.md) RF-006-P11 (the 10k baseline
   this run is compared against) and RF-006-P12 (the validation
   comparison table)
@@ -114,8 +112,7 @@ The `eval_subset_rows` field exists so in-loop eval can run on a small
 deterministic subset of `splits/validation.csv` (e.g. first 1000 rows)
 rather than the full 6,626. The full validation set is still used
 post-hoc (Step 6) for top-K checkpoint decision. This is the standard
-NMT-finetune pattern — see `docs/refactor/decisions.md` 2026-05-27
-follow-up note.
+NMT-finetune pattern — see [ADR-0031](../../decisions/adr/ADR-0031-formal-training-uses-early-stopping-on-composite-metric.md) follow-up note.
 
 Wire it into `TrainingConfig` as an optional field
 (`metrics: MetricsConfig | None`).

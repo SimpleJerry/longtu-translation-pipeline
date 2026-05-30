@@ -24,9 +24,8 @@ scoring paths.
 ## Shared context (read these first)
 
 - [docs/refactor/audit-2026-05-26.md](../audit-2026-05-26.md) §P2-1
-- [docs/refactor/decisions.md](../decisions.md) §2026-05-22 "Segment
-  Evidence Is Not a Sufficient Glossary Keep Signal", §2026-05-24
-  "Glossary Pipeline Uses Final Glossary As Baseline"
+- [ADR-0007](../../decisions/adr/ADR-0007-segment-evidence-not-sufficient-glossary-keep-signal.md) — Segment Evidence Is Not a Sufficient Glossary Keep Signal
+- [ADR-0008](../../decisions/adr/ADR-0008-glossary-pipeline-uses-final-glossary-as-baseline.md) — Glossary Pipeline Uses Final Glossary As Baseline
 - [docs/refactor/backlog.md](../backlog.md) RF-010 follow-up notes —
   history of what each rule was added for
 

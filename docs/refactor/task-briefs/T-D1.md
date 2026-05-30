@@ -27,10 +27,7 @@ keep importing what they need directly from submodules.
 ## Shared context (read these first)
 
 - [docs/refactor/audit-2026-05-26.md](../audit-2026-05-26.md) §P2-2
-- [docs/refactor/decisions.md](../decisions.md) §2026-05-17 "Preserve
-  Public Compatibility by Default" — the high bar for breaking the
-  public surface. Removing items that no external caller relies on
-  (verified by the audit) is acceptable per this decision.
+- [ADR-0006](../../decisions/adr/ADR-0006-preserve-public-compatibility-by-default.md) — Preserve Public Compatibility by Default (the high bar for breaking the public surface; removing items no external caller relies on, verified by audit, is acceptable)
 
 ## Files to read first
 

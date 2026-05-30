@@ -5,7 +5,7 @@ This file defines how AI/Codex agents should work in this repository. It is not 
 ## Refactor Task Source
 
 - Use `docs/refactor/backlog.md` as the single source of truth for refactor TODOs.
-- Use `docs/refactor/decisions.md` for confirmed architecture decisions and tradeoffs that should not be re-litigated without new context.
+- Use `docs/decisions/adr/` for confirmed architecture decisions and tradeoffs that should not be re-litigated without new context. See [ADR index](docs/decisions/adr/README.md).
 - Keep README files focused on project introduction, setup, basic usage, and navigation links.
 
 ## Choosing Work

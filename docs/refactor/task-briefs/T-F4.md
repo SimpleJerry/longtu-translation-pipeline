@@ -25,9 +25,7 @@ data from the validation/test splits.
 
 ## Shared context (read these first)
 
-- [docs/refactor/decisions.md](../decisions.md) §2026-05-26 "Cloud
-  LLM Segment Cleanup May Rewrite Korean With Local Guards" — the
-  closest precedent for synthetic data in this repo
+- [ADR-0026](../../decisions/adr/ADR-0026-cloud-llm-segment-cleanup-may-rewrite-korean-with-local-guards.md) — Cloud LLM Segment Cleanup May Rewrite Korean With Local Guards (the closest precedent for synthetic data in this repo)
 - [docs/refactor/backlog.md](../backlog.md) RF-006-P9, RF-006-P10 —
   the manifest schema and how `segments_sha256` enforces split
   consistency

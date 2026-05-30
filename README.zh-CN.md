@@ -140,7 +140,7 @@
 | `notebooks/analysis/` | 辅助分析 notebook，例如训练 loss 可视化。 |
 | `notebooks/archive/2023-legacy/` | 2023 年原始实验归档。 |
 | `docs/notebooks/inventory.md` | Notebook 时间线、用途、依赖状态和保留/归档/删除建议。 |
-| `docs/data-cleaning.md` | 数据清洗规则说明，包含样式 tag、结构化字符串、短碎片、目标语言污染和 strict gate 示例。 |
+| `docs/architecture/data-cleaning-pipeline.md` | 数据清洗规则说明，包含样式 tag、结构化字符串、短碎片、目标语言污染和 strict gate 示例。 |
 | `requirements-training.txt` | 训练链路依赖，包含 transformers、accelerate、sentencepiece 与 CUDA PyTorch。 |
 
 ## 运行环境
@@ -195,7 +195,7 @@ venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --dry-run
 # 确认 review 后：--apply
 ```
 
-各类清洗的详细规则和示例见 [docs/data-cleaning.md](docs/data-cleaning.md)。
+各类清洗的详细规则和示例见 [docs/architecture/data-cleaning-pipeline.md](docs/architecture/data-cleaning-pipeline.md)。
 
 **训练** —— 使用 `full_earlystop.json`（确定性 8:1:1 划分，seed 42，early-stopping）。
 
@@ -240,6 +240,6 @@ NLLB-200 还提供更大的基座（`nllb-200-1.3B`、`nllb-200-3.3B`）。更�
 
 - [重构 backlog](docs/refactor/backlog.md)
 - [后续任务（并行 track 索引）](docs/refactor/follow-up-tasks.md)
-- [重构决策记录](docs/refactor/decisions.md)
+- [架构决策记录 (ADR)](docs/decisions/adr/README.md)
 - [Notebook inventory](docs/notebooks/inventory.md)
 - [AI/Codex 工作规则](AGENTS.md)

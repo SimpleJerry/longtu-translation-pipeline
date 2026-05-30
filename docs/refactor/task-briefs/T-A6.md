@@ -31,9 +31,7 @@ becomes the current published result.
 
 ## Shared context (read these first)
 
-- [docs/refactor/decisions.md](../decisions.md) §2026-05-25 "Formal
-  Experiments Use Held-Out Test Splits" — test is used once, after
-  checkpoint selection; iterating on test = leakage
+- [ADR-0023](../../decisions/adr/ADR-0023-formal-experiments-use-held-out-test-splits.md) — Formal Experiments Use Held-Out Test Splits (test is used once, after checkpoint selection; iterating on test = leakage)
 - [docs/refactor/backlog.md](../backlog.md) RF-006-P13 (the training +
   Step 6b/6c selection record) and RF-007-P4 (this entry, to fill)
 - [docs/refactor/backlog.md](../backlog.md) RF-007-P3 (historical

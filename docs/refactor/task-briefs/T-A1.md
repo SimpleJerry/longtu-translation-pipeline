@@ -34,13 +34,10 @@ Do not start unless the user has authorized the cost.
 ## Shared context (read these first)
 
 - [docs/refactor/audit-2026-05-26.md](../audit-2026-05-26.md) §P0-1, §P0-2
-- [docs/refactor/decisions.md](../decisions.md) §2026-05-26 "Cloud LLM
-  Segment Cleanup May Rewrite Korean With Local Guards" — the policy
-  the script enforces
+- [ADR-0026](../../decisions/adr/ADR-0026-cloud-llm-segment-cleanup-may-rewrite-korean-with-local-guards.md) — Cloud LLM Segment Cleanup May Rewrite Korean With Local Guards (the policy the script enforces)
 - [docs/refactor/backlog.md](../backlog.md) RF-015 — current status
   and follow-up note
-- [docs/data-cleaning.md](../../data-cleaning.md) — segment validation
-  rules
+- [docs/architecture/data-cleaning-pipeline.md](../../architecture/data-cleaning-pipeline.md) — segment validation rules
 
 ## Files to read first
 
