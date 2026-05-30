@@ -1,6 +1,6 @@
 # ADR-0002: Refactor Backlog as Single Source of Truth (Superseded by ADR-0032)
 
-- Status: Accepted
+- Status: Superseded by ADR-0032
 - Date: 2026-05-17
 
 ## Context
