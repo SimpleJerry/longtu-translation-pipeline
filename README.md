@@ -140,7 +140,7 @@
 | `notebooks/analysis/` | train/eval loss 시각화 같은 보조 분석 notebook입니다. |
 | `notebooks/archive/2023-legacy/` | 2023년 원본 실험 archive입니다. |
 | `docs/notebooks/inventory.md` | Notebook의 시간순 흐름, 목적, 의존성 상태, 보존/archive/삭제 제안입니다. |
-| `docs/data-cleaning.md` | 스타일 태그, 구조화 문자열, 짧은 조각, target 오염, strict gate 예시를 포함한 데이터 정제 규칙 설명입니다. |
+| `docs/architecture/data-cleaning-pipeline.md` | 스타일 태그, 구조화 문자열, 짧은 조각, target 오염, strict gate 예시를 포함한 데이터 정제 규칙 설명입니다. |
 | `requirements-training.txt` | 학습 chain 의존성. transformers, accelerate, sentencepiece, CUDA PyTorch를 포함합니다. |
 
 ## 실행 환경
@@ -195,7 +195,7 @@ venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --dry-run
 # 확인 후: venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --apply
 ```
 
-각 정제 유형의 상세 예시와 규칙은 [docs/data-cleaning.md](docs/data-cleaning.md)를 참고하세요.
+각 정제 유형의 상세 예시와 규칙은 [docs/architecture/data-cleaning-pipeline.md](docs/architecture/data-cleaning-pipeline.md)를 참고하세요.
 
 **학습** — `full_earlystop.json`을 사용합니다(결정적 8:1:1 split, seed 42, early-stopping).
 
@@ -240,6 +240,6 @@ NLLB-200에는 더 큰 베이스(`nllb-200-1.3B`, `nllb-200-3.3B`)도 있습니�
 
 - [리팩터링 backlog](docs/refactor/backlog.md)
 - [후속 작업 (병렬 트랙 맵)](docs/refactor/follow-up-tasks.md)
-- [리팩터링 결정 기록](docs/refactor/decisions.md)
+- [아키텍처 결정 기록 (ADR)](docs/decisions/adr/README.md)
 - [Notebook inventory](docs/notebooks/inventory.md)
 - [AI/Codex 작업 규칙](AGENTS.md)

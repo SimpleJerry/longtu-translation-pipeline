@@ -7,7 +7,7 @@
 ## Why
 
 Six notebooks under `notebooks/main/` are listed in
-`docs/notebooks/inventory.md` and `docs/refactor/decisions.md` as
+`docs/notebooks/inventory.md` and [ADR-0010](../../decisions/adr/ADR-0010-text-protection-uses-single-segment-term-markers.md) as
 *deprecated*, but they still live in the active `main/` directory.
 Anyone browsing `notebooks/main/` is misled into thinking these are
 current. AGENTS.md "Do not leave docs implying an old behavior after
@@ -20,9 +20,8 @@ the code has changed" requires moving them to the archive.
 ## Shared context (read these first)
 
 - [docs/refactor/audit-2026-05-26.md](../audit-2026-05-26.md) §P2-3 and §P3-3
-- [docs/refactor/decisions.md](../decisions.md) §2026-05-24 "Text
-  Protection Uses Single-Segment Term Markers" (T&N+R deprecated),
-  §2026-05-24 "Notebook Deletion Requires Inventory First"
+- [ADR-0010](../../decisions/adr/ADR-0010-text-protection-uses-single-segment-term-markers.md) — Text Protection Uses Single-Segment Term Markers (T&N+R deprecated)
+- [ADR-0009](../../decisions/adr/ADR-0009-notebook-deletion-requires-inventory-first.md) — Notebook Deletion Requires Inventory First
 - [docs/notebooks/inventory.md](../../notebooks/inventory.md) —
   current per-notebook classification
 

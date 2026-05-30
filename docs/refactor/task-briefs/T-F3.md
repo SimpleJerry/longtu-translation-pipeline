@@ -22,9 +22,7 @@ shape identical** so the result is directly comparable.
 
 ## Shared context (read these first)
 
-- [docs/refactor/decisions.md](../decisions.md) §2026-05-25 "Full
-  Training Uses Explicit Profiles" — confirms new profiles are the
-  right way to introduce variants
+- [ADR-0022](../../decisions/adr/ADR-0022-full-training-uses-explicit-profiles.md) — Full Training Uses Explicit Profiles (new named profiles are the right way to introduce model variants)
 - [docs/refactor/backlog.md](../backlog.md) RF-006-P11 (the baseline
   600M run that this compares against)
 - HuggingFace NLLB model cards for 1.3B/3.3B variants

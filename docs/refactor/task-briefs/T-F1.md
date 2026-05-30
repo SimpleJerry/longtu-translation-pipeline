@@ -20,9 +20,7 @@ training run, and can backfill historical generation CSVs.
 
 ## Shared context (read these first)
 
-- [docs/refactor/decisions.md](../decisions.md) §2026-05-24
-  "Evaluation Uses BLEU and Glossary Preservation Only" — this task
-  *expands* but does not replace the current contract
+- [ADR-0012](../../decisions/adr/ADR-0012-evaluation-uses-bleu-and-glossary-preservation-only.md) — Evaluation Uses BLEU and Glossary Preservation Only (this task *expands* but does not replace the current contract)
 - [docs/refactor/backlog.md](../backlog.md) RF-007, RF-007-P2
 
 ## Files to read first

@@ -24,11 +24,10 @@ the held-out test split.
 
 ## Shared context (read these first)
 
-- [docs/refactor/decisions.md](../decisions.md) §2026-05-25
-  "Validation Generation Uses Fixed Training Splits", "Inference
-  Output Stays RF-007-Compatible", §2026-05-26 "Inference Uses Source
-  Terminology Markers", "Glossary Preservation Reports Exact And
-  No-Space Metrics"
+- [ADR-0021](../../decisions/adr/ADR-0021-validation-generation-uses-fixed-training-splits.md) — Validation Generation Uses Fixed Training Splits
+- [ADR-0016](../../decisions/adr/ADR-0016-inference-output-stays-rf007-compatible.md) — Inference Output Stays RF-007-Compatible
+- [ADR-0028](../../decisions/adr/ADR-0028-inference-uses-source-terminology-markers.md) — Inference Uses Source Terminology Markers
+- [ADR-0029](../../decisions/adr/ADR-0029-glossary-preservation-reports-exact-and-nospace-metrics.md) — Glossary Preservation Reports Exact And No-Space Metrics
 - [docs/refactor/backlog.md](../backlog.md) RF-006-P8 (validation
   generation flow), RF-007, RF-007-P2
 

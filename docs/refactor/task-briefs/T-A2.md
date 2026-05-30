@@ -25,10 +25,9 @@ It must not be bundled with any data-changing task.
 
 ## Shared context (read these first)
 
-- [docs/refactor/decisions.md](../decisions.md) §2026-05-25 "Formal
-  Training Runs Require Split Artifacts And Manifests", "Full
-  Training Uses Explicit Profiles", "Formal Experiments Use Held-Out
-  Test Splits"
+- [ADR-0020](../../decisions/adr/ADR-0020-formal-training-runs-require-split-artifacts-and-manifests.md) — Formal Training Runs Require Split Artifacts And Manifests
+- [ADR-0022](../../decisions/adr/ADR-0022-full-training-uses-explicit-profiles.md) — Full Training Uses Explicit Profiles
+- [ADR-0023](../../decisions/adr/ADR-0023-formal-experiments-use-held-out-test-splits.md) — Formal Experiments Use Held-Out Test Splits (8:1:1, seed=42)
 - [docs/refactor/backlog.md](../backlog.md) RF-006-P9, RF-006-P10 —
   the established formal training and held-out test split machinery
 - [docs/refactor/task-briefs/T-A1.md](T-A1.md) — predecessor task

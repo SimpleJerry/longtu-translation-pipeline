@@ -21,10 +21,7 @@ This task introduces ONE of two sync strategies. Pick A by default.
 ## Shared context (read these first)
 
 - [docs/refactor/audit-2026-05-26.md](../audit-2026-05-26.md) §P3-2
-- [docs/refactor/decisions.md](../decisions.md) §2026-05-17 "README
-  and AGENTS Do Not Carry Long-Term Task Pools" — confines README to
-  intro/setup/usage/nav; corpus numbers belong in
-  `docs/refactor/backlog.md`
+- [ADR-0001](../../decisions/adr/ADR-0001-readme-and-agents-do-not-carry-long-term-task-pools.md) — README and AGENTS Do Not Carry Long-Term Task Pools (confines README to intro/setup/usage/nav)
 
 ## Files to read first
 
@@ -32,8 +29,7 @@ This task introduces ONE of two sync strategies. Pick A by default.
   content: row counts, split counts, command examples, file paths
 - [docs/refactor/backlog.md](../backlog.md) — the canonical source
   of corpus numbers (RF-015 follow-up etc.)
-- [docs/data-cleaning.md](../../data-cleaning.md) — canonical for
-  cleaning rules
+- [docs/architecture/data-cleaning-pipeline.md](../../architecture/data-cleaning-pipeline.md) — canonical for cleaning rules
 
 ## Strategy A (recommended) — Centralize numbers
 

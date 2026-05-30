@@ -24,11 +24,9 @@ kiwi / bge-m3 in tests.
 ## Shared context (read these first)
 
 - [docs/refactor/audit-2026-05-26.md](../audit-2026-05-26.md) §P2-1
-- [docs/refactor/decisions.md](../decisions.md) §2026-05-24 "Segment
-  Cleanup Is Review-First", §2026-05-26 "Segment Fragments And Target
-  Contamination Are Training Noise"
-- [docs/data-cleaning.md](../../data-cleaning.md) — markup, wrapper,
-  structured tuple, placeholder rules
+- [ADR-0013](../../decisions/adr/ADR-0013-segment-cleanup-is-review-first.md) — Segment Cleanup Is Review-First
+- [ADR-0027](../../decisions/adr/ADR-0027-segment-fragments-and-target-contamination-are-training-noise.md) — Segment Fragments And Target Contamination Are Training Noise
+- [docs/architecture/data-cleaning-pipeline.md](../../architecture/data-cleaning-pipeline.md) — markup, wrapper, structured tuple, placeholder rules
 
 ## Files to read first
 

@@ -22,10 +22,7 @@ Only do this if the user wants COMET as a regular metric.
 
 ## Shared context (read these first)
 
-- [docs/refactor/decisions.md](../decisions.md) §2026-05-24
-  "Evaluation Uses BLEU and Glossary Preservation Only" — adding
-  COMET expands the contract; record this decision change in
-  decisions.md as part of the commit
+- [ADR-0012](../../decisions/adr/ADR-0012-evaluation-uses-bleu-and-glossary-preservation-only.md) — Evaluation Uses BLEU and Glossary Preservation Only (adding COMET expands the contract; record this decision change as a new ADR in `docs/decisions/adr/` as part of the commit)
 - COMET docs: https://unbabel.github.io/COMET/html/index.html
   (`unbabel-comet` Python package)
 - T-F1 (chrF) — same pattern, easier; confirm T-F1 is committed
@@ -68,9 +65,9 @@ Only do this if the user wants COMET as a regular metric.
      `comet_score` shows up in the summary
    - Mock pattern: `unittest.mock.patch(...,
      return_value=<deterministic>)`
-6. Decision log: add an entry under `docs/refactor/decisions.md`
+6. Decision log: add a new ADR file in `docs/decisions/adr/`
    noting that evaluation now optionally includes COMET, with the
-   default off.
+   default off (expands [ADR-0012](../../decisions/adr/ADR-0012-evaluation-uses-bleu-and-glossary-preservation-only.md)).
 7. README: brief note that COMET is available, off by default,
    requires `requirements-training.txt` to be installed.
 

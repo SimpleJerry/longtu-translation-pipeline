@@ -140,7 +140,7 @@ Net gain from fine-tuning + data cleaning: **+0.316 BLEU (~34×)** at the same b
 | `notebooks/analysis/` | Auxiliary analysis notebooks, such as train/eval loss visualization. |
 | `notebooks/archive/2023-legacy/` | Archived 2023 original experiment notebooks. |
 | `docs/notebooks/inventory.md` | Notebook timeline, purpose, dependency status, and keep/archive/delete guidance. |
-| `docs/data-cleaning.md` | Data-cleaning rule notes with examples for style tags, structured strings, short fragments, target contamination, and the strict gate. |
+| `docs/architecture/data-cleaning-pipeline.md` | Data-cleaning rule notes with examples for style tags, structured strings, short fragments, target contamination, and the strict gate. |
 | `requirements-training.txt` | Training-chain dependencies: transformers, accelerate, sentencepiece, and CUDA PyTorch. |
 
 ## Environment
@@ -195,7 +195,7 @@ venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --dry-run
 # after review: --apply
 ```
 
-See [docs/data-cleaning.md](docs/data-cleaning.md) for detailed examples and rules for each cleanup type.
+See [docs/architecture/data-cleaning-pipeline.md](docs/architecture/data-cleaning-pipeline.md) for detailed examples and rules for each cleanup type.
 
 **Training** — uses `full_earlystop.json` (deterministic 8:1:1 split, seed 42, early stopping).
 
@@ -240,6 +240,6 @@ Sources: parameter counts and the ~17.6 GB on-disk 3.3B checkpoint are from the 
 
 - [Refactor backlog](docs/refactor/backlog.md)
 - [Follow-up tasks (parallel track map)](docs/refactor/follow-up-tasks.md)
-- [Refactor decisions](docs/refactor/decisions.md)
+- [Architecture decisions (ADR)](docs/decisions/adr/README.md)
 - [Notebook inventory](docs/notebooks/inventory.md)
 - [AI/Codex working rules](AGENTS.md)
