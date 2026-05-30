@@ -65,7 +65,7 @@
 ├── README.md
 ├── README.en.md
 ├── README.zh-CN.md
-├── AGENTS.md
+├── CLAUDE.md
 ├── .env.example
 ├── requirements.txt
 ├── requirements-training.txt
@@ -242,4 +242,4 @@ NLLB-200에는 더 큰 베이스(`nllb-200-1.3B`, `nllb-200-3.3B`)도 있습니�
 - [후속 작업 (병렬 트랙 맵)](docs/refactor/follow-up-tasks.md)
 - [아키텍처 결정 기록 (ADR)](docs/decisions/adr/README.md)
 - [Notebook inventory](docs/notebooks/inventory.md)
-- [AI/Codex 작업 규칙](AGENTS.md)
+- [에이전트 헌법 (CLAUDE.md)](CLAUDE.md)

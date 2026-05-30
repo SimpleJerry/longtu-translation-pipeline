@@ -65,7 +65,7 @@ Net gain from fine-tuning + data cleaning: **+0.316 BLEU (~34×)** at the same b
 ├── README.md
 ├── README.en.md
 ├── README.zh-CN.md
-├── AGENTS.md
+├── CLAUDE.md
 ├── .env.example
 ├── requirements.txt
 ├── requirements-training.txt
@@ -242,4 +242,4 @@ Sources: parameter counts and the ~17.6 GB on-disk 3.3B checkpoint are from the 
 - [Follow-up tasks (parallel track map)](docs/refactor/follow-up-tasks.md)
 - [Architecture decisions (ADR)](docs/decisions/adr/README.md)
 - [Notebook inventory](docs/notebooks/inventory.md)
-- [AI/Codex working rules](AGENTS.md)
+- [Agent constitution (CLAUDE.md)](CLAUDE.md)

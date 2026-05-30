@@ -65,7 +65,7 @@
 ├── README.md
 ├── README.en.md
 ├── README.zh-CN.md
-├── AGENTS.md
+├── CLAUDE.md
 ├── .env.example
 ├── requirements.txt
 ├── requirements-training.txt
@@ -242,4 +242,4 @@ NLLB-200 还提供更大的基座（`nllb-200-1.3B`、`nllb-200-3.3B`）。更�
 - [后续任务（并行 track 索引）](docs/refactor/follow-up-tasks.md)
 - [架构决策记录 (ADR)](docs/decisions/adr/README.md)
 - [Notebook inventory](docs/notebooks/inventory.md)
-- [AI/Codex 工作规则](AGENTS.md)
+- [Agent 宪法 (CLAUDE.md)](CLAUDE.md)
