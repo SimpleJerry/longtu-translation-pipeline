@@ -18,13 +18,13 @@
     "source_terminology_markers": false
   },
   "output": {
-    "path": "data/review/inference/zeroshot/test_zeroshot_greedy.csv",
+    "path": "data/review/inference/base_model/test_base_beam4.csv",
     "strip_glossary_markers": true
   },
   "generation": {
     "batch_size": 8,
     "max_length": 400,
-    "num_beams": 1,
+    "num_beams": 4,
     "length_penalty": 1.0,
     "no_repeat_ngram_size": 0
   },
