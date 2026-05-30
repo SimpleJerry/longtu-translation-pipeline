@@ -31,6 +31,6 @@ Resume guards:
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive)
+- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entries: RF-006-P7, RF-006-P10
 - Related code: `scripts/train_model.py`, `src/longtu_translation_pipeline/training.py`

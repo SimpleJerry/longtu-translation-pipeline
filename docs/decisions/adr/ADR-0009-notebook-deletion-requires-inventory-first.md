@@ -30,6 +30,6 @@ module, config, or evaluation path is clear.
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive)
+- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entry: RF-004
 - Related document: `docs/notebooks/inventory.md`

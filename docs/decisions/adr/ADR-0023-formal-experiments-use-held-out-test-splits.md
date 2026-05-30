@@ -31,6 +31,6 @@ Formal experiments use deterministic **train / validation / test = 8:1:1 splits*
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive)
+- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entries: RF-006-P10, RF-007-P3
 - Related code: `src/longtu_translation_pipeline/training.py`, `scripts/run_inference.py`

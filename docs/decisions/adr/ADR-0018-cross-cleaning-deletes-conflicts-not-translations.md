@@ -32,6 +32,6 @@ It must not:
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive)
+- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entries: RF-011, RF-012
 - Related code: `scripts/segments_glossary_cross_cleaning_pipeline.py`, `configs/cross_cleaning/`

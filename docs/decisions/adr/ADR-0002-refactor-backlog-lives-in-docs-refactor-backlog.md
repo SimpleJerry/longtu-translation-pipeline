@@ -1,4 +1,4 @@
-# ADR-0002: Refactor Backlog Lives in docs/refactor/backlog.md
+# ADR-0002: Refactor Backlog as Single Source of Truth (Superseded by ADR-0032)
 
 - Status: Accepted
 - Date: 2026-05-17
@@ -12,7 +12,7 @@ outstanding work.
 
 ## Decision
 
-`docs/refactor/backlog.md` is the single source of truth for systematic refactor TODOs.
+The refactor backlog was the single source of truth for systematic refactor TODOs (now retired; see ADR-0032).
 Each backlog item includes: ID, status, scope, background/why, concrete scope, out-of-scope
 notes, risks, acceptance criteria, recommended test commands, and notes.
 
@@ -25,5 +25,5 @@ notes, risks, acceptance criteria, recommended test commands, and notes.
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive)
+- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entry: RF-009

@@ -4,15 +4,16 @@ This directory is the project's authoritative Architecture Decision Record (ADR)
 Each file represents one durable architectural or pipeline decision—something that was
 chosen from real alternatives and that constrains future behavior.
 
-`docs/refactor/decisions.md` (the original chronological decision log) has been
-superseded by this directory and is now preserved as a historical archive only.
+The original chronological decision log has been superseded by this ADR directory.
+The full phase-1 refactor scaffolding (including the original `decisions.md`) is archived
+in git history (tag: `phase-1-refactor-archive`; see ADR-0032).
 
 ---
 
 | ADR | Title | Status | Date | Summary |
 |-----|-------|--------|------|---------|
 | [ADR-0001](ADR-0001-readme-and-agents-do-not-carry-long-term-task-pools.md) | README and AGENTS Do Not Carry Long-Term Task Pools | Accepted | 2026-05-17 | README/AGENTS stay focused; all refactor TODOs go to backlog. |
-| [ADR-0002](ADR-0002-refactor-backlog-lives-in-docs-refactor-backlog.md) | Refactor Backlog Lives in docs/refactor/backlog.md | Accepted | 2026-05-17 | `docs/refactor/backlog.md` is the single source of truth for refactor tasks. |
+| [ADR-0002](ADR-0002-refactor-backlog-lives-in-docs-refactor-backlog.md) | Refactor Backlog as Single Source of Truth (Superseded by ADR-0032) | Superseded | 2026-05-17 | The refactor backlog was the single source of truth for phase-1 tasks (now retired). |
 | [ADR-0003](ADR-0003-architecture-decisions-log-superseded.md) | Architecture Decisions Log (Superseded) | Superseded | 2026-05-17 | Chronological `decisions.md` replaced by this ADR system. |
 | [ADR-0004](ADR-0004-csv-in-git-raw-xlsx-outside-git-tracking.md) | CSV In Git, Raw XLSX Outside Git Tracking | Accepted | 2026-05-17 | Normalized CSVs committed; raw Excel files in `.gitignore`. |
 | [ADR-0005](ADR-0005-gradual-engineering-refactor-approach.md) | Gradual Engineering Refactor Approach | Accepted | 2026-05-17 | Incremental refactor; notebooks preserved as experiment records. |

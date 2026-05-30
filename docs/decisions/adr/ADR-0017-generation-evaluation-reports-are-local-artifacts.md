@@ -33,6 +33,6 @@ held-out test report (see [[ADR-0023]]).
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive)
+- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entries: RF-007-P2, RF-007-P3
 - Related code: `configs/evaluation/generation_report.json`, `scripts/evaluate_translation.py`
