@@ -6,6 +6,7 @@ This directory contains system and pipeline architecture documentation.
 
 | File | Description |
 |------|-------------|
+| [invariants.md](invariants.md) | Authoritative catalogue of project invariants (data schema, split contract, marker shape, etc.), each bound to its ADR. Referenced by the constitution's Invariants section. |
 | [data-cleaning-pipeline.md](data-cleaning-pipeline.md) | Data-cleaning rule notes with examples: style tags, structured strings, short fragments, target-language contamination, glossary/segment cross cleaning, and the strict gate. |
 
 ## Pipeline Overview

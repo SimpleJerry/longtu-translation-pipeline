@@ -8,6 +8,7 @@ longtu-translation-pipeline project.
 | File | Description |
 |------|-------------|
 | [scope.md](scope.md) | Business context, language pair, domain, data policy, model, and scope boundaries. |
+| [model-card.md](model-card.md) | The current published model: base, fine-tuned checkpoint, training method, inference defaults, and held-out test metrics. |
 
 ## See Also
 
