@@ -18,14 +18,14 @@ eval_composite = 0.5 · eval_bleu + 0.5 · eval_glossary_preservation_nospace
 ```
 
 - `num_train_epochs` 为上限（默认 10）；`max_steps` 不设置，由早停循环决定何时停止。
-- `full_10k.json` 配置文件（`max_steps=10000`）作为历史基准**保留**，不得删除。
+- `step10k.json` 配置文件（`max_steps=10000`）作为历史基准**保留**，不得删除。
 - **循环内评估使用 1,000 行验证子集**（`metrics.eval_subset_rows=1000`）以提升性能：完整的 6,626 行验证集在 `predict_with_generate=True` 时每次评估约需 38 分钟，使 10 epoch 上限变得不切实际。
 - 剩余的 5,626 行验证集保留用于早停触发后的事后 top-K（3）完整验证重排。
 - 循环内使用 `generation_max_length=256`（韩语输出 token 的 p99.9 为 225；约 0.06% 截断）；`configs/inference/default.json` 对事后及最终推理保留 `max_length=400`。
 
 复合权重（当前 BLEU 和 preservation_nospace 各 0.5）只能通过新的 RF 修订，不得悄悄编辑。
 
-普通 `Trainer`（非 Seq2Seq）路径对冒烟/试验性/`full_10k.json` 保持可用，确保现有测试和旧配置文件继续工作。
+普通 `Trainer`（非 Seq2Seq）路径对冒烟/试验性/`step10k.json` 保持可用，确保现有测试和旧配置文件继续工作。
 
 ## 后果
 

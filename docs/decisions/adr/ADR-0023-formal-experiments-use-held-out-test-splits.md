@@ -18,7 +18,7 @@
 
 ## 后果
 
-- `configs/training/default.json` 和 `configs/training/full_10k.json` 均使用 8:1:1 / seed=42。
+- `configs/training/default.json` 和 `configs/training/step10k.json` 均使用 8:1:1 / seed=42。
 - RF-006-P9 的仅验证集报告被明确标记为历史工程产物。
 - `scripts/run_inference.py --generate-test` 从运行清单中读取测试集拆分（参见 ADR-0020）。
 
