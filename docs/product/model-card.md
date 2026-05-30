@@ -14,7 +14,7 @@ longtu-translation-pipeline 项目当前已发布的模型。
 |------|-----|
 | 任务 | 简体中文（`zh-CN`）→ 韩语（`ko`），游戏本地化 |
 | 基础模型 | `facebook/nllb-200-distilled-600M` |
-| 微调运行 | `run-full-earlystop-v1`，`checkpoint-48000` |
+| 微调运行 | `earlystop-v1`，`checkpoint-48000` |
 | 训练语料 | `data/segments.csv`，SHA256 `30D5C299828C10235AEE357E9333740913E55C291C5B07A45C0739E41818EA97` |
 | 拆分 | 确定性 8:1:1，seed 42；测试集 = 6,626 保留行 |
 | 术语标记 | 推理时将 `<start>...<end>` 应用于源端 |

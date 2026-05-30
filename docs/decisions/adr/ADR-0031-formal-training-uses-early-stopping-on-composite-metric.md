@@ -37,4 +37,4 @@ eval_composite = 0.5 · eval_bleu + 0.5 · eval_glossary_preservation_nospace
 
 - 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
 - 相关待办条目：RF-006-P13、T-A5
-- 相关代码：`src/longtu_translation_pipeline/training.py`、`src/longtu_translation_pipeline/training_metrics.py`、`configs/training/full_earlystop.json`
+- 相关代码：`src/longtu_translation_pipeline/training.py`、`src/longtu_translation_pipeline/training_metrics.py`、`configs/training/earlystop.json`
