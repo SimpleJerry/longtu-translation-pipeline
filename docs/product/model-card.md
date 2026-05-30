@@ -58,9 +58,15 @@ beam search contributes the small remaining lift.
 - **Mid-training diagnostic (NOT a baseline):** an early 10k-step run was
   under-fit at BLEU ≈ 0.198 and was used only to confirm the under-fitting
   direction. It is not a baseline for measuring fine-tuning value.
-- **True zero-shot baseline:** an evaluation of the un-fine-tuned base model
-  on the same held-out test split is **pending**. Until it is run, the net
-  value of fine-tuning over the stock base model is not quantified here.
+- **Base-model baseline (RF-007-P5, done 2026-05-30):** the un-fine-tuned
+  `facebook/nllb-200-distilled-600M` evaluated on the same held-out test
+  split scores BLEU **0.009**, chrF **0.226**, glossary preservation
+  (no-space) **0.323** at `num_beams=4`. The net value of fine-tuning +
+  data cleaning is therefore **+0.316 BLEU (~34×)** and glossary
+  preservation **+0.63** (≈32% → ≈95%) at matched decoding. The base
+  model generates fluent-sounding Korean but completely misses
+  game-specific terminology and character names; fine-tuning and the
+  cleaned corpus together account for the full gap.
 
 ## Reproducibility
 

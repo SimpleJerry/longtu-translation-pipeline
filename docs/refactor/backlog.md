@@ -1,4 +1,4 @@
-# Refactor Backlog
+﻿# Refactor Backlog
 
 This file is the single source of truth for systematic refactor work. README files should link here instead of carrying long-term TODO lists.
 
@@ -818,22 +818,22 @@ This file is the single source of truth for systematic refactor work. README fil
 
   > ⚠ **Greedy inference result superseded by RF-028**: beam=4 on test split yields BLEU 0.324958 (+0.0058, +1.82% vs this greedy baseline). `configs/inference/default.json` updated to `num_beams=4`. See RF-028.
 
-  > ⚠ **RF-007-P3/10k is an intermediate diagnostic, not the true zero-shot baseline.** RF-007-P3 (ckpt-9000) came from a 10k-step under-fit fine-tuned run; it indicates underfitting direction, not the pre-fine-tuning performance. The true baseline — zero-shot NLLB-600M before any fine-tuning — is recorded in RF-007-P5.
+  > ⚠ **RF-007-P3/10k is an intermediate diagnostic, not the true base-model baseline.** RF-007-P3 (ckpt-9000) came from a 10k-step under-fit fine-tuned run; it indicates underfitting direction, not the pre-fine-tuning performance. The true baseline — the base NLLB-600M before any fine-tuning — is recorded in RF-007-P5.
 
-## RF-007-P5: Zero-Shot Base-Model Baseline
+## RF-007-P5: Base-Model Baseline
 
 - **Status:** DONE
 - **Scope:** `configs/inference/zeroshot_greedy.json` (new), `configs/inference/zeroshot_beam4.json` (new), ignored `data/review/inference/zeroshot/`, ignored `data/review/evaluation/zeroshot_baseline/`
-- **Background / Why:** RF-007-P4 established the fine-tuned model's test performance. To quantify what fine-tuning actually contributes (vs. the stock NLLB model), a true "before fine-tuning" baseline is needed on the identical test split with the identical evaluation code.
+- **Background / Why:** RF-007-P4 established the fine-tuned model's test performance. To quantify what fine-tuning actually contributes (vs. the stock NLLB model), a true "before fine-tuning" base-model baseline is needed on the identical test split with the identical evaluation code.
 - **Concrete Scope:** Load the unmodified `facebook/nllb-200-distilled-600M` weights from a local copy, run test-split inference via the existing `run_inference.py --generate-test` path with `source_terminology_markers=false` (raw source, no markers), evaluate with `evaluate_translation.py`, record metrics for two decode settings matching RF-007-P4: greedy (`num_beams=1`) and beam=4 (`num_beams=4, length_penalty=1.0, no_repeat_ngram_size=0`).
 - **Out of Scope:** Writing a new generation script; modifying `run_inference.py` / `inference.py`; rerunning fine-tuned inference.
 - **Methodology note:** The `run_inference.py` path adds `<start>/<end>` special tokens to the tokenizer and resizes base-model embeddings from 256204 → 256206 (two randomly initialized, never-used slots). With `source_terminology_markers=false` these tokens never appear in input; `strip_glossary_markers=true` strips them from output. This is a negligible perturbation and does not affect metrics.
 - **Data:** Same test split: `fine-tuned-models/nllb-200-distilled-600M/zh2ko/runs/run-full-earlystop-v1/splits/test.csv`, 6626 rows, `segments_sha256=30D5C299828C10235AEE357E9333740913E55C291C5B07A45C0739E41818EA97` (verified identical to `data/segments.csv`).
 - **Notes:** Completed 2026-05-30 (T-A7 Stage 1).
 
-  **Zero-shot results:**
+  **Base-model results:**
 
-  | Metric | Zero-shot greedy | Zero-shot beam=4 |
+  | Metric | Base model greedy | Base model beam=4 |
   |---|---|---|
   | BLEU (whitespace) | 0.009152 | 0.009352 |
   | chrF (β=2, max_n=6) | 0.219321 | 0.225706 |
@@ -841,9 +841,9 @@ This file is the single source of truth for systematic refactor work. README fil
   | preservation_exact | 0.308757 | 0.318862 |
   | empty_candidate_rows | 26 | 37 |
 
-  **Fine-tuned vs. zero-shot net gain (same decode setting):**
+  **Fine-tuned vs. base-model net gain (same decode setting):**
 
-  | Metric | Fine-tuned @greedy | Zero-shot @greedy | Net gain @greedy | Fine-tuned @beam=4 | Zero-shot @beam=4 | Net gain @beam=4 |
+  | Metric | Fine-tuned @greedy | Base model @greedy | Net gain @greedy | Fine-tuned @beam=4 | Base model @beam=4 | Net gain @beam=4 |
   |---|---|---|---|---|---|---|
   | BLEU | 0.319163 | 0.009152 | **+0.310011 (+34×)** | 0.324958 | 0.009352 | **+0.315606 (+34×)** |
   | chrF | 0.590 | 0.219321 | **+0.371** | — | 0.225706 | — |
@@ -851,6 +851,6 @@ This file is the single source of truth for systematic refactor work. README fil
 
   Fine-tuned chrF and preservation @beam=4 not separately recorded in RF-007-P4 / RF-028 notes; the greedy reference values are from RF-007-P4 (`chrF 0.590`, `preservation_nospace 0.954`).
 
-  **Interpretation:** Zero-shot NLLB-600M generates fluent Korean but completely misses game-specific terminology, character names, and UI vocabulary. Fine-tuning on the LongTu corpus delivers a ~34× BLEU gain and raises glossary preservation from ~31% to ~95%.
+  **Interpretation:** The base NLLB-600M generates fluent Korean but completely misses game-specific terminology, character names, and UI vocabulary. Fine-tuning on the LongTu corpus delivers a ~34× BLEU gain and raises glossary preservation from ~31% to ~95%.
 
   Report artifacts (Git-ignored): `data/review/evaluation/zeroshot_baseline/greedy/`, `data/review/evaluation/zeroshot_baseline/beam4/`. Generation CSVs: `data/review/inference/zeroshot/test_zeroshot_greedy.csv`, `data/review/inference/zeroshot/test_zeroshot_beam4.csv`.
