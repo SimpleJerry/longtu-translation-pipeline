@@ -15,7 +15,7 @@
 venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --strict-check
 ```
 
-预期的训练前门控结果为：
+预期的训练前gate结果为：
 ```
 strict_current_mismatch_rows=0
 ```
@@ -26,7 +26,7 @@ strict_current_mismatch_rows=0
 
 ## 后果
 
-- `--strict-check` 是每次正式训练运行和保留测试集评估前的门控。
+- `--strict-check` 是每次正式训练运行和保留测试集评估前的gate。
 - 词汇表质量受限于当前语料中实际可强制执行的范围。
 - 每轮严格应用后术语统计可能发生变化，可在多轮中运行严格应用。
 

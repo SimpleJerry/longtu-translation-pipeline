@@ -9,10 +9,10 @@ Seq2seq 语段清理的误报风险高于词汇表清理。短 UI 标签、含�
 
 ## 决策
 
-语段清理流水线（`scripts/segments_cleaning_pipeline.py`）默认以演习模式运行，仅在明确使用 `--apply` 参数时才改写 `data/segments.csv`。
+语段清理pipeline（`scripts/segments_cleaning_pipeline.py`）默认以dry-run模式运行，仅在明确使用 `--apply` 参数时才改写 `data/segments.csv`。
 
 附加约束：
-- 术语/实体类删除使用本地语义信号（Stanza 词性、嵌入相似度、游戏领域种子词接近度），而非固定文本长度阈值。
+- 术语/实体类删除使用本地语义信号（Stanza 词性、embedding 相似度、游戏领域种子词接近度），而非固定文本长度阈值。
 - 表现层标签（`<c=...>`）在保留被包裹文本的同时被去除。
 - 对称外层包装器被展开；有效机器占位符被审计，而非删除。
 - 结构化元组式字符串在安全对齐时被拆分；仅在解析失败时删除。

@@ -1,4 +1,4 @@
-# ADR-0032：退役第一阶段重构脚手架
+# ADR-0032：退役第一阶段重构 scaffolding
 
 - 状态：已接受
 - 日期：2026-05-30
@@ -8,7 +8,7 @@
 
 第一阶段工程重构（RF-001 至 RF-022，以及后续的 RF-026–RF-031）已告完成。所有持久性决策均已迁移至独立的 ADR 文件（ADR-0001–ADR-0031）。指标和模型溯源存放于 [`docs/product/model-card.md`](../../product/model-card.md)。数据清理规则存放于 [`docs/architecture/data-cleaning-pipeline.md`](../../architecture/data-cleaning-pipeline.md)。不变量存放于 [`docs/architecture/invariants.md`](../../architecture/invariants.md)。产品范围存放于 [`docs/product/scope.md`](../../product/scope.md)。
 
-`docs/refactor/` 是该阶段的过程性脚手架：
+`docs/refactor/` 是该阶段的过程性 scaffolding：
 
 | 文件 | 内容 | 状态 |
 |------|------|------|
@@ -29,10 +29,10 @@
 
 通过以下步骤退役 `docs/refactor/`：
 
-1. 创建注释 git 标签 `phase-1-refactor-archive`，指向仍包含完整脚手架的最后一个提交，使历史记录随时可恢复。
+1. 创建注释 git 标签 `phase-1-refactor-archive`，指向仍包含完整 scaffolding 的最后一个提交，使历史记录随时可恢复。
 2. 运行 `git rm -r docs/refactor/` 将该目录从工作树和索引中删除。
 
-ADR-0002（确立 `docs/refactor/backlog.md` 为重构任务单一真相源）被本决策废弃——待办列表的使命已完成，目录已退役。
+ADR-0002（确立 `docs/refactor/backlog.md` 为重构任务单一真相源）被本决策废弃——backlog 的使命已完成，目录已退役。
 
 未来的重构或功能工作应使用：
 - 本 ADR 系统处理持久性决策，或

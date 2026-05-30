@@ -57,7 +57,7 @@ ko:    간
 
 - 纯单字 CJK 片段以 `AUTO_REMOVE_NON_SEGMENT_FRAGMENT` 标记删除。
 - 历史混合语料中的纯双字或三字 CJK 片段经过一次性迁移处理：从 `segments.csv` 中删除，仅将无冲突的可强制执行词对添加至 `glossary.csv`。
-- 双字/三字迁移不是永久性流水线规则，仅为针对历史词条/语段混合问题的一次性修复。
+- 双字/三字迁移不是永久性pipeline规则，仅为针对历史词条/语段混合问题的一次性修复。
 
 ## 目标语言污染
 
@@ -94,7 +94,7 @@ ko:    六壬秘境85级
 venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --strict-check
 ```
 
-预期的训练前门控结果为：
+预期的训练前gate结果为：
 
 ```text
 strict_current_mismatch_rows=0
@@ -102,7 +102,7 @@ strict_current_mismatch_rows=0
 
 ## LLM 词汇表清理
 
-本地词汇表清理流水线是首选，因为它可复现且不会将公司术语发送至本地机器以外。若本地规则已无力处理剩余的语义噪声，可将可选的 LLM 清理步骤用作激进的仅删除操作。
+本地词汇表清理pipeline是首选，因为它可复现且不会将公司术语发送至本地机器以外。若本地规则已无力处理剩余的语义噪声，可将可选的 LLM 清理步骤用作激进的仅删除操作。
 
 候选示例：
 
@@ -129,7 +129,7 @@ $env:LLM_MODEL="<your-model>"
 venv\Scripts\python.exe scripts\glossary_llm_cleanup_pipeline.py --apply
 ```
 
-LLM 清理后，在训练前重新运行严格词汇表/语段门控：
+LLM 清理后，在训练前重新运行严格词汇表/语段gate：
 
 ```powershell
 venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --strict-check

@@ -1,29 +1,29 @@
 # 架构决策记录
 
 本目录是项目的权威架构决策记录（ADR）日志。
-每个文件代表一项持久的架构或流水线决策——从真实备选方案中做出的选择，且对未来行为具有约束力。
+每个文件代表一项持久的架构或 pipeline 决策——从真实备选方案中做出的选择，且对未来行为具有约束力。
 
 原始的按时间顺序排列的决策日志已被本 ADR 目录取代。
-完整的第一阶段重构脚手架（包括原始 `decisions.md`）已归档至 git 历史
+完整的第一阶段重构 scaffolding（包括原始 `decisions.md`）已归档至 git 历史
 （标签：`phase-1-refactor-archive`；参见 ADR-0032）。
 
 ---
 
 | ADR | 标题 | 状态 | 日期 | 摘要 |
 |-----|------|------|------|------|
-| [ADR-0001](ADR-0001-readme-and-agents-do-not-carry-long-term-task-pools.md) | README 与 AGENTS 不承载长期任务池 | 已接受 | 2026-05-17 | README/AGENTS 保持专注；所有重构 TODO 进入待办列表。 |
-| [ADR-0002](ADR-0002-refactor-backlog-lives-in-docs-refactor-backlog.md) | 重构待办列表作为单一真相源（已废弃，见 ADR-0032） | 已废弃 | 2026-05-17 | 重构待办列表曾是第一阶段任务的单一真相源（现已退役）。 |
+| [ADR-0001](ADR-0001-readme-and-agents-do-not-carry-long-term-task-pools.md) | README 与 AGENTS 不承载长期任务池 | 已接受 | 2026-05-17 | README/AGENTS 保持专注；所有重构 TODO 进入 backlog。 |
+| [ADR-0002](ADR-0002-refactor-backlog-lives-in-docs-refactor-backlog.md) | 重构 backlog作为单一真相源（已废弃，见 ADR-0032） | 已废弃 | 2026-05-17 | 重构 backlog曾是第一阶段任务的单一真相源（现已退役）。 |
 | [ADR-0003](ADR-0003-architecture-decisions-log-superseded.md) | 架构决策日志（已废弃） | 已废弃 | 2026-05-17 | 按时间顺序的 `decisions.md` 已被本 ADR 系统取代。 |
 | [ADR-0004](ADR-0004-csv-in-git-raw-xlsx-outside-git-tracking.md) | CSV 纳入 Git，原始 XLSX 排除 Git 跟踪 | 已接受 | 2026-05-17 | 规范化 CSV 提交；原始 Excel 文件列入 `.gitignore`。 |
-| [ADR-0005](ADR-0005-gradual-engineering-refactor-approach.md) | 渐进式工程重构方法 | 已接受 | 2026-05-17 | 增量重构；笔记本保留为实验记录。 |
+| [ADR-0005](ADR-0005-gradual-engineering-refactor-approach.md) | 渐进式工程重构方法 | 已接受 | 2026-05-17 | 增量重构；Notebook 保留为实验记录。 |
 | [ADR-0006](ADR-0006-preserve-public-compatibility-by-default.md) | 默认保留公开兼容性 | 已接受 | 2026-05-17 | 破坏性变更需明确的待办范围和 README 更新。 |
-| [ADR-0007](ADR-0007-segment-evidence-not-sufficient-glossary-keep-signal.md) | 语段证据不足以作为词汇表保留信号 | 已接受 | 2026-05-22 | 语段存在是删除门控，而非保留投票。 |
-| [ADR-0008](ADR-0008-glossary-pipeline-uses-final-glossary-as-baseline.md) | 词汇表流水线以最终词汇表为基准 | 已接受 | 2026-05-24 | 流水线读取 `data/glossary.csv`；审计 CSV 为本地忽略产物。 |
-| [ADR-0009](ADR-0009-notebook-deletion-requires-inventory-first.md) | 笔记本删除前须先建立清单 | 已接受 | 2026-05-24 | 笔记本归档并建立清单后再做任何删除决定。 |
+| [ADR-0007](ADR-0007-segment-evidence-not-sufficient-glossary-keep-signal.md) | 语段证据不足以作为词汇表保留信号 | 已接受 | 2026-05-22 | 语段存在是删除 gate，而非保留投票。 |
+| [ADR-0008](ADR-0008-glossary-pipeline-uses-final-glossary-as-baseline.md) | 词汇表 pipeline 以最终词汇表为基准 | 已接受 | 2026-05-24 | pipeline 读取 `data/glossary.csv`；审计 CSV 为本地忽略产物。 |
+| [ADR-0009](ADR-0009-notebook-deletion-requires-inventory-first.md) | Notebook 删除前须先建立清单 | 已接受 | 2026-05-24 | Notebook 归档并建立清单后再做任何删除决定。 |
 | [ADR-0010](ADR-0010-text-protection-uses-single-segment-term-markers.md) | 文本保护使用单语段术语标记 | 已接受 | 2026-05-24 | 仅使用 `<start>...<end>`；T&N+R 和 `<code_id=N>` 已废弃。 |
-| [ADR-0011](ADR-0011-training-inference-configs-use-json-dry-run-entrypoints.md) | 训练与推理配置使用 JSON 及演习入口点 | 已接受 | 2026-05-24 | JSON 配置；`--dry-run` 不加载模型。 |
+| [ADR-0011](ADR-0011-training-inference-configs-use-json-dry-run-entrypoints.md) | 训练与推理配置使用 JSON 及 dry-run 入口点 | 已接受 | 2026-05-24 | JSON 配置；`--dry-run` 不加载模型。 |
 | [ADR-0012](ADR-0012-evaluation-uses-bleu-and-glossary-preservation-only.md) | 评估仅使用 BLEU 和词汇表保留率 | 已接受 | 2026-05-24 | 核心指标为 BLEU + 词汇表保留率；chrF/COMET 为可选扩展。 |
-| [ADR-0013](ADR-0013-segment-cleanup-is-review-first.md) | 语段清理以审校为先 | 已接受 | 2026-05-24 | `--apply` 为显式操作；默认输出演习审校结果。 |
+| [ADR-0013](ADR-0013-segment-cleanup-is-review-first.md) | 语段清理以审校为先 | 已接受 | 2026-05-24 | `--apply` 为显式操作；默认输出 dry-run 审校结果。 |
 | [ADR-0014](ADR-0014-engineering-smoke-tests-use-staged-model-loading.md) | 工程冒烟测试使用分阶段模型加载 | 已接受 | 2026-05-25 | 第一阶段：微型随机模型；第二阶段：真实权重，各运行一步。 |
 | [ADR-0015](ADR-0015-pilot-training-may-save-ignored-local-checkpoints.md) | 试验性训练可保存被忽略的本地检查点 | 已接受 | 2026-05-25 | 试验性检查点为本地工程产物，非交付物。 |
 | [ADR-0016](ADR-0016-inference-output-stays-rf007-compatible.md) | 推理输出保持 RF-007 兼容 | 已接受 | 2026-05-25 | 输出模式：`segment_id,source,references,candidates`。 |
@@ -42,4 +42,4 @@
 | [ADR-0029](ADR-0029-glossary-preservation-reports-exact-and-nospace-metrics.md) | 词汇表保留率同时报告精确匹配和无空格指标 | 已接受 | 2026-05-26 | 精确匹配与无空格保留率并排报告。 |
 | [ADR-0030](ADR-0030-llm-cleanup-defaults-to-batch-api-with-strict-json-schema.md) | LLM 清理默认使用批量 API 及严格 JSON Schema | 已接受 | 2026-05-27 | 默认 `--batch-mode batch`；所有补全请求使用严格 `json_schema`。 |
 | [ADR-0031](ADR-0031-formal-training-uses-early-stopping-on-composite-metric.md) | 正式训练在复合指标上执行早停 | 已接受 | 2026-05-27 | `Seq2SeqTrainer` + `EarlyStoppingCallback`；复合指标 = 0.5·BLEU + 0.5·preservation_nospace。 |
-| [ADR-0032](ADR-0032-retire-phase-1-refactor-scaffolding.md) | 退役第一阶段重构脚手架 | 已接受 | 2026-05-30 | 第一阶段重构完成；`docs/refactor/` 退役至 git 历史（标签：`phase-1-refactor-archive`）。废弃 ADR-0002。 |
+| [ADR-0032](ADR-0032-retire-phase-1-refactor-scaffolding.md) | 退役第一阶段重构 scaffolding | 已接受 | 2026-05-30 | 第一阶段重构完成；`docs/refactor/` 退役至 git 历史（标签：`phase-1-refactor-archive`）。废弃 ADR-0002。 |

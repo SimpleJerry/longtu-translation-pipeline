@@ -11,7 +11,7 @@ OpenAI Batch API 提供 50% 费用折扣，而严格 `json_schema` 通过要求�
 
 ## 决策
 
-两个 LLM 清理流水线（`scripts/segments_llm_cleanup_pipeline.py` 和 `scripts/glossary_llm_cleanup_pipeline.py`）均默认 `--batch-mode batch`，为整个语料提交一个 OpenAI `/v1/batches` 任务并下载 JSONL 结果。
+两个 LLM 清理pipeline（`scripts/segments_llm_cleanup_pipeline.py` 和 `scripts/glossary_llm_cleanup_pipeline.py`）均默认 `--batch-mode batch`，为整个语料提交一个 OpenAI `/v1/batches` 任务并下载 JSONL 结果。
 
 每个 chat completion 请求负载（同步或批量）均携带：
 - `response_format={"type":"json_schema","strict":true}`
@@ -28,7 +28,7 @@ OpenAI Batch API 提供 50% 费用折扣，而严格 `json_schema` 通过要求�
 
 - Batch API SLA 为 24 小时；相应设置 `--max-wait-sec`。
 - 同步模式接受相同的严格 `json_schema` 验证，旧调用方获得等效的服务器端验证。
-- 流水线成本在提交前即可确定和预测。
+- pipeline成本在提交前即可确定和预测。
 
 ## 参考
 

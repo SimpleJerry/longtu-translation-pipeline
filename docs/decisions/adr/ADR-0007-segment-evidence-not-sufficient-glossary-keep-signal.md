@@ -18,7 +18,7 @@
 
 ## 后果
 
-- 词汇表语义流水线（`scripts/glossary_semantic_pipeline.py`）采用多信号评分方法：游戏领域种子词、普通名词种子词、嵌入质心、Stanza/Jieba 词性形态、`wordfreq` 词频及产品语料存在性。
+- 词汇表语义pipeline（`scripts/glossary_semantic_pipeline.py`）采用多信号评分方法：游戏领域种子词、普通名词种子词、embedding 质心、Stanza/Jieba 词性形态、`wordfreq` 词频及产品语料存在性。
 - `product_score` 不纳入正向术语评分；首字母缩写组件证据仅用于防止强游戏首字母缩写复合词被错误标记为 `not_in_segments` 删除。
 - 词汇表保持专注于真实的公司游戏术语。
 

@@ -88,7 +88,7 @@ Separate facts, inferences, assumptions, and recommendations. Raise an **Open Qu
 
 - **Conversation** follows the user — currently Chinese (中文优先,英文次要).
 - **Knowledge base** (`docs/`) single source of truth is Chinese (mixed zh/en); non-Chinese versions are generated on demand and not committed.
-- **Skeleton is never translated:** code identifiers, file paths and commands, IDs (`ADR-XXXX`), and established technical names stay in English / their original form.
+- **Skeleton is never translated:** code identifiers, file paths and commands, IDs (`ADR-XXXX`), and established technical names stay in English / their original form. In zh/en mixed prose, use English for terms that Chinese ML/software practitioners habitually write in English (e.g. Agent, Notebook, pipeline, backlog, dry-run, embedding, scaffolding, gate); translate only terms with settled Chinese field equivalents (e.g. 语料 corpus, 微调 fine-tuning, 推理 inference, 拆分 split, 检查点 checkpoint).
 - **READMEs are a deliberate exception** — they ship tri-lingual (ko / en / zh) as the public face.
 - **Commit messages and code comments** are English.
 - The model's target language `ko` and the bilingual `zh` / `ko` corpora are domain data, not a UI i18n track; this repository has no shippable UI-locale assets.
