@@ -37,6 +37,6 @@ checkpoints or constitutes a training run.
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive, two entries merged here)
+- Original entry: phase-1 refactor decisions log (archived, two entries merged; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entries: RF-006-P3, RF-006-P4
 - Related code: `scripts/train_model.py`, `src/longtu_translation_pipeline/training.py`

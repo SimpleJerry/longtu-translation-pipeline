@@ -27,6 +27,6 @@ Generated inference CSVs are local artifacts under ignored `data/review/inferenc
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive)
+- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entries: RF-006-P6, RF-007-P2
 - Related code: `src/longtu_translation_pipeline/inference.py`, `scripts/run_inference.py`

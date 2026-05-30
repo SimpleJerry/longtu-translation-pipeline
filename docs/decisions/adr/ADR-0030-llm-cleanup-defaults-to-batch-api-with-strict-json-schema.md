@@ -44,7 +44,7 @@ to preserve the urllib-only audit surface (§P0-1).
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive)
+- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entries: RF-029, T-A1
 - Related code: `scripts/llm_common.py`, `scripts/segments_llm_cleanup_pipeline.py`,
   `scripts/glossary_llm_cleanup_pipeline.py`

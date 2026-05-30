@@ -238,8 +238,6 @@ NLLB-200 还提供更大的基座（`nllb-200-1.3B`、`nllb-200-3.3B`）。更�
 
 ## 参考文档
 
-- [重构 backlog](docs/refactor/backlog.md)
-- [后续任务（并行 track 索引）](docs/refactor/follow-up-tasks.md)
 - [架构决策记录 (ADR)](docs/decisions/adr/README.md)
 - [Notebook inventory](docs/notebooks/inventory.md)
 - [Agent 宪法 (CLAUDE.md)](CLAUDE.md)

@@ -38,7 +38,7 @@ was a historical repair for the mixed corpus and is **not a recurring pipeline s
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive)
+- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entry: RF-013
 - Related code: `scripts/segments_cleaning_pipeline.py`
 - Related document: `docs/architecture/data-cleaning-pipeline.md`

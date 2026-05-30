@@ -36,7 +36,7 @@ regenerate training splits before training.
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive)
+- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entries: RF-014, RF-029
 - Related code: `scripts/glossary_llm_cleanup_pipeline.py`
 - Related document: `docs/architecture/data-cleaning-pipeline.md`

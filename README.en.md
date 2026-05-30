@@ -238,8 +238,6 @@ Sources: parameter counts and the ~17.6 GB on-disk 3.3B checkpoint are from the 
 
 ## Reference Documents
 
-- [Refactor backlog](docs/refactor/backlog.md)
-- [Follow-up tasks (parallel track map)](docs/refactor/follow-up-tasks.md)
 - [Architecture decisions (ADR)](docs/decisions/adr/README.md)
 - [Notebook inventory](docs/notebooks/inventory.md)
 - [Agent constitution (CLAUDE.md)](CLAUDE.md)

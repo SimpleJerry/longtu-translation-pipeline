@@ -31,6 +31,6 @@ input rather than model behavior.
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive)
+- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entries: RF-007, RF-007-P2
 - Related code: `src/longtu_translation_pipeline/evaluation.py`, `tests/test_evaluation.py`

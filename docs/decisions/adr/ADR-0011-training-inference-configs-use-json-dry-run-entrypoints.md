@@ -29,6 +29,6 @@ not load models during import or dry-run execution.
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive)
+- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entry: RF-006
 - Related code: `configs/training/`, `configs/inference/`, `src/longtu_translation_pipeline/config.py`

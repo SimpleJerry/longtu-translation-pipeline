@@ -33,6 +33,6 @@ baselines and must not be deleted.
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive)
+- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entries: RF-006-P9, RF-006-P11
 - Related code: `configs/training/full_10k.json`, `configs/training/full_earlystop.json`

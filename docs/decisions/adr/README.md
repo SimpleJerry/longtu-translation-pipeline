@@ -4,15 +4,16 @@ This directory is the project's authoritative Architecture Decision Record (ADR)
 Each file represents one durable architectural or pipeline decision—something that was
 chosen from real alternatives and that constrains future behavior.
 
-`docs/refactor/decisions.md` (the original chronological decision log) has been
-superseded by this directory and is now preserved as a historical archive only.
+The original chronological decision log has been superseded by this ADR directory.
+The full phase-1 refactor scaffolding (including the original `decisions.md`) is archived
+in git history (tag: `phase-1-refactor-archive`; see ADR-0032).
 
 ---
 
 | ADR | Title | Status | Date | Summary |
 |-----|-------|--------|------|---------|
 | [ADR-0001](ADR-0001-readme-and-agents-do-not-carry-long-term-task-pools.md) | README and AGENTS Do Not Carry Long-Term Task Pools | Accepted | 2026-05-17 | README/AGENTS stay focused; all refactor TODOs go to backlog. |
-| [ADR-0002](ADR-0002-refactor-backlog-lives-in-docs-refactor-backlog.md) | Refactor Backlog Lives in docs/refactor/backlog.md | Accepted | 2026-05-17 | `docs/refactor/backlog.md` is the single source of truth for refactor tasks. |
+| [ADR-0002](ADR-0002-refactor-backlog-lives-in-docs-refactor-backlog.md) | Refactor Backlog as Single Source of Truth (Superseded by ADR-0032) | Superseded | 2026-05-17 | The refactor backlog was the single source of truth for phase-1 tasks (now retired). |
 | [ADR-0003](ADR-0003-architecture-decisions-log-superseded.md) | Architecture Decisions Log (Superseded) | Superseded | 2026-05-17 | Chronological `decisions.md` replaced by this ADR system. |
 | [ADR-0004](ADR-0004-csv-in-git-raw-xlsx-outside-git-tracking.md) | CSV In Git, Raw XLSX Outside Git Tracking | Accepted | 2026-05-17 | Normalized CSVs committed; raw Excel files in `.gitignore`. |
 | [ADR-0005](ADR-0005-gradual-engineering-refactor-approach.md) | Gradual Engineering Refactor Approach | Accepted | 2026-05-17 | Incremental refactor; notebooks preserved as experiment records. |
@@ -42,3 +43,4 @@ superseded by this directory and is now preserved as a historical archive only.
 | [ADR-0029](ADR-0029-glossary-preservation-reports-exact-and-nospace-metrics.md) | Glossary Preservation Reports Exact And No-Space Metrics | Accepted | 2026-05-26 | Both exact and no-space preservation reported side by side. |
 | [ADR-0030](ADR-0030-llm-cleanup-defaults-to-batch-api-with-strict-json-schema.md) | LLM Cleanup Defaults To Batch API With Strict JSON Schema | Accepted | 2026-05-27 | Default `--batch-mode batch`; strict `json_schema` in all completions. |
 | [ADR-0031](ADR-0031-formal-training-uses-early-stopping-on-composite-metric.md) | Formal Training Uses Early Stopping On Composite Metric | Accepted | 2026-05-27 | `Seq2SeqTrainer` + `EarlyStoppingCallback`; composite = 0.5·BLEU + 0.5·preservation_nospace. |
+| [ADR-0032](ADR-0032-retire-phase-1-refactor-scaffolding.md) | Retire Phase-1 Refactor Scaffolding | Accepted | 2026-05-30 | Phase-1 refactor complete; `docs/refactor/` retired to git history (tag: `phase-1-refactor-archive`). Supersedes ADR-0002. |

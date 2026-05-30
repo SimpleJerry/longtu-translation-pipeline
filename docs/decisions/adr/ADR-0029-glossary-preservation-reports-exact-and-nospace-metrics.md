@@ -32,6 +32,6 @@ differences. Use `glossary_preservation_rate` when strict character-level equali
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive)
+- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entries: RF-007 (follow-up notes), RF-006-P13
 - Related code: `src/longtu_translation_pipeline/evaluation.py`

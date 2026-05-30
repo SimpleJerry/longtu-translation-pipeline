@@ -53,7 +53,7 @@ existing tests and old profiles keep working.
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive)
+- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entries: RF-006-P13, T-A5
 - Related code: `src/longtu_translation_pipeline/training.py`,
   `src/longtu_translation_pipeline/training_metrics.py`,

@@ -30,6 +30,6 @@ schema (see [[ADR-0016]]) and remain local ignored artifacts.
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive)
+- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entries: RF-006-P8, RF-007-P3
 - Related code: `scripts/run_inference.py`, `src/longtu_translation_pipeline/inference.py`

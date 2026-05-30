@@ -38,7 +38,7 @@ Strict cleanup selects an **enforceable** glossary first by using real segment t
 
 ## References
 
-- Original entry: `docs/refactor/decisions.md` (historical archive)
+- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
 - Related backlog entries: RF-012, RF-013
 - Related code: `scripts/segments_glossary_cross_cleaning_pipeline.py`
 - Related document: `docs/architecture/data-cleaning-pipeline.md`
