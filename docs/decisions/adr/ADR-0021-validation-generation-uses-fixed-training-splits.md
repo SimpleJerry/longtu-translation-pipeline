@@ -1,35 +1,28 @@
-# ADR-0021: Validation Generation Uses Fixed Training Splits
+# ADR-0021：验证集生成使用固定的训练拆分
 
-- Status: Accepted
-- Date: 2026-05-25
+- 状态：已接受
+- 日期：2026-05-25
 
-## Context
+## 背景
 
-RF-006-P6 sample generation proved checkpoint loading and generation shape but generated
-translations from the first N rows of `data/segments.csv` rather than from the deterministic
-validation split written by the formal training run. Using an ad-hoc row slice instead of the
-fixed split breaks reproducibility: the same segment can appear in both training and evaluation.
+RF-006-P6 样本生成验证了检查点加载和生成结构，但从 `data/segments.csv` 的前 N 行生成翻译，而非从正式训练运行写入的确定性验证集拆分生成。使用临时行切片而非固定拆分会破坏可复现性：同一语段可能同时出现在训练集和评估集中。
 
-## Decision
+## 决策
 
-Validation generation (`scripts/run_inference.py --generate-validation`) must read
-`splits/validation.csv` from a formal run manifest (see [[ADR-0020]]) rather than taking the
-first N rows from `data/segments.csv`.
+验证集生成（`scripts/run_inference.py --generate-validation`）必须从正式运行清单中读取 `splits/validation.csv`（参见 ADR-0020），而非从 `data/segments.csv` 取前 N 行。
 
-The default checkpoint is the latest numeric checkpoint in the run directory; override with
-`--checkpoint`.
+默认检查点为运行目录中最新的数字编号检查点；可通过 `--checkpoint` 覆盖。
 
-Generated validation CSVs keep the RF-007-compatible `segment_id,source,references,candidates`
-schema (see [[ADR-0016]]) and remain local ignored artifacts.
+生成的验证集 CSV 保持 RF-007 兼容的 `segment_id,source,references,candidates` 模式（参见 ADR-0016），并保留为本地忽略产物。
 
-## Consequences
+## 后果
 
-- Validation generation is deterministically tied to the training run's data split.
-- The validation split is used for checkpoint selection (see [[ADR-0023]]).
-- The test split is reserved for final held-out reports.
+- 验证集生成与训练运行的数据拆分确定性绑定。
+- 验证集拆分用于检查点选择（参见 ADR-0023）。
+- 测试集拆分保留用于最终保留测试集报告。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entries: RF-006-P8, RF-007-P3
-- Related code: `scripts/run_inference.py`, `src/longtu_translation_pipeline/inference.py`
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-006-P8、RF-007-P3
+- 相关代码：`scripts/run_inference.py`、`src/longtu_translation_pipeline/inference.py`

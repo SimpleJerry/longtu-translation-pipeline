@@ -1,61 +1,51 @@
-# Product Scope
+# 产品范围
 
-This document describes the product and business scope of the longtu-translation-pipeline.
+本文档描述 longtu-translation-pipeline 的产品与业务范围。
 
-## Business Context
+## 业务背景
 
-This project was developed during the author's tenure as a systems engineer at
-LONGTU KOREA Inc. (龙图韩国, ㈜룽투코리아, now renamed STACO LINK Co., Ltd. / ㈜스타코링크).
-The company operates mobile games in the Korean market and faced a substantial annual cost
-for outsourcing Chinese-to-Korean game localization translation. The project goal is to
-fine-tune an NLLB model on the company's proprietary parallel corpus, supplemented by
-light human review, to automate the translation workflow and reduce outsourcing costs.
+本项目由作者在 LONGTU KOREA Inc.（龙图韩国，㈜룽투코리아，现已更名为 STACO LINK Co., Ltd. / ㈜스타코링크）任职系统工程师期间开发。该公司在韩国市场运营手机游戏，每年需承担大量中文→韩文游戏本地化翻译的外包成本。本项目的目标是在公司自有平行语料上微调 NLLB 模型，辅以轻量级人工审校，以实现翻译工作流的自动化并降低外包支出。
 
-## Language Pair
+## 语言对
 
-- **Source language:** Simplified Chinese (`zh-CN`, NLLB code `zho_Hans`)
-- **Target language:** Korean (`ko`, NLLB code `kor_Hang`)
-- **Direction:** zh-CN → ko only (unidirectional fine-tuning)
+- **源语言：** 简体中文（`zh-CN`，NLLB 代码 `zho_Hans`）
+- **目标语言：** 韩语（`ko`，NLLB 代码 `kor_Hang`）
+- **方向：** 仅 zh-CN → ko（单向微调）
 
-## Domain
+## 领域
 
-Game localization: UI strings, skill descriptions, item names, NPC dialogue, and game system
-text for mobile RPG / action games. The terminology table (`data/glossary.csv`) covers
-company-specific game terms, character names, and product-specific vocabulary.
+游戏本地化：UI 文本、技能描述、道具名称、NPC 对话及手机 RPG / 动作游戏的系统文本。术语表（`data/glossary.csv`）涵盖公司特有游戏术语、角色名称及产品专用词汇。
 
-## Data Policy
+## 数据政策
 
-- Only final training corpora and glossary data are committed to the repository.
-- Sensitive raw Excel/CSV inputs (original localization exports) are not committed.
-- The committed corpus is strictly bilingual: `segment_id`, `zh-CN`, `ko` for segments;
-  `term_id`, `zh-CN`, `ko` for glossary.
+- 仅将最终训练语料和词汇表数据提交至版本库。
+- 敏感原始 Excel/CSV 输入（原始本地化导出文件）不提交。
+- 已提交的语料为严格的双语格式：语段使用 `segment_id`、`zh-CN`、`ko` 字段；词汇表使用 `term_id`、`zh-CN`、`ko` 字段。
 
-## Model
+## 模型
 
-Base model: `facebook/nllb-200-distilled-600M` (fine-tuned on the cleaned parallel corpus).
+基础模型：`facebook/nllb-200-distilled-600M`（在清洗后的平行语料上微调）。
 
-Larger NLLB variants (1.3B, 3.3B) are not currently tested on this fine-tuned task.
-See the README "Larger Models" section for cost/benefit discussion.
+更大的 NLLB 变体（1.3B、3.3B）目前未针对本微调任务进行测试。成本效益分析请参阅 README 的"更大模型"章节。
 
-## Scope Boundaries
+## 范围边界
 
-**In scope:**
-- Local semantic pipeline for Chinese-Korean game glossary cleaning.
-- Fine-tuning `facebook/nllb-200-*` on game localization data.
-- Single `<start>...<end>` special-token terminology markers in translation.
-- BLEU + chrF + glossary preservation evaluation on a held-out test split.
-- Batch inference CLI for translating new Chinese text to Korean.
+**在范围内：**
+- 中文→韩文游戏词汇表清理的本地语义流水线。
+- 在游戏本地化数据上微调 `facebook/nllb-200-*`。
+- 翻译中使用单一 `<start>...<end>` 特殊标记保护术语。
+- 在保留测试集上进行 BLEU + chrF + 词汇表保留率评估。
+- 用于将新中文文本翻译为韩文的批量推理 CLI。
 
-**Out of scope (current mainline):**
-- T&N+R (`<middle>`) and `<code_id=N>` code/tag protection — preserved as historical
-  experiments only.
-- Korean → Chinese back-translation or reverse direction.
-- Automatic deployment or production serving.
-- Languages other than zh-CN and ko.
+**不在范围内（当前主线）：**
+- T&N+R（`<middle>`）和 `<code_id=N>` 代码/标签保护——仅保留为历史实验记录。
+- 韩文 → 中文反向翻译。
+- 自动化部署或生产服务。
+- zh-CN 与 ko 以外的其他语言。
 
-## References
+## 参考
 
-- [README.en.md](../../README.en.md) — English project overview
-- [README.zh-CN.md](../../README.zh-CN.md) — Chinese project overview
-- [README.md](../../README.md) — Korean project overview
-- [docs/architecture/data-cleaning-pipeline.md](../architecture/data-cleaning-pipeline.md) — data cleaning rules
+- [README.en.md](../../README.en.md) — 英文项目概述
+- [README.zh-CN.md](../../README.zh-CN.md) — 中文项目概述
+- [README.md](../../README.md) — 韩文项目概述
+- [docs/architecture/data-cleaning-pipeline.md](../architecture/data-cleaning-pipeline.md) — 数据清理规则

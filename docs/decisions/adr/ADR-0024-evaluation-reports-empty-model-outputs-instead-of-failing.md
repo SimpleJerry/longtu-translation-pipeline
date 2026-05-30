@@ -1,36 +1,31 @@
-# ADR-0024: Evaluation Reports Empty Model Outputs Instead Of Failing
+# ADR-0024：评估对空模型输出报告而非报错
 
-- Status: Accepted
-- Date: 2026-05-25
+- 状态：已接受
+- 日期：2026-05-25
 
-## Context
+## 背景
 
-The first 10k validation generation produced a small number of empty candidate rows. Treating
-empty `candidates` cells as hard schema errors blocked the full-run evaluation report entirely
-and hid a useful model-quality signal: empty candidates indicate model failure cases that
-should be visible in the summary.
+首次 10k 验证集生成产生了少量空候选行。将空 `candidates` 单元格视为硬性模式错误会完全阻塞完整运行的评估报告，并隐藏一个有价值的模型质量信号：空候选项表明模型失败的情况，这些情况应在摘要中可见。
 
-## Decision
+## 决策
 
-Empty `candidates` cells in generated translation CSVs are valid model-output failures for
-reporting, not schema errors.
+生成翻译 CSV 中的空 `candidates` 单元格是有效的模型输出失败，用于报告，而非模式错误。
 
-Evaluation counts empty candidates as:
-- Zero-length BLEU candidates.
-- Glossary misses.
-- `empty_candidate_rows` count in summary and report manifest.
+评估将空候选项计为：
+- 零长度 BLEU 候选项。
+- 词汇表未命中。
+- 摘要和报告清单中的 `empty_candidate_rows` 计数。
 
-Empty `source` and `references` remain hard errors because they indicate invalid evaluation
-input rather than model behavior.
+空 `source` 和 `references` 仍为硬性错误，因为它们表明无效的评估输入，而非模型行为。
 
-## Consequences
+## 后果
 
-- `scripts/evaluate_translation.py` no longer fails on empty candidate cells.
-- Full-run reports are always producible even when the model produces some empty outputs.
-- Empty candidate rates are a visible quality signal in `report_manifest.json`.
+- `scripts/evaluate_translation.py` 不再在空候选单元格上失败。
+- 即使模型产生部分空输出，也始终可以生成完整运行报告。
+- 空候选率是 `report_manifest.json` 中可见的质量信号。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entries: RF-007, RF-007-P2
-- Related code: `src/longtu_translation_pipeline/evaluation.py`, `tests/test_evaluation.py`
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-007、RF-007-P2
+- 相关代码：`src/longtu_translation_pipeline/evaluation.py`、`tests/test_evaluation.py`

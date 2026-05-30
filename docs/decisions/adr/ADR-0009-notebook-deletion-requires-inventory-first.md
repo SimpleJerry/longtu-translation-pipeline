@@ -1,35 +1,31 @@
-# ADR-0009: Notebook Deletion Requires Inventory First
+# ADR-0009：笔记本删除前须先建立清单
 
-- Status: Accepted
-- Date: 2026-05-24
+- 状态：已接受
+- 日期：2026-05-24
 
-## Context
+## 背景
 
-The repository originally held 2023 experiment notebooks in the root directory. Their original
-order and purpose were no longer obvious from filenames alone after a long gap since active
-use. Deleting them without documentation would have lost irreplaceable experiment history.
+版本库最初将 2023 年的实验笔记本保存在根目录。经过长时间未活跃使用后，仅凭文件名已无法判断原始顺序和用途。在没有文档记录的情况下删除它们，将永久丢失不可替代的实验历史。
 
-## Decision
+## 决策
 
-Historical notebooks are classified and archived before any deletion. The layout is:
-- `notebooks/main/` — main workflow notebooks
-- `notebooks/analysis/` — auxiliary analysis notebooks
-- `notebooks/archive/2023-legacy/` — old experiments
+历史笔记本在任何删除操作之前须先分类并归档。目录结构如下：
+- `notebooks/main/` — 主工作流笔记本
+- `notebooks/analysis/` — 辅助分析笔记本
+- `notebooks/archive/2023-legacy/` — 旧实验
 
-`docs/notebooks/inventory.md` records purpose, timeline, dependency status, and
-keep/archive/delete guidance for every tracked notebook.
+`docs/notebooks/inventory.md` 记录每个被追踪笔记本的用途、时间线、依赖状态及保留/归档/删除建议。
 
-Do not delete archived notebooks until the inventory has been reviewed and the replacement
-module, config, or evaluation path is clear.
+在清单经过审查且替代模块、配置或评估路径明确之前，不得删除已归档笔记本。
 
-## Consequences
+## 后果
 
-- No notebooks are deleted during the initial reorganization.
-- Root directory is clean: no `.ipynb` files tracked there.
-- Experiment history is preserved and documented for future reference.
+- 初始重组期间不删除任何笔记本。
+- 根目录保持整洁：不在此处追踪 `.ipynb` 文件。
+- 实验历史被保留并有文档记录，供未来参考。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entry: RF-004
-- Related document: `docs/notebooks/inventory.md`
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-004
+- 相关文档：`docs/notebooks/inventory.md`

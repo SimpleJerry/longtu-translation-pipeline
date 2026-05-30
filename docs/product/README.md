@@ -1,19 +1,18 @@
-# Product Documents
+# 产品文档
 
-This directory contains product and business scope documentation for the
-longtu-translation-pipeline project.
+本目录包含 longtu-translation-pipeline 项目的产品与业务范围文档。
 
-## Documents
+## 文档列表
 
-| File | Description |
-|------|-------------|
-| [scope.md](scope.md) | Business context, language pair, domain, data policy, model, and scope boundaries. |
-| [model-card.md](model-card.md) | The current published model: base, fine-tuned checkpoint, training method, inference defaults, and held-out test metrics. |
+| 文件 | 说明 |
+|------|------|
+| [scope.md](scope.md) | 业务背景、语言对、领域、数据政策、模型及范围边界。 |
+| [model-card.md](model-card.md) | 当前已发布的模型：基础模型、微调检查点、训练方法、推理默认参数及保留测试集指标。 |
 
-## See Also
+## 另见
 
-For the full project overview, setup, and usage instructions, see the top-level README files:
+完整的项目概述、安装与使用说明，请参阅顶层 README 文件：
 
-- [README.md](../../README.md) (한국어)
-- [README.en.md](../../README.en.md) (English)
-- [README.zh-CN.md](../../README.zh-CN.md) (中文)
+- [README.md](../../README.md)（한국어）
+- [README.en.md](../../README.en.md)（English）
+- [README.zh-CN.md](../../README.zh-CN.md)（中文）

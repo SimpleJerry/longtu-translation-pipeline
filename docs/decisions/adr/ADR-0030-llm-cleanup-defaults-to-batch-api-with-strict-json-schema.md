@@ -1,50 +1,37 @@
-# ADR-0030: LLM Cleanup Defaults To Batch API With Strict JSON Schema
+# ADR-0030：LLM 清理默认使用批量 API 及严格 JSON Schema
 
-- Status: Accepted
-- Date: 2026-05-27
+- 状态：已接受
+- 日期：2026-05-27
 
-## Context
+## 背景
 
-T-A1 pricing review estimated ~7.3M input + ~2.3M output tokens for the remaining segments
-corpus. The legacy synchronous `/v1/chat/completions` transport had no `response_format`
-constraint and no `max_tokens` cap, requiring regex fallback for JSON parsing and providing
-no cost discount.
+T-A1 定价评估估算剩余语段语料约需 730 万输入 token + 230 万输出 token。旧的同步 `/v1/chat/completions` 传输方式没有 `response_format` 约束，也没有 `max_tokens` 上限，需要正则回退来解析 JSON，且不享受任何费用折扣。
 
-OpenAI Batch API gives a 50% cost discount, and strict `json_schema` eliminates the regex
-fallback by requiring the server to validate the JSON response schema. After pricing review,
-`gpt-4.1-mini` + Batch API + strict schema was confirmed as the cost-optimal configuration
-(estimated ~$1.5-3 for the remaining corpus vs. ~$2.5 sync at `gpt-4o-mini`).
+OpenAI Batch API 提供 50% 费用折扣，而严格 `json_schema` 通过要求服务器验证 JSON 响应模式消除了正则回退。经定价评估，`gpt-4.1-mini` + Batch API + 严格 schema 被确认为成本最优配置（剩余语料估算约 $1.5–3，而同步 `gpt-4o-mini` 约 $2.5）。
 
-## Decision
+## 决策
 
-Both LLM cleanup pipelines (`scripts/segments_llm_cleanup_pipeline.py` and
-`scripts/glossary_llm_cleanup_pipeline.py`) default `--batch-mode batch`, submitting one
-OpenAI `/v1/batches` job for the whole corpus and downloading the JSONL result.
+两个 LLM 清理流水线（`scripts/segments_llm_cleanup_pipeline.py` 和 `scripts/glossary_llm_cleanup_pipeline.py`）均默认 `--batch-mode batch`，为整个语料提交一个 OpenAI `/v1/batches` 任务并下载 JSONL 结果。
 
-Every chat completion payload (sync or batch) carries:
+每个 chat completion 请求负载（同步或批量）均携带：
 - `response_format={"type":"json_schema","strict":true}`
 - `parallel_tool_calls=false`
-- `max_tokens=batch_size*45` (segments) or `batch_size*30` (glossary)
+- `max_tokens=batch_size*45`（语段）或 `batch_size*30`（词汇表）
 
-The legacy synchronous path is preserved behind `--batch-mode sync` for unit tests and
-small ad-hoc debugging runs only.
+旧的同步路径保留在 `--batch-mode sync` 后，仅用于单元测试和小型临时调试运行。
 
-Batch runs are resumable via `batch_state.json` (atomic write of phase ∈ {init,
-input_written, uploaded, submitted, completed, downloaded} + IDs).
+批量运行通过 `batch_state.json` 支持恢复（原子写入阶段 ∈ {init, input_written, uploaded, submitted, completed, downloaded} + ID）。
 
-No new third-party dependency was added; multipart upload is hand-rolled in `llm_common.py`
-to preserve the urllib-only audit surface (§P0-1).
+未添加新的第三方依赖；多部分上传在 `llm_common.py` 中手动实现，以保留仅 urllib 的审计面（§P0-1）。
 
-## Consequences
+## 后果
 
-- Batch API SLA is 24h; set `--max-wait-sec` accordingly.
-- Sync mode receives the same strict `json_schema` validation, so legacy callers get
-  equivalent server-side validation.
-- Pipeline cost is bounded and predictable before submission.
+- Batch API SLA 为 24 小时；相应设置 `--max-wait-sec`。
+- 同步模式接受相同的严格 `json_schema` 验证，旧调用方获得等效的服务器端验证。
+- 流水线成本在提交前即可确定和预测。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entries: RF-029, T-A1
-- Related code: `scripts/llm_common.py`, `scripts/segments_llm_cleanup_pipeline.py`,
-  `scripts/glossary_llm_cleanup_pipeline.py`
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-029、T-A1
+- 相关代码：`scripts/llm_common.py`、`scripts/segments_llm_cleanup_pipeline.py`、`scripts/glossary_llm_cleanup_pipeline.py`

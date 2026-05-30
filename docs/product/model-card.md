@@ -1,78 +1,65 @@
-# Model Card — zh-CN → ko Translation
+# 模型卡片 — zh-CN → ko 翻译
 
-The current published model for the longtu-translation-pipeline project.
-This card is the durable home for headline metrics and model lineage;
-the constitution ([CLAUDE.md](../../CLAUDE.md)) and READMEs link here
-instead of duplicating numbers that drift.
+longtu-translation-pipeline 项目当前已发布的模型。
+本卡片是核心指标与模型溯源的持久存储位置；
+宪法（[CLAUDE.md](../../CLAUDE.md)）和 README 均链接至此，而非在各处重复那些会随时间漂移的数字。
 
-All metrics below are bound to a specific training corpus fingerprint.
-Any change to `data/segments.csv` invalidates them and requires a fresh
-evaluation (see [ADR-0023](../decisions/adr/ADR-0023-formal-experiments-use-held-out-test-splits.md)).
+以下所有指标均绑定到特定的训练语料指纹。
+`data/segments.csv` 的任何变更都会使这些指标失效，并需要重新评估
+（参见 [ADR-0023](../decisions/adr/ADR-0023-formal-experiments-use-held-out-test-splits.md)）。
 
-## Model
+## 模型
 
-| Field | Value |
-|-------|-------|
-| Task | Simplified Chinese (`zh-CN`) → Korean (`ko`), game localization |
-| Base model | `facebook/nllb-200-distilled-600M` |
-| Fine-tuned run | `run-full-earlystop-v1`, `checkpoint-48000` |
-| Training corpus | `data/segments.csv`, SHA256 `30D5C299828C10235AEE357E9333740913E55C291C5B07A45C0739E41818EA97` |
-| Split | deterministic 8:1:1, seed 42; test = 6,626 held-out rows |
-| Terminology markers | `<start>...<end>` applied to source at inference |
+| 字段 | 值 |
+|------|-----|
+| 任务 | 简体中文（`zh-CN`）→ 韩语（`ko`），游戏本地化 |
+| 基础模型 | `facebook/nllb-200-distilled-600M` |
+| 微调运行 | `run-full-earlystop-v1`，`checkpoint-48000` |
+| 训练语料 | `data/segments.csv`，SHA256 `30D5C299828C10235AEE357E9333740913E55C291C5B07A45C0739E41818EA97` |
+| 拆分 | 确定性 8:1:1，seed 42；测试集 = 6,626 保留行 |
+| 术语标记 | 推理时将 `<start>...<end>` 应用于源端 |
 
-## Training Method
+## 训练方法
 
-- Early stopping on a composite metric (`0.5 · BLEU + 0.5 · glossary-preservation-nospace`), evaluated on a validation subset; training stopped at step 49000 (~3.7 epochs). See [ADR-0031](../decisions/adr/ADR-0031-formal-training-uses-early-stopping-on-composite-metric.md).
-- The published checkpoint was chosen by re-ranking the retained checkpoints on the **full** validation split, not by the trainer's in-loop auto-best; this selected `checkpoint-48000`.
+- 在验证子集上以复合指标（`0.5 · BLEU + 0.5 · glossary-preservation-nospace`）做早停；训练在第 49000 步（约 3.7 epoch）停止。参见 [ADR-0031](../decisions/adr/ADR-0031-formal-training-uses-early-stopping-on-composite-metric.md)。
+- 已发布的检查点通过在**完整**验证集上对保留检查点重新排序选出，而非使用训练器循环内的自动最优检查点；最终选定 `checkpoint-48000`。
 
-## Inference Defaults
+## 推理默认参数
 
-Decode configuration selected by a validation-only parameter sweep
-([ADR-0006](../decisions/adr/ADR-0006-preserve-public-compatibility-by-default.md) governs changes to these defaults):
+通过仅在验证集上进行的参数扫描选定解码配置
+（[ADR-0006](../decisions/adr/ADR-0006-preserve-public-compatibility-by-default.md) 约束对这些默认值的变更）：
 
-| Parameter | Value |
-|-----------|-------|
+| 参数 | 值 |
+|------|-----|
 | `num_beams` | 4 |
 | `length_penalty` | 1.0 |
 | `no_repeat_ngram_size` | 0 |
 | `max_length` | 400 |
 
-## Held-Out Test Results
+## 保留测试集结果
 
-Single evaluation on the held-out test split (6,626 rows, seed 42),
-using the production decode defaults (beam search):
+在保留测试集（6,626 行，seed 42）上的单次评估，
+使用生产默认解码参数（束搜索）：
 
-| Metric | Score |
-|--------|-------|
-| BLEU (whitespace) | 0.325 |
-| chrF (max_n=6, β=2) | 0.590 |
-| Glossary preservation (no-space) | 0.954 |
-| Glossary preservation (exact) | 0.950 |
-| Empty candidate rows | 0 |
+| 指标 | 分数 |
+|------|------|
+| BLEU（按空格分词） | 0.325 |
+| chrF（max_n=6，β=2） | 0.590 |
+| 词汇表保留率（无空格） | 0.954 |
+| 词汇表保留率（精确） | 0.950 |
+| 空输出行数 | 0 |
 
-Greedy decoding (`num_beams=1`) on the same test split scores BLEU ≈ 0.319;
-beam search contributes the small remaining lift.
+贪婪解码（`num_beams=1`）在同一测试集上得分 BLEU ≈ 0.319；束搜索提供了余下的小幅提升。
 
-## Reference Points
+## 参考基准
 
-- **Mid-training diagnostic (NOT a baseline):** an early 10k-step run was
-  under-fit at BLEU ≈ 0.198 and was used only to confirm the under-fitting
-  direction. It is not a baseline for measuring fine-tuning value.
-- **Base-model baseline (RF-007-P5, done 2026-05-30):** the un-fine-tuned
-  `facebook/nllb-200-distilled-600M` evaluated on the same held-out test
-  split scores BLEU **0.009**, chrF **0.226**, glossary preservation
-  (no-space) **0.323** at `num_beams=4`. The net value of fine-tuning +
-  data cleaning is therefore **+0.316 BLEU (~34×)** and glossary
-  preservation **+0.63** (≈32% → ≈95%) at matched decoding. The base
-  model generates fluent-sounding Korean but completely misses
-  game-specific terminology and character names; fine-tuning and the
-  cleaned corpus together account for the full gap.
+- **训练中期诊断（非基准线）：** 一次早期 10k 步运行在 BLEU ≈ 0.198 时欠拟合，仅用于确认欠拟合方向，不作为衡量微调价值的基准线。
+- **基础模型基准（RF-007-P5，完成于 2026-05-30）：** 未微调的 `facebook/nllb-200-distilled-600M` 在同一保留测试集上，以 `num_beams=4` 解码时得分 BLEU **0.009**、chrF **0.226**、词汇表保留率（无空格）**0.323**。因此微调 + 数据清理的净收益为 **+0.316 BLEU（约 34 倍）**，词汇表保留率 **+0.63**（≈32% → ≈95%）。基础模型能生成听起来流利的韩语，但完全无法正确处理游戏专有术语和角色名称；微调与清洗语料共同弥合了全部差距。
 
-## Reproducibility
+## 可复现性
 
-The run manifest (`run_manifest.json` inside the run directory) records the
-corpus SHA256, split seed and ratios, row counts, and checkpoint paths.
-Run directories, checkpoints, and evaluation reports are git-ignored
-([ADR-0004](../decisions/adr/ADR-0004-csv-in-git-raw-xlsx-outside-git-tracking.md),
-[ADR-0017](../decisions/adr/ADR-0017-generation-evaluation-reports-are-local-artifacts.md));
-only the final corpora and configs are committed.
+运行清单（运行目录内的 `run_manifest.json`）记录了语料 SHA256、拆分 seed 与比例、行数及检查点路径。
+运行目录、检查点和评估报告均被 Git 忽略
+（[ADR-0004](../decisions/adr/ADR-0004-csv-in-git-raw-xlsx-outside-git-tracking.md)、
+[ADR-0017](../decisions/adr/ADR-0017-generation-evaluation-reports-are-local-artifacts.md)）；
+仅最终语料和配置文件被提交。

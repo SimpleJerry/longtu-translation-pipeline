@@ -1,36 +1,29 @@
-# ADR-0015: Pilot Training May Save Ignored Local Checkpoints
+# ADR-0015：试验性训练可保存被忽略的本地检查点
 
-- Status: Accepted
-- Date: 2026-05-25
+- 状态：已接受
+- 日期：2026-05-25
 
-## Context
+## 背景
 
-One-step smoke tests (see [[ADR-0014]]) proved the backward pass but did not verify checkpoint
-persistence, Trainer resume behavior, loss logging across runs, or the final output directory
-shape. Before investing in a multi-hour full training run, the project needed a small pilot
-that exercises the real checkpoint lifecycle.
+单步冒烟测试（参见 ADR-0014）验证了反向传播，但未验证检查点持久化、Trainer 恢复行为、跨运行的损失日志记录，以及最终输出目录结构。在投入多小时正式训练之前，项目需要一次小规模试验来演练真实的检查点生命周期。
 
-## Decision
+## 决策
 
-RF-006 pilot training (`--pilot-train`) may save checkpoints under ignored
-`fine-tuned-models/.../pilot/run-*` and resume from them to validate the real training
-lifecycle.
+RF-006 试验性训练（`--pilot-train`）可在被忽略的 `fine-tuned-models/.../pilot/run-*` 下保存检查点，并从中恢复以验证真实训练生命周期。
 
-Pilot checkpoints are local engineering artifacts, not deliverables:
-- Not committed to Git.
-- Not used as quality checkpoints.
-- Outputs remain under ignored directories.
+试验性检查点是本地工程产物，非交付物：
+- 不提交至 Git。
+- 不用作质量检查点。
+- 输出保留在被忽略目录下。
 
-## Consequences
+## 后果
 
-- Full training duration, final checkpoint selection, generation, and RF-007 quality
-  evaluation all require a later, longer training phase.
-- Pilot parameters (row count, max steps) are small and do not represent final training
-  hyperparameters.
-- The pilot output confirms the manifest schema, checkpoint naming, and resume guard behavior.
+- 完整训练时长、最终检查点选择、生成和 RF-007 质量评估均需在后续更长时间的训练阶段完成。
+- 试验性参数（行数、最大步数）较小，不代表最终训练超参数。
+- 试验性输出确认了运行清单模式、检查点命名及恢复保护行为。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entry: RF-006-P5
-- Related code: `scripts/train_model.py`, `src/longtu_translation_pipeline/training.py`
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-006-P5
+- 相关代码：`scripts/train_model.py`、`src/longtu_translation_pipeline/training.py`

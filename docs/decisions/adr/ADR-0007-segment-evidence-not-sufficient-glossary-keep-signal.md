@@ -1,39 +1,29 @@
-# ADR-0007: Segment Evidence Is Not a Sufficient Glossary Keep Signal
+# ADR-0007：语段证据不足以作为词汇表保留信号
 
-- Status: Accepted
-- Date: 2026-05-22
+- 状态：已接受
+- 日期：2026-05-22
 
-## Context
+## 背景
 
-`data/segments.csv` provides current product-corpus relevance evidence for glossary cleanup:
-if a term's Chinese or Korean form appears in segments, the term is at least present in the
-product. However, common words (e.g., "月亮/달" — moon) also appear frequently in product text
-while being entirely unsuitable for a company game terminology table.
+`data/segments.csv` 为词汇表清理提供当前产品语料的相关性证据：若某术语的中文或韩文形式出现在语段中，说明该术语至少存在于产品中。然而，常用词（如"月亮/달"——月亮）也频繁出现在产品文本中，却完全不适合纳入公司游戏术语表。
 
-Using segment presence as a sufficient keep signal would have retained many common words and
-generic phrases that do not belong in the glossary.
+若将语段存在作为充分的保留信号，将导致许多不属于词汇表的常用词和通用短语被保留。
 
-## Decision
+## 决策
 
-Matching segment text is **not** by itself enough to keep a glossary term.
+语段文本匹配**本身**不足以保留一个词汇表条目。
 
-- Segment evidence can **remove** terms that are absent from the current corpus (marked
-  `not_in_segments_redundant_for_current_corpus`).
-- Segment evidence can be recorded for audit, but hard noise filters, termhood scoring,
-  game-domain signals, POS shape, and semantic checks still decide whether a matched term
-  should remain.
+- 语段证据可**删除**当前语料中不存在的术语（标记为 `not_in_segments_redundant_for_current_corpus`）。
+- 语段证据可用于审计记录，但最终由强硬噪声过滤器、术语性评分、游戏领域信号、词性形态和语义检查决定匹配术语是否应保留。
 
-## Consequences
+## 后果
 
-- The glossary semantic pipeline (`scripts/glossary_semantic_pipeline.py`) uses a multi-signal
-  scoring approach: game-domain seeds, ordinary-noun seeds, embedding centroids, Stanza/Jieba
-  POS shape, `wordfreq` frequency, and product-corpus presence.
-- `product_score` is not included in the positive term score; acronym-component evidence
-  only prevents false `not_in_segments` deletion for strong game acronym compounds.
-- Glossary remains focused on genuine company game terminology.
+- 词汇表语义流水线（`scripts/glossary_semantic_pipeline.py`）采用多信号评分方法：游戏领域种子词、普通名词种子词、嵌入质心、Stanza/Jieba 词性形态、`wordfreq` 词频及产品语料存在性。
+- `product_score` 不纳入正向术语评分；首字母缩写组件证据仅用于防止强游戏首字母缩写复合词被错误标记为 `not_in_segments` 删除。
+- 词汇表保持专注于真实的公司游戏术语。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entries: RF-010, RF-011
-- Related code: `scripts/glossary_semantic_pipeline.py`, `configs/glossary/`
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-010、RF-011
+- 相关代码：`scripts/glossary_semantic_pipeline.py`、`configs/glossary/`

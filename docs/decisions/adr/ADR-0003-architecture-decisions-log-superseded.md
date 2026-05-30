@@ -1,30 +1,23 @@
-# ADR-0003: Phase-1 Architecture Decisions Log (Superseded)
+# ADR-0003：第一阶段架构决策日志（已废弃）
 
-- Status: Superseded by docs/decisions/adr/ (this ADR system)
-- Date: 2026-05-17
+- 状态：已废弃（由 `docs/decisions/adr/` 本 ADR 系统取代）
+- 日期：2026-05-17
 
-## Context
+## 背景
 
-The project needed a place to record confirmed architecture decisions and refactor principles
-so they would not be re-decided in each task. A chronological single-file log was chosen as
-the initial format.
+项目需要一个地方来记录已确认的架构决策和重构原则，避免在每次任务中重复讨论。最初选择了按时间顺序排列的单文件日志作为初始格式。
 
-## Decision
+## 决策
 
-Confirmed architecture decisions and refactor principles were placed in a chronologically
-ordered `decisions.md` log (in the original phase-1 refactor scaffolding; one `## YYYY-MM-DD:`
-section per decision).
+已确认的架构决策和重构原则被记录在按时间顺序排列的 `decisions.md` 日志中（位于原始第一阶段重构脚手架中；每个决策使用一个 `## YYYY-MM-DD:` 章节）。
 
-## Consequences
+## 后果
 
-- Decisions were easy to find by date but hard to reference individually or link to precisely.
-- As the number of decisions grew, navigating and linking to specific decisions became
-  cumbersome for task-brief files and the backlog.
-- This format has been superseded; the original `decisions.md` is archived in git history
-  (tag: `phase-1-refactor-archive`). All decisions have been migrated to individual ADR files
-  in `docs/decisions/adr/`.
+- 决策按日期易于查找，但难以单独引用或精确链接。
+- 随着决策数量增加，在任务简报文件和待办列表中导航和链接到特定决策变得繁琐。
+- 该格式已被废弃；原始 `decisions.md` 已归档至 git 历史（标签：`phase-1-refactor-archive`）。所有决策已迁移至 `docs/decisions/adr/` 中的独立 ADR 文件。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Superseded by: this `docs/decisions/adr/` directory
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 已废弃，被本 `docs/decisions/adr/` 目录取代

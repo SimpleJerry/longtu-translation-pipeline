@@ -1,36 +1,30 @@
-# ADR-0020: Formal Training Runs Require Split Artifacts And Manifests
+# ADR-0020：正式训练运行须生成拆分产物和运行清单
 
-- Status: Accepted
-- Date: 2026-05-25
+- 状态：已接受
+- 日期：2026-05-25
 
-## Context
+## 背景
 
-Pilot training (see [[ADR-0015]]) proved checkpoint save and resume, but it did not provide
-enough metadata or split stability for a future full run to be reproducible. Without fixed
-split artifacts, each training resumption could silently use a different data subset.
+试验性训练（参见 ADR-0015）验证了检查点保存和恢复，但未提供足够的元数据或拆分稳定性以使未来的完整运行可复现。没有固定的拆分产物，每次训练恢复都可能悄悄使用不同的数据子集。
 
-## Decision
+## 决策
 
-Formal training (`scripts/train_model.py --train`) must:
-1. Write fixed `splits/train.csv`, `splits/validation.csv`, and `splits/test.csv` inside
-   an ignored `fine-tuned-models/.../runs/run-*` directory.
-2. Record `run_manifest.json` with: command, split ratios, split seed, row counts, split
-   paths, `data/segments.csv` SHA256, checkpoint policy, dependency versions, loss, and
-   git metadata.
+正式训练（`scripts/train_model.py --train`）必须：
+1. 在被忽略的 `fine-tuned-models/.../runs/run-*` 目录下写入固定的 `splits/train.csv`、`splits/validation.csv` 和 `splits/test.csv`。
+2. 记录 `run_manifest.json`，包含：命令、拆分比例、拆分 seed、行数、拆分路径、`data/segments.csv` SHA256、检查点策略、依赖版本、损失值和 git 元数据。
 
-Resume guards:
-- Explicit `--limit-rows` must match the existing manifest row limit.
-- Checkpoint steps must be smaller than the requested `max_steps`.
+恢复保护：
+- 显式 `--limit-rows` 必须与已有清单中的行限制相匹配。
+- 检查点步数必须小于请求的 `max_steps`。
 
-## Consequences
+## 后果
 
-- Validation generation reads `splits/validation.csv` from the manifest (see [[ADR-0021]]).
-- Final test reports read `splits/test.csv` from the manifest (see [[ADR-0023]]).
-- Run directories with mismatched manifests (e.g., from pre-correction two-way splits) are
-  treated as obsolete engineering artifacts.
+- 验证集生成从清单中读取 `splits/validation.csv`（参见 ADR-0021）。
+- 最终测试报告从清单中读取 `splits/test.csv`（参见 ADR-0023）。
+- 清单不匹配的运行目录（例如来自修正前的双向拆分）视为已过时的工程产物。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entries: RF-006-P7, RF-006-P10
-- Related code: `scripts/train_model.py`, `src/longtu_translation_pipeline/training.py`
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-006-P7、RF-006-P10
+- 相关代码：`scripts/train_model.py`、`src/longtu_translation_pipeline/training.py`

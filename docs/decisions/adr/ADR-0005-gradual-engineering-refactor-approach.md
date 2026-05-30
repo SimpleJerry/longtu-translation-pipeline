@@ -1,34 +1,29 @@
-# ADR-0005: Gradual Engineering Refactor Approach
+# ADR-0005：渐进式工程重构方法
 
-- Status: Accepted
-- Date: 2026-05-17
+- 状态：已接受
+- 日期：2026-05-17
 
-## Context
+## 背景
 
-The repository was an experiment workspace consisting of Jupyter notebooks and one data
-script. The project needed a refactor strategy: rewrite the whole project at once vs.
-refactor incrementally.
+版本库是一个由 Jupyter 笔记本和一个数据脚本构成的实验工作区。项目需要制定重构策略：一次性重写整个项目，还是增量重构。
 
-Rewriting all at once risks breaking existing workflows, losing experiment history, and
-producing a large unreviewed diff. The project was still actively used for manual research.
+一次性重写风险在于：可能破坏现有工作流、丢失实验历史，并产生一个大型未经审查的 diff。该项目当时仍在积极用于手动研究。
 
-## Decision
+## 决策
 
-Refactor incrementally ("渐进工程化") instead of rewriting the whole project at once.
+选择增量式重构（"渐进工程化"），而非一次性重写整个项目。
 
-- Keep notebooks as experiment records while extracting repeatable logic into modules
-  and CLIs over time.
-- Each refactor task targets one clearly bounded scope.
-- Commit sizes are kept manageable for review.
+- 保留笔记本作为实验记录，同时随时间将可重复逻辑提取至模块和 CLI。
+- 每个重构任务针对一个边界清晰的范围。
+- 提交大小保持在可审查范围内。
 
-## Consequences
+## 后果
 
-- Historical notebooks are preserved and documented (see [[ADR-0009]]) rather than deleted.
-- Reusable logic (terminology protection, training, inference, evaluation) is extracted
-  module by module.
-- The project is usable at each intermediate stage; there is no "flag day" rewrite.
+- 历史笔记本被保留并建立文档（参见 ADR-0009），而非删除。
+- 可复用逻辑（术语保护、训练、推理、评估）逐模块提取。
+- 项目在每个中间阶段均可正常使用；不存在"一刀切"式大重写。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entry: RF-009
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-009

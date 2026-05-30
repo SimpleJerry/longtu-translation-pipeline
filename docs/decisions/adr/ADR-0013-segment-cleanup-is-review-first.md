@@ -1,36 +1,31 @@
-# ADR-0013: Segment Cleanup Is Review-First
+# ADR-0013：语段清理以审校为先
 
-- Status: Accepted
-- Date: 2026-05-24
+- 状态：已接受
+- 日期：2026-05-24
 
-## Context
+## 背景
 
-Seq2seq segment cleaning has a higher false-positive risk than glossary cleaning. Short UI
-labels, structured strings with machine placeholders, and phonetic game terms can look like
-noise by simple heuristics while being valid training examples. Applying deletions without
-a human review step could degrade the corpus silently.
+Seq2seq 语段清理的误报风险高于词汇表清理。短 UI 标签、含机器占位符的结构化字符串以及音译游戏术语，用简单启发式规则可能看起来像噪声，但实际上是有效的训练样本。在没有人工审校步骤的情况下直接应用删除操作，可能在不知不觉中降低语料质量。
 
-## Decision
+## 决策
 
-The segment cleanup pipeline (`scripts/segments_cleaning_pipeline.py`) defaults to dry-run
-and rewrites `data/segments.csv` only when explicitly run with `--apply`.
+语段清理流水线（`scripts/segments_cleaning_pipeline.py`）默认以演习模式运行，仅在明确使用 `--apply` 参数时才改写 `data/segments.csv`。
 
-Additional constraints:
-- Term/entity-like deletion uses local semantic signals (Stanza POS, embedding similarity,
-  game-domain seed proximity), not fixed text-length thresholds.
-- Presentation tags (`<c=...>`) are stripped while preserving wrapped text.
-- Symmetric outer wrappers are unwrapped; valid machine placeholders are audited, not deleted.
-- Structured tuple-like strings are split when safely aligned; removed only when parsing fails.
+附加约束：
+- 术语/实体类删除使用本地语义信号（Stanza 词性、嵌入相似度、游戏领域种子词接近度），而非固定文本长度阈值。
+- 表现层标签（`<c=...>`）在保留被包裹文本的同时被去除。
+- 对称外层包装器被展开；有效机器占位符被审计，而非删除。
+- 结构化元组式字符串在安全对齐时被拆分；仅在解析失败时删除。
 
-## Consequences
+## 后果
 
-- Every cleanup run writes review CSVs under `data/review/segments/` before any data changes.
-- `--apply` is a deliberate operator decision, not a default.
-- The rules in `configs/segments/` are configurable without code changes.
+- 每次清理运行在数据变更之前都会在 `data/review/segments/` 下写入审校 CSV。
+- `--apply` 是操作者的主动决策，而非默认行为。
+- `configs/segments/` 中的规则无需修改代码即可配置。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entries: RF-010, RF-013
-- Related code: `scripts/segments_cleaning_pipeline.py`, `configs/segments/`
-- Related document: `docs/architecture/data-cleaning-pipeline.md`
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-010、RF-013
+- 相关代码：`scripts/segments_cleaning_pipeline.py`、`configs/segments/`
+- 相关文档：`docs/architecture/data-cleaning-pipeline.md`

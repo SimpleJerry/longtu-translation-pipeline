@@ -1,37 +1,29 @@
-# ADR-0029: Glossary Preservation Reports Exact And No-Space Metrics
+# ADR-0029：词汇表保留率同时报告精确匹配和无空格指标
 
-- Status: Accepted
-- Date: 2026-05-26
+- 状态：已接受
+- 日期：2026-05-26
 
-## Context
+## 背景
 
-Strict cleaning (see [[ADR-0019]]) accepts both exact and no-space-exact Korean preservation as
-passing. However, the evaluation metric originally reported only exact preservation. This meant
-valid translations like `추가피해` (no space) being scored as failures when the glossary entry
-was `추가 피해` (with space)—creating misleading low preservation scores even for a well-cleaned
-corpus.
+严格清理（参见 ADR-0019）将精确匹配和无空格精确韩语保留均视为通过。然而，评估指标最初只报告精确保留率。这意味着像 `추가피해`（无空格）这样的有效翻译，当词汇表条目为 `추가 피해`（有空格）时会被评为失败——即使对于一个良好清洗的语料，也会产生误导性的低保留分数。
 
-## Decision
+## 决策
 
-RF-007 reports **both** exact glossary preservation and no-space glossary preservation
-side by side:
+RF-007 并排报告**两种**词汇表保留率指标：
 
-- `glossary_preservation_rate`: exact match (preserved for backward compatibility).
-- `glossary_preservation_rate_nospace`: no-space exact match (avoids penalizing valid Korean
-  spacing variation).
+- `glossary_preservation_rate`：精确匹配（向后兼容保留）。
+- `glossary_preservation_rate_nospace`：无空格精确匹配（避免因有效的韩语空格变体而扣分）。
 
-Use `glossary_preservation_rate_nospace` when judging term retention across Korean spacing
-differences. Use `glossary_preservation_rate` when strict character-level equality is required.
+在判断跨韩语空格差异的术语保留时，使用 `glossary_preservation_rate_nospace`。需要严格字符级相等时，使用 `glossary_preservation_rate`。
 
-## Consequences
+## 后果
 
-- Evaluation reports carry both metrics.
-- Early stopping (see [[ADR-0031]]) uses `eval_glossary_preservation_nospace` as one of
-  the two composite metric components.
-- Existing code that reads `glossary_preservation_rate` continues to work unchanged.
+- 评估报告包含两项指标。
+- 早停（参见 ADR-0031）使用 `eval_glossary_preservation_nospace` 作为复合指标的两个组成部分之一。
+- 读取 `glossary_preservation_rate` 的现有代码无需修改，继续正常工作。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entries: RF-007 (follow-up notes), RF-006-P13
-- Related code: `src/longtu_translation_pipeline/evaluation.py`
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-007（后续说明）、RF-006-P13
+- 相关代码：`src/longtu_translation_pipeline/evaluation.py`

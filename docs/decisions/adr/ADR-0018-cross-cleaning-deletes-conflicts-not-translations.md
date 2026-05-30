@@ -1,37 +1,30 @@
-# ADR-0018: Cross Cleaning Deletes Strong Conflicts, Not Translations
+# ADR-0018：交叉清理删除强冲突，不删除翻译
 
-- Status: Accepted
-- Date: 2026-05-25
+- 状态：已接受
+- 日期：2026-05-25
 
-## Context
+## 背景
 
-Glossary and segment cleanup cannot be fully independent. An exact glossary mismatch in a
-segment can mean either: (a) the glossary term is noisy and should be removed, or (b) the
-segment translation is too free for training purposes. Automatically rewriting Korean to
-match the glossary would risk producing ungrammatical Korean; deleting the segment is the
-safer fallback.
+词汇表和语段清理不能完全独立。语段中的精确词汇表不匹配可能意味着：(a) 词汇表条目存在噪声应被删除，或 (b) 语段翻译过于自由，不适合用于训练。自动改写韩语以匹配词汇表可能产生不符合语法的韩语；删除语段是更安全的回退操作。
 
-## Decision
+## 决策
 
-Glossary/segments cross-consistency cleanup (`scripts/segments_glossary_cross_cleaning_pipeline.py`)
-may:
-- Delete high-confidence glossary noise (terms that are not enforceable across the corpus).
-- Delete segment rows that miss strong retained glossary terms.
+词汇表/语段交叉一致性清理（`scripts/segments_glossary_cross_cleaning_pipeline.py`）可以：
+- 删除高置信度的词汇表噪声（在语料中无法强制执行的术语）。
+- 删除缺少强保留词汇表术语的语段行。
 
-It must not:
-- Auto-rewrite Korean segment translations.
-- Delete glossary terms based on shortness alone (weak-term score threshold ≥ 0.85 required).
+不得：
+- 自动改写韩语语段翻译。
+- 仅基于长度短就删除词汇表术语（要求弱术语评分阈值 ≥ 0.85）。
 
-## Consequences
+## 后果
 
-- Training runs after cross-cleaning must regenerate train/validation/test split artifacts
-  from the cleaned `data/segments.csv`.
-- Short proper names or equipment-like terms (e.g., `艾格`, `臂铠`) are sent to review
-  rather than auto-deleted.
-- Cross-cleaning is a blocking step before full training (see [[ADR-0019]]).
+- 交叉清理后的训练运行必须从清洗后的 `data/segments.csv` 重新生成 train/validation/test 拆分产物。
+- 短专有名词或装备类术语（如 `艾格`、`臂铠`）被发送至审校，而非自动删除。
+- 交叉清理是正式训练前的阻塞步骤（参见 ADR-0019）。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entries: RF-011, RF-012
-- Related code: `scripts/segments_glossary_cross_cleaning_pipeline.py`, `configs/cross_cleaning/`
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-011、RF-012
+- 相关代码：`scripts/segments_glossary_cross_cleaning_pipeline.py`、`configs/cross_cleaning/`

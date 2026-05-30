@@ -1,39 +1,34 @@
-# ADR-0004: CSV In Git, Raw XLSX Outside Normal Git Tracking
+# ADR-0004：CSV 纳入 Git，原始 XLSX 排除 Git 跟踪
 
-- Status: Accepted
-- Date: 2026-05-17
+- 状态：已接受
+- 日期：2026-05-17
 
-## Context
+## 背景
 
-The repository originally tracked raw Excel files (`.xlsx`). Binary Excel files are large,
-produce unintelligible diffs, and cannot be reviewed in pull requests. The project needed
-a data governance policy that allows review-friendly snapshots while keeping raw source
-files out of the repository.
+版本库最初追踪原始 Excel 文件（`.xlsx`）。二进制 Excel 文件体积较大、产生无法阅读的 diff，也无法在 Pull Request 中审查。项目需要一个数据治理策略，既允许生成可审查的快照，又将原始源文件排除在版本库之外。
 
-Alternatives considered:
-- Keep tracking xlsx files as-is (rejected: no reviewability).
-- Store both CSV and xlsx (rejected: duplication, unclear authority).
-- CSV only, xlsx outside Git (chosen).
+备选方案：
+- 继续追踪 xlsx 文件（已拒绝：无可审查性）。
+- 同时存储 CSV 和 xlsx（已拒绝：重复数据，权威来源不明确）。
+- 仅保留 CSV，xlsx 排除 Git（已选择）。
 
-## Decision
+## 决策
 
-Store normalized CSV snapshots in Git and move raw xlsx files out of normal Git tracking
-(`.gitignore`). The committed CSV files are the authoritative training data representation.
+将规范化的 CSV 快照存储于 Git，并将原始 xlsx 文件移出正常 Git 跟踪（`.gitignore`）。已提交的 CSV 文件是权威的训练数据表示。
 
-Rules:
-- Multi-sheet workbooks must preserve workbook and sheet identity when converted to CSV.
-- Formula cells export the workbook's saved cached values, not the formulas.
-- Raw xlsx files live locally outside Git; their paths are documented but not committed.
+规则：
+- 多工作表工作簿转换为 CSV 时须保留工作簿和工作表标识。
+- 公式单元格导出工作簿保存的缓存值，而非公式本身。
+- 原始 xlsx 文件保存于 Git 之外的本地路径；路径有文档记录但不提交。
 
-## Consequences
+## 后果
 
-- `data/segments.csv` and `data/glossary.csv` are fully reviewable in PRs.
-- Regenerating the corpus from raw xlsx requires local files that are not in the repository.
-- RF-010 executed the initial conversion; the conversion script was subsequently removed
-  as an intermediate artifact.
+- `data/segments.csv` 和 `data/glossary.csv` 在 PR 中完全可审查。
+- 从原始 xlsx 重新生成语料需要版本库中不存在的本地文件。
+- RF-010 执行了初始转换；转换脚本作为中间产物随后被删除。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entries: RF-002, RF-010
-- Related code: `scripts/export_xlsx_to_csv.py` (removed post-RF-010)
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-002、RF-010
+- 相关代码：`scripts/export_xlsx_to_csv.py`（RF-010 后已删除）

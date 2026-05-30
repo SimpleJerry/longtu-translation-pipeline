@@ -1,33 +1,28 @@
-# ADR-0006: Preserve Public Compatibility by Default
+# ADR-0006：默认保留公开兼容性
 
-- Status: Accepted
-- Date: 2026-05-17
+- 状态：已接受
+- 日期：2026-05-17
 
-## Context
+## 背景
 
-The project contains research workflows that may still be used manually by the author. During
-incremental refactoring (see [[ADR-0005]]), each task risks accidentally breaking documented
-commands, public APIs, file formats, or token names that are in active use.
+项目包含作者仍可能手动使用的研究工作流。在增量重构过程中（参见 ADR-0005），每个任务都可能意外破坏正在使用的已记录命令、公开 API、文件格式或 token 名称。
 
-## Decision
+## 决策
 
-Preserve documented commands, public APIs, file formats, token names, and notebook usability
-unless a selected task explicitly requires a breaking change.
+保留已记录的命令、公开 API、文件格式、token 名称及笔记本可用性，除非选定的任务明确需要破坏性变更。
 
-Breaking changes require:
-1. Explicit scope in the backlog item.
-2. README updates in the same commit.
-3. Migration notes where appropriate.
+破坏性变更需满足：
+1. 待办条目中有明确的范围说明。
+2. 同一提交中包含 README 更新。
+3. 在适当情况下提供迁移说明。
 
-## Consequences
+## 后果
 
-- Individual refactor tasks can be executed without fear of silently breaking the overall
-  workflow.
-- Breaking changes are opt-in and documented, not accidental side effects.
-- This constraint applies across: CLI design, module extraction, data conversion, and
-  notebook migration.
+- 各重构任务可独立执行，无需担心悄悄破坏整体工作流。
+- 破坏性变更为可选项且有文档记录，而非意外副作用。
+- 此约束适用于：CLI 设计、模块提取、数据转换和笔记本迁移。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entry: RF-009
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-009

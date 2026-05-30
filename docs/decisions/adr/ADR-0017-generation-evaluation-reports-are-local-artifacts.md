@@ -1,38 +1,30 @@
-# ADR-0017: Generation Evaluation Reports Are Local Engineering Artifacts
+# ADR-0017：生成评估报告为本地工程产物
 
-- Status: Accepted
-- Date: 2026-05-25
+- 状态：已接受
+- 日期：2026-05-25
 
-## Context
+## 背景
 
-The project needed a fixed report shape for RF-006 generation outputs before running long
-training or full validation. Without a stable format, each evaluation run would produce
-differently structured output that could not be compared across checkpoints.
+项目在进行长时间训练或完整验证之前，需要为 RF-006 生成输出制定固定的报告格式。没有稳定格式的话，每次评估运行将产生结构各异的输出，无法跨检查点进行比较。
 
-However, reports derived from pilot or smoke checkpoints are engineering-loop artifacts, not
-quality evidence—treating them as committed documentation would be misleading.
+然而，从试验性或冒烟检查点生成的报告是工程循环产物，而非质量证据——将其作为已提交文档处理将产生误导。
 
-## Decision
+## 决策
 
-Generation evaluation reports live under ignored `data/review/evaluation/` and record:
-checkpoint/generation metadata, BLEU, glossary preservation, and sample review rows—without
-implying model quality.
+生成评估报告存放于被忽略的 `data/review/evaluation/` 下，记录：检查点/生成元数据、BLEU、词汇表保留率和样本审查行——不暗示模型质量。
 
-The same report format is used for: pilot, validation, and future test outputs. This format
-does not change based on checkpoint quality.
+试验性、验证集和未来测试集输出均使用相同的报告格式。该格式不随检查点质量而变化。
 
-Full-run quality conclusions require: a real training run, a selected checkpoint, and a
-held-out test report (see [[ADR-0023]]).
+完整运行的质量结论需要：真实训练运行、已选定的检查点，以及保留测试集报告（参见 ADR-0023）。
 
-## Consequences
+## 后果
 
-- Reports are regenerated locally on demand; they are not committed or pushed.
-- The format is stable enough to compare reports across different checkpoints.
-- Pilot/engineering reports must be explicitly labeled as engineering artifacts, not cited
-  as model quality.
+- 报告按需在本地重新生成；不提交也不推送。
+- 格式足够稳定，可跨不同检查点比较报告。
+- 试验性/工程报告必须明确标记为工程产物，不得作为模型质量依据引用。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entries: RF-007-P2, RF-007-P3
-- Related code: `configs/evaluation/generation_report.json`, `scripts/evaluate_translation.py`
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-007-P2、RF-007-P3
+- 相关代码：`configs/evaluation/generation_report.json`、`scripts/evaluate_translation.py`

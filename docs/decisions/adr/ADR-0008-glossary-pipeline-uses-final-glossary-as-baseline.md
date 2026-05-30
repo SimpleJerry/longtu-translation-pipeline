@@ -1,35 +1,28 @@
-# ADR-0008: Glossary Pipeline Uses Final Glossary As Baseline
+# ADR-0008：词汇表流水线以最终词汇表为基准
 
-- Status: Accepted
-- Date: 2026-05-24
+- 状态：已接受
+- 日期：2026-05-24
 
-## Context
+## 背景
 
-Early versions of the glossary semantic pipeline read from a historical audit CSV as its
-baseline. Historical audit baselines and raw source files are not committed because they
-are intermediate or sensitive data. This made the pipeline non-reproducible for anyone
-who only has the committed repository.
+词汇表语义流水线的早期版本以历史审计 CSV 作为基准读取。历史审计基准和原始源文件不被提交，因为它们是中间数据或敏感数据。这使得流水线对于仅有已提交版本库的人员无法复现。
 
-## Decision
+## 决策
 
-The glossary semantic pipeline reads the current `data/glossary.csv` as its authoritative
-baseline and writes audit CSVs only as local ignored artifacts under `data/review/`.
+词汇表语义流水线将当前 `data/glossary.csv` 作为权威基准读取，并仅将审计 CSV 作为本地忽略产物写入 `data/review/` 下。
 
-Additional constraints:
-- Long business rule lists and thresholds live in `configs/glossary/` (not hard-coded).
-- `segments.csv` SHA256 hashes are recorded in audit output for traceability, but must not
-  be hard-coded as a required source-code gate.
+附加约束：
+- 较长的业务规则列表和阈值存放于 `configs/glossary/`（不硬编码）。
+- `segments.csv` SHA256 哈希记录在审计输出中以供追溯，但不得作为必须满足的源代码门控被硬编码。
 
-## Consequences
+## 后果
 
-- The pipeline is reproducible from the committed corpus without needing external baseline
-  files.
-- Audit CSVs under `data/review/glossary_*` are local artifacts that are regenerated on
-  each pipeline run.
-- Business rules are reviewable and configurable without code changes.
+- 流水线可从已提交语料复现，无需外部基准文件。
+- `data/review/glossary_*` 下的审计 CSV 是本地产物，每次流水线运行时重新生成。
+- 业务规则可审查且可配置，无需修改代码。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entries: RF-010, RF-011
-- Related code: `scripts/glossary_semantic_pipeline.py`, `configs/glossary/`
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-010、RF-011
+- 相关代码：`scripts/glossary_semantic_pipeline.py`、`configs/glossary/`

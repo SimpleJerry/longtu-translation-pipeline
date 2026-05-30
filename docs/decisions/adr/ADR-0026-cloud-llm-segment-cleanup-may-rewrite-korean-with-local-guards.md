@@ -1,46 +1,38 @@
-# ADR-0026: Cloud LLM Segment Cleanup May Rewrite Korean With Local Guards
+# ADR-0026：云端 LLM 语段清理可在本地保护下改写韩语
 
-- Status: Accepted
-- Date: 2026-05-26
+- 状态：已接受
+- 日期：2026-05-26
 
-## Context
+## 背景
 
-Remaining segment noise may be too semantic for deterministic local rules alone. The user chose
-full-corpus LLM review and allowed Korean rewrite for cases where the existing Korean target is
-semantically incorrect. However, unvalidated synthetic translations are risky—applying LLM
-rewrites without local checks could introduce grammatical errors, missing glossary terms, or
-placeholder corruption.
+剩余的语段噪声可能过于语义化，单靠确定性本地规则已无法处理。用户选择了全语料 LLM 审查，并允许在现有韩语目标端语义不正确时进行改写。然而，未经验证的合成翻译存在风险——在没有本地检查的情况下应用 LLM 改写，可能引入语法错误、词汇表术语缺失或占位符损坏。
 
-## Decision
+## 决策
 
-Optional cloud LLM segment cleanup (`scripts/segments_llm_cleanup_pipeline.py`) may:
-- Delete segment rows.
-- Rewrite only the Korean target—**but only after local validation passes**.
+可选的云端 LLM 语段清理（`scripts/segments_llm_cleanup_pipeline.py`）可以：
+- 删除语段行。
+- 仅改写韩语目标端——**但仅在通过本地验证后方可执行**。
 
-The LLM must not:
-- Change Chinese source text.
-- Add rows, split rows, or merge rows.
-- Edit glossary.
+LLM 不得：
+- 修改中文源文本。
+- 添加行、拆分行或合并行。
+- 编辑词汇表。
 
-The LLM prompt receives only raw row text, placeholders, and matched glossary constraints.
-Local pre-judgment flags (target contamination, structured-string hints, length ratio,
-repeated-output checks) run only in post-response validation.
+LLM 提示词仅接收原始行文本、占位符和匹配的词汇表约束。本地预判标志（目标污染、结构化字符串提示、长度比、重复输出检查）仅在响应后的验证阶段运行。
 
-Rewrite validation checks: Hangul presence, no Chinese CJK in target, placeholder preservation,
-glossary preservation (exact or no-space), length ratio, and repetition/explanation-like output.
+改写验证检查：韩文字符存在性、目标端不含中文 CJK、占位符保留、词汇表保留（精确或无空格）、长度比及重复/类解释性输出。
 
-A full LLM segment cleanup invalidates existing split artifacts, checkpoints, and reports.
+完整的 LLM 语段清理会使现有拆分产物、检查点和报告失效。
 
-## Consequences
+## 后果
 
-- Korean rewrite is accepted only when all local guards pass.
-- Failed rewrites fall back to keeping the original row (or deleting if the original target
-  is already contaminated).
-- Review artifacts remain under ignored `data/review/llm_segments_cleanup/`.
+- 仅在所有本地保护通过时才接受韩语改写。
+- 验证失败的改写回退至保留原行（若原目标端已被污染则删除）。
+- 审校产物保留在被忽略的 `data/review/llm_segments_cleanup/` 下。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entries: RF-015, RF-029
-- Related code: `scripts/segments_llm_cleanup_pipeline.py`
-- Related document: `docs/architecture/data-cleaning-pipeline.md`
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-015、RF-029
+- 相关代码：`scripts/segments_llm_cleanup_pipeline.py`
+- 相关文档：`docs/architecture/data-cleaning-pipeline.md`

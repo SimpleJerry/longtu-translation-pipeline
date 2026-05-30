@@ -1,42 +1,34 @@
-# ADR-0014: Engineering Smoke Tests Use Staged Model Loading
+# ADR-0014：工程冒烟测试使用分阶段模型加载
 
-- Status: Accepted
-- Date: 2026-05-25
+- 状态：已接受
+- 日期：2026-05-25
 
-## Context
+## 背景
 
-The training chain involves multiple risky integration points: real NLLB tokenizer, language
-code handling, marker tokens, tensor shapes, Trainer wiring, CUDA execution, and embedding
-resize. Validating all of these in a single full model training run would make failures
-hard to isolate and would be unnecessarily expensive.
+训练链涉及多个高风险的集成点：真实 NLLB 分词器、语言代码处理、标记 token、张量形状、Trainer 连接、CUDA 执行及嵌入层扩展。在单次完整模型训练运行中验证所有这些内容将使故障难以隔离，且代价不必要地高昂。
 
-Two intermediate smoke stages were established:
+为此建立了两个中间冒烟阶段：
 
-**Stage 1 (RF-006-P3):** Use the real NLLB tokenizer but a tiny *randomly initialized*
-`M2M100ForConditionalGeneration` model. Validates: language codes, marker tokens, dataset
-tensors, Trainer wiring — without downloading real weights.
+**第一阶段（RF-006-P3）：** 使用真实 NLLB 分词器，但配合微型**随机初始化**的 `M2M100ForConditionalGeneration` 模型。验证内容：语言代码、标记 token、数据集张量、Trainer 连接——无需下载真实权重。
 
-**Stage 2 (RF-006-P4):** Use the real NLLB tokenizer and real `facebook/nllb-200-distilled-600M`
-weights. Validates: actual model loading, embedding resize for `<start>/<end>`, CUDA execution,
-FP16 autocast — without running a training epoch.
+**第二阶段（RF-006-P4）：** 使用真实 NLLB 分词器和真实 `facebook/nllb-200-distilled-600M` 权重。验证内容：实际模型加载、`<start>/<end>` 的嵌入层扩展、CUDA 执行、FP16 自动混合精度——无需运行完整训练 epoch。
 
-## Decision
+## 决策
 
-Engineering smoke tests use staged model loading:
-- `--nllb-smoke-test` (stage 1): real tokenizer + tiny random model, `max_steps=1`.
-- `--real-model-smoke-test` (stage 2): real tokenizer + real weights, `max_steps=1`.
+工程冒烟测试使用分阶段模型加载：
+- `--nllb-smoke-test`（第一阶段）：真实分词器 + 微型随机模型，`max_steps=1`。
+- `--real-model-smoke-test`（第二阶段）：真实分词器 + 真实权重，`max_steps=1`。
 
-Both stages write outputs to ignored `data/review/training_smoke/`. Neither stage retains
-checkpoints or constitutes a training run.
+两个阶段均将输出写入被忽略的 `data/review/training_smoke/`。两个阶段均不保留检查点，也不构成正式训练运行。
 
-## Consequences
+## 后果
 
-- Failed smoke tests can be diagnosed at the appropriate stage without wasting GPU time.
-- Real model smoke confirms CUDA/embed path before pilot or full training.
-- Stage 1 runs without downloading NLLB model weights (~600 MB), keeping the CI-safe path light.
+- 冒烟测试失败可在对应阶段诊断，无需浪费 GPU 时间。
+- 真实模型冒烟测试在试验性或正式训练前确认 CUDA/嵌入路径。
+- 第一阶段无需下载 NLLB 模型权重（约 600 MB），保持 CI 安全路径轻量。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived, two entries merged; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entries: RF-006-P3, RF-006-P4
-- Related code: `scripts/train_model.py`, `src/longtu_translation_pipeline/training.py`
+- 原始条目：第一阶段重构决策日志（已归档，两条条目已合并；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-006-P3、RF-006-P4
+- 相关代码：`scripts/train_model.py`、`src/longtu_translation_pipeline/training.py`

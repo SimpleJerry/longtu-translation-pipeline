@@ -1,29 +1,23 @@
-# ADR-0002: Refactor Backlog as Single Source of Truth (Superseded by ADR-0032)
+# ADR-0002：重构待办列表作为单一真相源（已废弃，见 ADR-0032）
 
-- Status: Superseded by ADR-0032
-- Date: 2026-05-17
+- 状态：已废弃（见 ADR-0032）
+- 日期：2026-05-17
 
-## Context
+## 背景
 
-The project needed a single authoritative location for systematic refactor tasks. Without a
-dedicated location, refactor TODOs risk being scattered across README files, notebooks, and
-ad-hoc comments—making it impossible for AI agents or human contributors to find and track
-outstanding work.
+项目需要一个权威的单一位置来管理系统性重构任务。没有专用位置的话，重构 TODO 就会分散在 README、笔记本和临时注释中，使 AI 代理或人工贡献者无法找到和追踪未完成工作。
 
-## Decision
+## 决策
 
-The refactor backlog was the single source of truth for systematic refactor TODOs (now retired; see ADR-0032).
-Each backlog item includes: ID, status, scope, background/why, concrete scope, out-of-scope
-notes, risks, acceptance criteria, recommended test commands, and notes.
+重构待办列表曾是系统性重构 TODO 的单一真相源（现已退役；参见 ADR-0032）。每个待办条目包含：ID、状态、范围、背景/原因、具体范围、排除事项、风险、验收标准、推荐测试命令和备注。
 
-## Consequences
+## 后果
 
-- README and AGENTS files link to the backlog rather than carrying their own task lists
-  (see [[ADR-0001]]).
-- AI/Codex agents use the backlog to select work items.
-- New refactor discoveries are added as backlog items, not folded into the current task.
+- README 和 AGENTS 文件链接至待办列表，而非自带任务列表（参见 ADR-0001）。
+- AI/Codex 代理使用待办列表选择工作项。
+- 新发现的重构项作为待办条目添加，不折叠进当前任务。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entry: RF-009
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-009

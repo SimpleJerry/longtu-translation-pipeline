@@ -1,31 +1,25 @@
-# ADR-0001: README and AGENTS Do Not Carry Long-Term Task Pools
+# ADR-0001：README 与 AGENTS 不承载长期任务池
 
-- Status: Accepted
-- Date: 2026-05-17
+- 状态：已接受
+- 日期：2026-05-17
 
-## Context
+## 背景
 
-README files were beginning to accumulate long-running refactor TODO lists and task planning
-content. AGENTS.md was similarly at risk of becoming a mixed working-rules-and-task-pool file.
-These files are the primary entry point for human readers and AI agents; cluttering them with
-task tracking degrades their signal-to-noise ratio and makes them hard to maintain.
+README 文件开始积累长期重构 TODO 列表和任务规划内容。AGENTS.md 也面临类似风险，有可能演变为工作规则与任务池的混合文件。这些文件是人类读者和 AI 代理的主要入口；用任务跟踪内容填塞它们会降低信噪比，使其难以维护。
 
-## Decision
+## 决策
 
-README files (`README.md`, `README.en.md`, `README.zh-CN.md`) stay focused on project
-introduction, setup, basic usage, and navigation links. `AGENTS.md` stays focused on AI/Codex
-working rules. Neither file carries long-term refactor TODOs or task pools.
+README 文件（`README.md`、`README.en.md`、`README.zh-CN.md`）专注于项目介绍、安装、基本使用和导航链接。`AGENTS.md` 专注于 AI/Codex 工作规则。这两类文件均不承载长期重构 TODO 或任务池。
 
-Short navigation links pointing to `docs/decisions/adr/` and the model card are acceptable;
-embedded task lists are not.
+指向 `docs/decisions/adr/` 和模型卡片的简短导航链接可以保留；嵌入式任务列表则不可以。
 
-## Consequences
+## 后果
 
-- All long-term refactor TODOs were tracked in a dedicated refactor backlog (now retired; see ADR-0032).
-- README files remain usable as user-facing documentation without noise from internal planning.
-- New refactor work items must be added to the backlog, not to README or AGENTS.
+- 所有长期重构 TODO 在专用重构待办列表中追踪（现已退役；参见 ADR-0032）。
+- README 文件保持可用的用户文档状态，不受内部规划内容干扰。
+- 新的重构工作项必须添加至待办列表，而非写入 README 或 AGENTS。
 
-## References
+## 参考
 
-- Original entry: phase-1 refactor decisions log (archived; see ADR-0032 and git tag `phase-1-refactor-archive`)
-- Related backlog entry: RF-009
+- 原始条目：第一阶段重构决策日志（已归档；参见 ADR-0032 及 git 标签 `phase-1-refactor-archive`）
+- 相关待办条目：RF-009
