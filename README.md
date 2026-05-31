@@ -96,9 +96,8 @@
 ├── src/
 │   └── longtu_translation_pipeline/
 ├── tests/
-├── logs/
 └── docs/
-    ├── data-cleaning.md
+    ├── architecture/data-cleaning-pipeline.md
     └── notebooks/inventory.md
 ```
 
@@ -113,8 +112,8 @@
 | `configs/segments/` | segment 정제를 위한 구조화 문자열 분리, term/entity seed, semantic 임계값 설정입니다. |
 | `configs/cross_cleaning/` | glossary/segments 교차 일관성 정제 임계값 설정입니다. |
 | `configs/training/default.json` | smoke/dry-run용 기본 학습 설정. 데이터 경로, 언어 코드, 모델명, 출력 디렉터리, 기본 파라미터를 선언합니다. |
-| `configs/training/full_10k.json` | 10k step full-data 학습 profile. step, checkpoint, eval, optimizer 설정을 명시합니다. |
-| `configs/training/full_earlystop.json` | Early-stopping 학습 profile. 현재 최종 모델(`checkpoint-48000`)을 생성한 설정입니다. |
+| `configs/training/step10k.json` | 10k step full-data 학습 profile. step, checkpoint, eval, optimizer 설정을 명시합니다. |
+| `configs/training/earlystop.json` | Early-stopping 학습 profile. 현재 최종 모델(`checkpoint-48000`)을 생성한 설정입니다. |
 | `configs/inference/default.json` | 추론 설정. 모델 경로, 입력/출력 경로, 언어 코드, 생성 파라미터를 선언합니다. |
 | `configs/evaluation/default.json` | 평가 설정. 번역 결과 CSV, glossary, BLEU 설정, 로컬 보고서 출력 위치를 선언합니다. |
 | `scripts/cleanup_common.py` | segment/glossary 정제 pipeline이 공유하는 공통 유틸리티 함수입니다. |
@@ -193,10 +192,10 @@ venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --dry-run
 
 각 정제 유형의 상세 예시와 규칙은 [docs/architecture/data-cleaning-pipeline.md](docs/architecture/data-cleaning-pipeline.md)를 참고하세요.
 
-**학습** — `full_earlystop.json`을 사용합니다(결정적 8:1:1 split, seed 42, early-stopping).
+**학습** — `earlystop.json`을 사용합니다(결정적 8:1:1 split, seed 42, early-stopping).
 
 ```powershell
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_earlystop.json --train --run-name <run-name>
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\earlystop.json --train --run-name <run-name>
 ```
 
 빠른 검증용 smoke/dry-run:

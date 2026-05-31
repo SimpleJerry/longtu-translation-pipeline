@@ -96,9 +96,8 @@ Net gain from fine-tuning + data cleaning: **+0.316 BLEU (~34×)** at the same b
 ├── src/
 │   └── longtu_translation_pipeline/
 ├── tests/
-├── logs/
 └── docs/
-    ├── data-cleaning.md
+    ├── architecture/data-cleaning-pipeline.md
     └── notebooks/inventory.md
 ```
 
@@ -113,8 +112,8 @@ Net gain from fine-tuning + data cleaning: **+0.316 BLEU (~34×)** at the same b
 | `configs/segments/` | Structured-string splitting, term/entity seeds, and semantic thresholds for segment cleanup. |
 | `configs/cross_cleaning/` | Thresholds for glossary/segments cross-consistency cleanup. |
 | `configs/training/default.json` | Smoke/dry-run training config for data paths, language codes, model name, output directory, and basic parameters. |
-| `configs/training/full_10k.json` | Full-data 10k-step training profile with explicit step, checkpoint, eval, and optimizer settings. |
-| `configs/training/full_earlystop.json` | Early-stopping training profile; produced the current final model (`checkpoint-48000`). |
+| `configs/training/step10k.json` | Full-data 10k-step training profile with explicit step, checkpoint, eval, and optimizer settings. |
+| `configs/training/earlystop.json` | Early-stopping training profile; produced the current final model (`checkpoint-48000`). |
 | `configs/inference/default.json` | Inference config for model path, input/output paths, language codes, and generation parameters. |
 | `configs/evaluation/default.json` | Evaluation config for translation-result CSVs, glossary path, BLEU settings, and local report output. |
 | `scripts/cleanup_common.py` | Shared utility functions used by segment and glossary cleanup pipelines. |
@@ -193,10 +192,10 @@ venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --dry-run
 
 See [docs/architecture/data-cleaning-pipeline.md](docs/architecture/data-cleaning-pipeline.md) for detailed examples and rules for each cleanup type.
 
-**Training** — uses `full_earlystop.json` (deterministic 8:1:1 split, seed 42, early stopping).
+**Training** — uses `earlystop.json` (deterministic 8:1:1 split, seed 42, early stopping).
 
 ```powershell
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_earlystop.json --train --run-name <run-name>
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\earlystop.json --train --run-name <run-name>
 ```
 
 Quick smoke/dry-run checks:
