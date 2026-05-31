@@ -11,9 +11,14 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "src"))
 
-import glossary_llm_cleanup_pipeline as llm_cleanup  # noqa: E402
+from longtu_translation_pipeline.cleanup.glossary_llm import (  # noqa: E402
+    models,
+    pipeline,
+    prompts,
+)
+from longtu_translation_pipeline.cleanup.glossary_llm import response as resp  # noqa: E402
 
 
 class GlossaryLlmCleanupTest(unittest.TestCase):
@@ -38,7 +43,7 @@ class GlossaryLlmCleanupTest(unittest.TestCase):
                 }
             )
 
-            result = llm_cleanup.run_cleanup(
+            result = pipeline.run_cleanup(
                 glossary_path=glossary,
                 review_dir=review,
                 apply_changes=True,
@@ -65,7 +70,7 @@ class GlossaryLlmCleanupTest(unittest.TestCase):
             write_glossary(glossary, [("1", "月亮", "달")])
             before = glossary.read_text(encoding="utf-8-sig")
 
-            llm_cleanup.run_cleanup(
+            pipeline.run_cleanup(
                 glossary_path=glossary,
                 review_dir=review,
                 apply_changes=False,
@@ -85,7 +90,7 @@ class GlossaryLlmCleanupTest(unittest.TestCase):
             write_glossary(glossary, [("1", "暴击", "치명타")])
 
             with self.assertRaisesRegex(RuntimeError, "OPENAI_API_KEY"):
-                llm_cleanup.run_cleanup(
+                pipeline.run_cleanup(
                     glossary_path=glossary,
                     review_dir=review,
                     apply_changes=True,
@@ -103,7 +108,7 @@ class GlossaryLlmCleanupTest(unittest.TestCase):
             write_glossary(glossary, [("1", "暴击", "치명타")])
 
             with self.assertRaisesRegex(RuntimeError, "LLM_MODEL"):
-                llm_cleanup.run_cleanup(
+                pipeline.run_cleanup(
                     glossary_path=glossary,
                     review_dir=review,
                     apply_changes=True,
@@ -117,10 +122,10 @@ class GlossaryLlmCleanupTest(unittest.TestCase):
         response = response_for(
             [{"term_id": "1", "action": "KEEP", "reason": "bad action"}]
         )
-        batch = [llm_cleanup.GlossaryRow("1", "暴击", "치명타")]
+        batch = [models.GlossaryRow("1", "暴击", "치명타")]
 
         with self.assertRaisesRegex(RuntimeError, "Invalid action"):
-            llm_cleanup.parse_and_validate_response(response, batch)
+            resp.parse_and_validate_response(response, batch)
 
     def test_missing_row_retries_whole_batch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -156,7 +161,7 @@ class GlossaryLlmCleanupTest(unittest.TestCase):
                 ]
             )
 
-            result = llm_cleanup.run_cleanup(
+            result = pipeline.run_cleanup(
                 glossary_path=glossary,
                 review_dir=review,
                 apply_changes=False,
@@ -180,10 +185,10 @@ class GlossaryLlmCleanupTest(unittest.TestCase):
                 },
             ]
         )
-        batch = [llm_cleanup.GlossaryRow("1", "暴击", "치명타")]
+        batch = [models.GlossaryRow("1", "暴击", "치명타")]
 
         with self.assertRaisesRegex(RuntimeError, "Duplicate term_id"):
-            llm_cleanup.parse_and_validate_response(response, batch)
+            resp.parse_and_validate_response(response, batch)
 
     def test_json_wrapped_in_text_is_accepted(self) -> None:
         response = {
@@ -195,18 +200,18 @@ class GlossaryLlmCleanupTest(unittest.TestCase):
                 }
             ]
         }
-        batch = [llm_cleanup.GlossaryRow("1", "暴击", "치명타")]
+        batch = [models.GlossaryRow("1", "暴击", "치명타")]
 
-        decisions = llm_cleanup.parse_and_validate_response(response, batch)
+        decisions = resp.parse_and_validate_response(response, batch)
 
         self.assertEqual(decisions[0].action, "KEEP_GAME_TERM")
 
 
 class GlossaryLlmBatchModeTest(unittest.TestCase):
     def test_payload_includes_response_format_and_max_tokens(self) -> None:
-        payload = llm_cleanup.build_request_payload(
+        payload = prompts.build_request_payload(
             "gpt-4.1-mini",
-            [llm_cleanup.GlossaryRow("1", "暴击", "치명타")],
+            [models.GlossaryRow("1", "暴击", "치명타")],
             temperature=0.0,
             max_output_tokens=1500,
         )
@@ -218,7 +223,7 @@ class GlossaryLlmBatchModeTest(unittest.TestCase):
         self.assertEqual(
             set(rf["json_schema"]["schema"]["properties"]["results"]["items"]
                   ["properties"]["action"]["enum"]),
-            set(llm_cleanup.VALID_ACTIONS),
+            set(models.VALID_ACTIONS),
         )
 
     def test_end_to_end_batch_path(self) -> None:
@@ -263,11 +268,11 @@ class GlossaryLlmBatchModeTest(unittest.TestCase):
                 Path(dest_path).write_text(json.dumps(line) + "\n", encoding="utf-8")
                 return {"glo-batch-0001": line}
 
-            with patch.object(llm_cleanup, "upload_batch_input_file", fake_upload), \
-                 patch.object(llm_cleanup, "create_batch", fake_create), \
-                 patch.object(llm_cleanup, "wait_for_batch", fake_wait), \
-                 patch.object(llm_cleanup, "download_batch_output", fake_download):
-                result = llm_cleanup.run_cleanup(
+            with patch.object(pipeline,"upload_batch_input_file", fake_upload), \
+                 patch.object(pipeline,"create_batch", fake_create), \
+                 patch.object(pipeline,"wait_for_batch", fake_wait), \
+                 patch.object(pipeline,"download_batch_output", fake_download):
+                result = pipeline.run_cleanup(
                     glossary_path=glossary,
                     review_dir=review,
                     apply_changes=True,
@@ -299,7 +304,7 @@ class StaticClient:
     def __call__(
         self,
         payload: dict[str, Any],
-        config: llm_cleanup.ClientConfig,
+        config: models.ClientConfig,
         temperature: float,
         timeout: int,
     ) -> dict[str, Any]:
@@ -322,7 +327,7 @@ class RetryClient:
     def __call__(
         self,
         payload: dict[str, Any],
-        config: llm_cleanup.ClientConfig,
+        config: models.ClientConfig,
         temperature: float,
         timeout: int,
     ) -> dict[str, Any]:
