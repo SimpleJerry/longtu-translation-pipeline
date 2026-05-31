@@ -10,9 +10,9 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "src"))
 
-from cleanup_common import (  # noqa: E402
+from longtu_translation_pipeline.cleanup.common import (  # noqa: E402
     compile_regexes,
     ensure_csv_columns,
     read_json_config,

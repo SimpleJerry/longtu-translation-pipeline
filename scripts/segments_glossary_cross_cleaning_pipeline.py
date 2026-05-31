@@ -22,15 +22,19 @@ from __future__ import annotations
 import argparse
 import csv
 import re
+import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-try:
-    from cleanup_common import ensure_csv_columns, read_json_config, read_term_file
-except ModuleNotFoundError:  # pragma: no cover - import fallback for tests
-    from scripts.cleanup_common import ensure_csv_columns, read_json_config, read_term_file
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from longtu_translation_pipeline.cleanup.common import (  # noqa: E402
+    ensure_csv_columns,
+    read_json_config,
+    read_term_file,
+)
 
 
 SEGMENT_SCHEMA = ["segment_id", "zh-CN", "ko"]

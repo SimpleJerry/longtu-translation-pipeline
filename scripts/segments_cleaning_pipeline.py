@@ -14,27 +14,21 @@ import argparse
 import csv
 import os
 import re
+import sys
 from collections import OrderedDict
 from io import StringIO
 from pathlib import Path
 from typing import Any
 
-try:
-    from cleanup_common import (
-        compile_regexes,
-        ensure_csv_columns,
-        read_json_config,
-        read_term_file,
-        sha256,
-    )
-except ModuleNotFoundError:  # pragma: no cover - module import fallback
-    from scripts.cleanup_common import (
-        compile_regexes,
-        ensure_csv_columns,
-        read_json_config,
-        read_term_file,
-        sha256,
-    )
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from longtu_translation_pipeline.cleanup.common import (  # noqa: E402
+    compile_regexes,
+    ensure_csv_columns,
+    read_json_config,
+    read_term_file,
+    sha256,
+)
 
 SEGMENT_SCHEMA = ["segment_id", "zh-CN", "ko"]
 GLOSSARY_SCHEMA = ["term_id", "zh-CN", "ko"]

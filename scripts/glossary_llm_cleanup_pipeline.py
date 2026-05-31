@@ -25,7 +25,7 @@ from typing import Any, Callable, Mapping
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from cleanup_common import ensure_csv_columns  # noqa: E402
+from longtu_translation_pipeline.cleanup.common import ensure_csv_columns  # noqa: E402
 from longtu_translation_pipeline.llm import (  # noqa: E402
     ClientConfig,
     build_batch_request_line,

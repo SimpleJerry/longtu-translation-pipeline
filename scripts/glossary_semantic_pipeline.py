@@ -32,26 +32,20 @@ import csv
 import locale
 import os
 import re
+import sys
 from collections import OrderedDict, defaultdict
 from pathlib import Path
 from typing import Any
 
-try:
-    from cleanup_common import (
-        compile_regexes,
-        ensure_csv_columns,
-        read_json_config,
-        read_term_file,
-        sha256,
-    )
-except ModuleNotFoundError:  # pragma: no cover - module import fallback
-    from scripts.cleanup_common import (
-        compile_regexes,
-        ensure_csv_columns,
-        read_json_config,
-        read_term_file,
-        sha256,
-    )
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from longtu_translation_pipeline.cleanup.common import (  # noqa: E402
+    compile_regexes,
+    ensure_csv_columns,
+    read_json_config,
+    read_term_file,
+    sha256,
+)
 
 try:
     from wordfreq import zipf_frequency
