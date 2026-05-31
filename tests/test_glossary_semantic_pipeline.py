@@ -20,9 +20,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "src"))
 
-import glossary_semantic_pipeline as gsp  # noqa: E402
+from longtu_translation_pipeline.cleanup.glossary_semantic import pipeline as gsp  # noqa: E402
 
 
 def setUpModule() -> None:
