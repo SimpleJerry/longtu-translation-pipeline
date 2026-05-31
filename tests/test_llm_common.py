@@ -11,9 +11,9 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "src"))
 
-import llm_common  # noqa: E402
+from longtu_translation_pipeline.llm import client as llm_common  # noqa: E402
 
 
 CFG = llm_common.ClientConfig(api_key="test-key", base_url="https://api.test/v1", model="gpt-test")
@@ -146,7 +146,7 @@ class UploadBatchInputFileTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             jsonl = Path(tmp) / "in.jsonl"
             jsonl.write_text('{"custom_id":"c1","method":"POST","url":"/v1/chat/completions","body":{}}\n', encoding="utf-8")
-            with patch("llm_common.urllib.request.urlopen") as mock_open:
+            with patch("longtu_translation_pipeline.llm.client.urllib.request.urlopen") as mock_open:
                 mock_open.return_value = _fake_urlopen({"id": "file_abc", "object": "file"})
                 file_id = llm_common.upload_batch_input_file(jsonl, CFG)
             self.assertEqual(file_id, "file_abc")
@@ -169,7 +169,7 @@ class UploadBatchInputFileTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             jsonl = Path(tmp) / "in.jsonl"
             jsonl.write_text("x\n", encoding="utf-8")
-            with patch("llm_common.urllib.request.urlopen") as mock_open:
+            with patch("longtu_translation_pipeline.llm.client.urllib.request.urlopen") as mock_open:
                 mock_open.return_value = _fake_urlopen({"object": "file"})
                 with self.assertRaisesRegex(RuntimeError, "missing 'id'"):
                     llm_common.upload_batch_input_file(jsonl, CFG)
@@ -178,14 +178,14 @@ class UploadBatchInputFileTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             jsonl = Path(tmp) / "in.jsonl"
             jsonl.write_text("x\n", encoding="utf-8")
-            with patch("llm_common.urllib.request.urlopen", side_effect=_http_error(400, "bad purpose")):
+            with patch("longtu_translation_pipeline.llm.client.urllib.request.urlopen", side_effect=_http_error(400, "bad purpose")):
                 with self.assertRaisesRegex(RuntimeError, "HTTP 400.*bad purpose"):
                     llm_common.upload_batch_input_file(jsonl, CFG)
 
 
 class CreateBatchTest(unittest.TestCase):
     def test_posts_batch_request_and_returns_id(self) -> None:
-        with patch("llm_common.urllib.request.urlopen") as mock_open:
+        with patch("longtu_translation_pipeline.llm.client.urllib.request.urlopen") as mock_open:
             mock_open.return_value = _fake_urlopen({"id": "batch_xyz", "status": "validating"})
             batch_id = llm_common.create_batch(
                 "file_abc", CFG, completion_window="24h", metadata={"job": "t-a1"}
@@ -200,7 +200,7 @@ class CreateBatchTest(unittest.TestCase):
         self.assertEqual(request.headers["Content-type"], "application/json")
 
     def test_raises_when_response_missing_id(self) -> None:
-        with patch("llm_common.urllib.request.urlopen") as mock_open:
+        with patch("longtu_translation_pipeline.llm.client.urllib.request.urlopen") as mock_open:
             mock_open.return_value = _fake_urlopen({"status": "validating"})
             with self.assertRaisesRegex(RuntimeError, "missing 'id'"):
                 llm_common.create_batch("file_abc", CFG)
@@ -208,7 +208,7 @@ class CreateBatchTest(unittest.TestCase):
 
 class GetBatchTest(unittest.TestCase):
     def test_returns_batch_dict(self) -> None:
-        with patch("llm_common.urllib.request.urlopen") as mock_open:
+        with patch("longtu_translation_pipeline.llm.client.urllib.request.urlopen") as mock_open:
             mock_open.return_value = _fake_urlopen({"id": "b1", "status": "in_progress"})
             result = llm_common.get_batch("b1", CFG)
         self.assertEqual(result["status"], "in_progress")
@@ -229,7 +229,7 @@ class WaitForBatchTest(unittest.TestCase):
             {"id": "b", "status": "completed", "output_file_id": "file_out"},
         ])
         sleeps: list[float] = []
-        with patch("llm_common.urllib.request.urlopen") as mock_open:
+        with patch("longtu_translation_pipeline.llm.client.urllib.request.urlopen") as mock_open:
             mock_open.side_effect = [_fake_urlopen(s) for s in statuses]
             batch = llm_common.wait_for_batch(
                 "b",
@@ -245,7 +245,7 @@ class WaitForBatchTest(unittest.TestCase):
         self.assertEqual(sleeps, [1, 1])
 
     def test_raises_on_failed_status(self) -> None:
-        with patch("llm_common.urllib.request.urlopen") as mock_open:
+        with patch("longtu_translation_pipeline.llm.client.urllib.request.urlopen") as mock_open:
             mock_open.return_value = _fake_urlopen(
                 {"id": "b", "status": "failed", "errors": {"data": [{"message": "boom"}]}}
             )
@@ -256,7 +256,7 @@ class WaitForBatchTest(unittest.TestCase):
                 )
 
     def test_raises_on_max_wait_exceeded(self) -> None:
-        with patch("llm_common.urllib.request.urlopen") as mock_open:
+        with patch("longtu_translation_pipeline.llm.client.urllib.request.urlopen") as mock_open:
             mock_open.return_value = _fake_urlopen({"id": "b", "status": "in_progress"})
             with self.assertRaisesRegex(RuntimeError, "did not complete"):
                 llm_common.wait_for_batch(
@@ -268,7 +268,7 @@ class WaitForBatchTest(unittest.TestCase):
 
     def test_progress_cb_fires_each_poll(self) -> None:
         seen: list[str] = []
-        with patch("llm_common.urllib.request.urlopen") as mock_open:
+        with patch("longtu_translation_pipeline.llm.client.urllib.request.urlopen") as mock_open:
             mock_open.side_effect = [
                 _fake_urlopen({"id": "b", "status": "in_progress"}),
                 _fake_urlopen({"id": "b", "status": "completed"}),
@@ -299,7 +299,7 @@ class DownloadBatchOutputTest(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp) / "out.jsonl"
-            with patch("llm_common.urllib.request.urlopen") as mock_open:
+            with patch("longtu_translation_pipeline.llm.client.urllib.request.urlopen") as mock_open:
                 mock_open.return_value = _fake_urlopen(output)
                 by_id = llm_common.download_batch_output("file_out", CFG, dest)
             self.assertEqual(dest.read_bytes(), output)
@@ -313,7 +313,7 @@ class DownloadBatchOutputTest(unittest.TestCase):
             b'{"custom_id":"c","response":null,"error":null}\n'
         )
         with tempfile.TemporaryDirectory() as tmp:
-            with patch("llm_common.urllib.request.urlopen") as mock_open:
+            with patch("longtu_translation_pipeline.llm.client.urllib.request.urlopen") as mock_open:
                 mock_open.return_value = _fake_urlopen(output)
                 with self.assertRaisesRegex(RuntimeError, "Duplicate custom_id"):
                     llm_common.download_batch_output("f", CFG, Path(tmp) / "o.jsonl")
@@ -321,14 +321,14 @@ class DownloadBatchOutputTest(unittest.TestCase):
     def test_raises_on_missing_custom_id(self) -> None:
         output = b'{"response":null}\n'
         with tempfile.TemporaryDirectory() as tmp:
-            with patch("llm_common.urllib.request.urlopen") as mock_open:
+            with patch("longtu_translation_pipeline.llm.client.urllib.request.urlopen") as mock_open:
                 mock_open.return_value = _fake_urlopen(output)
                 with self.assertRaisesRegex(RuntimeError, "missing custom_id"):
                     llm_common.download_batch_output("f", CFG, Path(tmp) / "o.jsonl")
 
     def test_raises_on_invalid_jsonl_line(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            with patch("llm_common.urllib.request.urlopen") as mock_open:
+            with patch("longtu_translation_pipeline.llm.client.urllib.request.urlopen") as mock_open:
                 mock_open.return_value = _fake_urlopen(b"not json\n")
                 with self.assertRaisesRegex(RuntimeError, "not JSON"):
                     llm_common.download_batch_output("f", CFG, Path(tmp) / "o.jsonl")

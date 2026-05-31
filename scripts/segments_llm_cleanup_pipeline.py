@@ -15,6 +15,7 @@ import json
 import math
 import os
 import re
+import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -22,32 +23,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-try:
-    from cleanup_common import ensure_csv_columns
-    from llm_common import (
-        ClientConfig,
-        build_batch_request_line,
-        call_chat_completion,
-        create_batch,
-        download_batch_output,
-        parse_json_content,
-        resolve_client_config,
-        upload_batch_input_file,
-        wait_for_batch,
-    )
-except ModuleNotFoundError:  # pragma: no cover - import fallback for tests
-    from scripts.cleanup_common import ensure_csv_columns
-    from scripts.llm_common import (
-        ClientConfig,
-        build_batch_request_line,
-        call_chat_completion,
-        create_batch,
-        download_batch_output,
-        parse_json_content,
-        resolve_client_config,
-        upload_batch_input_file,
-        wait_for_batch,
-    )
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from cleanup_common import ensure_csv_columns  # noqa: E402
+from longtu_translation_pipeline.llm import (  # noqa: E402
+    ClientConfig,
+    build_batch_request_line,
+    call_chat_completion,
+    create_batch,
+    download_batch_output,
+    parse_json_content,
+    resolve_client_config,
+    upload_batch_input_file,
+    wait_for_batch,
+)
 
 
 SEGMENT_SCHEMA = ["segment_id", "zh-CN", "ko"]
