@@ -11,17 +11,23 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "src"))
 
-import segments_llm_cleanup_pipeline as segments_llm  # noqa: E402
+from longtu_translation_pipeline.cleanup.segments_llm import (  # noqa: E402
+    models,
+    pipeline,
+    prompts,
+    response,
+    validation,
+)
 
 
 class SegmentsLlmCleanupTest(unittest.TestCase):
     def test_payload_excludes_local_prejudgment_fields(self) -> None:
-        payload = segments_llm.build_request_payload(
+        payload = prompts.build_request_payload(
             model="test-model",
-            batch=[segments_llm.SegmentRow("1", "六壬秘境85级", "六壬秘境85级")],
-            glossary_sorted=[segments_llm.GlossaryTerm("1", "秘境", "비경")],
+            batch=[models.SegmentRow("1", "六壬秘境85级", "六壬秘境85级")],
+            glossary_sorted=[models.GlossaryTerm("1", "秘境", "비경")],
             temperature=0.0,
         )
         user_payload = json.loads(payload["messages"][1]["content"])
@@ -53,7 +59,7 @@ class SegmentsLlmCleanupTest(unittest.TestCase):
                 }
             )
 
-            result = segments_llm.run_cleanup(
+            result = pipeline.run_cleanup(
                 segments_path=paths["segments"],
                 glossary_path=paths["glossary"],
                 review_dir=paths["review"],
@@ -81,7 +87,7 @@ class SegmentsLlmCleanupTest(unittest.TestCase):
             write_glossary(paths["glossary"], [("1", "挑战", "도전")])
             client = StaticClient({"1": ("REWRITE_KO", "bad placeholder", "도전 횟수")})
 
-            result = segments_llm.run_cleanup(
+            result = pipeline.run_cleanup(
                 segments_path=paths["segments"],
                 glossary_path=paths["glossary"],
                 review_dir=paths["review"],
@@ -98,28 +104,28 @@ class SegmentsLlmCleanupTest(unittest.TestCase):
         self.assertIn("placeholder_missing", failed[0]["validation_errors"])
 
     def test_rewrite_missing_glossary_term_is_rejected(self) -> None:
-        row = segments_llm.SegmentRow("1", "技能升级", "기술 강화")
-        features = segments_llm.SegmentFeatures(
+        row = models.SegmentRow("1", "技能升级", "기술 강화")
+        features = models.SegmentFeatures(
             placeholders=[],
-            glossary_terms=[segments_llm.GlossaryTerm("1", "技能", "스킬")],
+            glossary_terms=[models.GlossaryTerm("1", "技能", "스킬")],
             target_contamination=False,
             structured_hint=False,
         )
 
-        errors = segments_llm.validate_rewrite(row, "기술 강화", features)
+        errors = validation.validate_rewrite(row, "기술 강화", features)
 
         self.assertIn("glossary_term_missing", errors)
 
     def test_rewrite_extra_placeholder_is_rejected(self) -> None:
-        row = segments_llm.SegmentRow("1", "挑战次数", "도전 횟수")
-        features = segments_llm.SegmentFeatures(
+        row = models.SegmentRow("1", "挑战次数", "도전 횟수")
+        features = models.SegmentFeatures(
             placeholders=[],
             glossary_terms=[],
             target_contamination=False,
             structured_hint=False,
         )
 
-        errors = segments_llm.validate_rewrite(row, "도전 횟수 {0}", features)
+        errors = validation.validate_rewrite(row, "도전 횟수 {0}", features)
 
         self.assertIn("placeholder_extra", errors)
 
@@ -130,7 +136,7 @@ class SegmentsLlmCleanupTest(unittest.TestCase):
             write_glossary(paths["glossary"], [("1", "秘境", "비경")])
             client = StaticClient({"1": ("REWRITE_KO", "bad rewrite", "六壬秘境85级")})
 
-            result = segments_llm.run_cleanup(
+            result = pipeline.run_cleanup(
                 segments_path=paths["segments"],
                 glossary_path=paths["glossary"],
                 review_dir=paths["review"],
@@ -150,7 +156,7 @@ class SegmentsLlmCleanupTest(unittest.TestCase):
             write_glossary(paths["glossary"], [("1", "技能", "스킬")])
 
             with self.assertRaisesRegex(RuntimeError, "OPENAI_API_KEY"):
-                segments_llm.run_cleanup(
+                pipeline.run_cleanup(
                     segments_path=paths["segments"],
                     glossary_path=paths["glossary"],
                     review_dir=paths["review"],
@@ -168,16 +174,16 @@ class SegmentsLlmCleanupTest(unittest.TestCase):
         rest of the batch survives. This was discovered during the real T-A1
         full-corpus run, where truncated outputs occasionally mangled an action
         token and the strict-raise behaviour killed the whole micro-batch."""
-        response = response_for(
+        api_response = response_for(
             [{"segment_id": "1", "action": "KEEP", "reason": "bad", "corrected_ko": ""}]
         )
-        batch = [segments_llm.SegmentRow("1", "技能升级", "스킬 강화")]
+        batch = [models.SegmentRow("1", "技能升级", "스킬 강화")]
 
-        decisions = segments_llm.parse_and_validate_response(response, batch)
+        decisions = response.parse_and_validate_response(api_response, batch)
 
         self.assertEqual(len(decisions), 1)
         self.assertEqual(decisions[0].segment_id, "1")
-        self.assertEqual(decisions[0].action, segments_llm.REVIEW_ACTION)
+        self.assertEqual(decisions[0].action, models.REVIEW_ACTION)
 
     def test_missing_row_falls_back_to_review_uncertain(self) -> None:
         """Since cdfa1b6 (RF-029 follow-up), a missing segment_id no longer
@@ -208,7 +214,7 @@ class SegmentsLlmCleanupTest(unittest.TestCase):
                 ]
             )
 
-            result = segments_llm.run_cleanup(
+            result = pipeline.run_cleanup(
                 segments_path=paths["segments"],
                 glossary_path=paths["glossary"],
                 review_dir=paths["review"],
@@ -238,7 +244,7 @@ class SegmentsLlmCleanupTest(unittest.TestCase):
                 }
             )
 
-            segments_llm.run_cleanup(
+            pipeline.run_cleanup(
                 segments_path=paths["segments"],
                 glossary_path=paths["glossary"],
                 review_dir=paths["review"],
@@ -269,7 +275,7 @@ class SegmentsLlmCleanupTest(unittest.TestCase):
                 }
             )
 
-            result = segments_llm.run_cleanup(
+            result = pipeline.run_cleanup(
                 segments_path=paths["segments"],
                 glossary_path=paths["glossary"],
                 review_dir=paths["review"],
@@ -303,9 +309,9 @@ class SegmentsLlmBatchModeTest(unittest.TestCase):
     """
 
     def test_payload_includes_response_format_and_max_tokens(self) -> None:
-        payload = segments_llm.build_request_payload(
+        payload = prompts.build_request_payload(
             model="gpt-4.1-mini",
-            batch=[segments_llm.SegmentRow("1", "技能", "스킬")],
+            batch=[models.SegmentRow("1", "技能", "스킬")],
             glossary_sorted=[],
             temperature=0.0,
             max_output_tokens=2250,
@@ -323,13 +329,13 @@ class SegmentsLlmBatchModeTest(unittest.TestCase):
         # Action enum reflects the live VALID_ACTIONS set.
         self.assertEqual(
             set(schema_props["action"]["enum"]),
-            set(segments_llm.VALID_ACTIONS),
+            set(models.VALID_ACTIONS),
         )
 
     def test_payload_omits_max_tokens_when_unset(self) -> None:
-        payload = segments_llm.build_request_payload(
+        payload = prompts.build_request_payload(
             model="m",
-            batch=[segments_llm.SegmentRow("1", "x", "x")],
+            batch=[models.SegmentRow("1", "x", "x")],
             glossary_sorted=[],
             temperature=0.0,
         )
@@ -396,11 +402,11 @@ class SegmentsLlmBatchModeTest(unittest.TestCase):
                 Path(dest_path).write_text(json.dumps(line) + "\n", encoding="utf-8")
                 return {"seg-batch-0001": line}
 
-            with patch.object(segments_llm, "upload_batch_input_file", fake_upload), \
-                 patch.object(segments_llm, "create_batch", fake_create), \
-                 patch.object(segments_llm, "wait_for_batch", fake_wait), \
-                 patch.object(segments_llm, "download_batch_output", fake_download):
-                result = segments_llm.run_cleanup(
+            with patch.object(pipeline,"upload_batch_input_file", fake_upload), \
+                 patch.object(pipeline,"create_batch", fake_create), \
+                 patch.object(pipeline,"wait_for_batch", fake_wait), \
+                 patch.object(pipeline,"download_batch_output", fake_download):
+                result = pipeline.run_cleanup(
                     segments_path=paths["segments"],
                     glossary_path=paths["glossary"],
                     review_dir=paths["review"],
@@ -495,11 +501,11 @@ class SegmentsLlmBatchModeTest(unittest.TestCase):
                 calls["download"] += 1
                 raise AssertionError("must not re-download when resuming")
 
-            with patch.object(segments_llm, "upload_batch_input_file", fail_upload), \
-                 patch.object(segments_llm, "create_batch", fail_create), \
-                 patch.object(segments_llm, "wait_for_batch", fail_wait), \
-                 patch.object(segments_llm, "download_batch_output", fail_download):
-                result = segments_llm.run_cleanup(
+            with patch.object(pipeline,"upload_batch_input_file", fail_upload), \
+                 patch.object(pipeline,"create_batch", fail_create), \
+                 patch.object(pipeline,"wait_for_batch", fail_wait), \
+                 patch.object(pipeline,"download_batch_output", fail_download):
+                result = pipeline.run_cleanup(
                     segments_path=paths["segments"],
                     glossary_path=paths["glossary"],
                     review_dir=review_dir,
@@ -528,12 +534,12 @@ class SegmentsLlmBatchModeTest(unittest.TestCase):
                 Path(dest_path).write_text(json.dumps(line) + "\n", encoding="utf-8")
                 return {"seg-batch-0001": line}
 
-            with patch.object(segments_llm, "upload_batch_input_file", fake_upload), \
-                 patch.object(segments_llm, "create_batch", fake_create), \
-                 patch.object(segments_llm, "wait_for_batch", fake_wait), \
-                 patch.object(segments_llm, "download_batch_output", fake_download):
+            with patch.object(pipeline,"upload_batch_input_file", fake_upload), \
+                 patch.object(pipeline,"create_batch", fake_create), \
+                 patch.object(pipeline,"wait_for_batch", fake_wait), \
+                 patch.object(pipeline,"download_batch_output", fake_download):
                 with self.assertRaisesRegex(RuntimeError, "rate_limited"):
-                    segments_llm.run_cleanup(
+                    pipeline.run_cleanup(
                         segments_path=paths["segments"],
                         glossary_path=paths["glossary"],
                         review_dir=paths["review"],

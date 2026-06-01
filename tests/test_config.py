@@ -30,8 +30,8 @@ class ConfigTest(unittest.TestCase):
         self.assertTrue(config.tokenization.terminology_markers)
         self.assertIsNone(config.training.max_steps)
 
-    def test_full_10k_training_config_loads_profile_parameters(self) -> None:
-        config = load_training_config(ROOT / "configs" / "training" / "full_10k.json", base_dir=ROOT)
+    def test_step10k_training_config_loads_profile_parameters(self) -> None:
+        config = load_training_config(ROOT / "configs" / "training" / "step10k.json", base_dir=ROOT)
 
         self.assertEqual(config.training.max_steps, 10000)
         self.assertEqual(config.training.save_steps, 1000)

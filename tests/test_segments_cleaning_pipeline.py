@@ -4,12 +4,14 @@ import re
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "src"))
 
-import segments_cleaning_pipeline as segments  # noqa: E402
+from longtu_translation_pipeline.cleanup.segments_cleaning import pipeline as segments  # noqa: E402
+from longtu_translation_pipeline.cleanup.segments_cleaning import classify as sc_classify  # noqa: E402
 
 
 def make_patterns() -> dict[str, re.Pattern[str]]:
@@ -327,6 +329,242 @@ class SentenceLikeScoreTest(unittest.TestCase):
     def test_ko_sentence_end_adds_to_score(self) -> None:
         score = self._score("감사합니다", "감사합니다")
         self.assertGreater(score, 0.0)
+
+
+class ZhNounScoreTest(unittest.TestCase):
+    """zh_noun_score: jieba + stanza coefficient logic (ADR-0033 characterization)."""
+
+    def test_empty_text_returns_zero(self) -> None:
+        score, evidence = segments.zh_noun_score("", {})
+        self.assertEqual(score, 0.0)
+        self.assertEqual(evidence, "")
+
+    def test_all_noun_tokens_raise_score(self) -> None:
+        mock_pseg = MagicMock()
+        mock_pseg.cut.return_value = [("技能", "n"), ("攻击", "n")]
+        stanza = {"upos": ["NOUN", "NOUN"], "summary": "技能/NOUN 攻击/NOUN"}
+        with patch.dict(sys.modules, {"jieba": MagicMock(), "jieba.posseg": mock_pseg}):
+            score, evidence = segments.zh_noun_score("技能攻击", stanza)
+        # raw = 0.15 + 0.45*1.0 + 0.40*1.0 + 0.08 (alpha digit) → clamped 1.0
+        self.assertGreater(score, 0.5)
+        self.assertIn("jieba=", evidence)
+
+    def test_empty_jieba_empty_stanza_gives_baseline(self) -> None:
+        mock_pseg = MagicMock()
+        mock_pseg.cut.return_value = []
+        with patch.dict(sys.modules, {"jieba": MagicMock(), "jieba.posseg": mock_pseg}):
+            score, _ = segments.zh_noun_score("技能", {})
+        # 0.15 + 0 + 0; has_cjk → no CJK penalty; no alpha → no bonus
+        self.assertAlmostEqual(score, 0.15, places=6)
+
+    def test_score_in_unit_range(self) -> None:
+        mock_pseg = MagicMock()
+        mock_pseg.cut.return_value = [("x", "n")]
+        with patch.dict(sys.modules, {"jieba": MagicMock(), "jieba.posseg": mock_pseg}):
+            score, _ = segments.zh_noun_score("x", {"upos": ["NOUN"]})
+        self.assertGreaterEqual(score, 0.0)
+        self.assertLessEqual(score, 1.0)
+
+
+class KoNounScoreTest(unittest.TestCase):
+    """ko_noun_score: kiwipiepy (injected) + stanza coefficient logic."""
+
+    @staticmethod
+    def _tok(tag: str, form: str = "x") -> MagicMock:
+        t = MagicMock()
+        t.tag = tag
+        t.form = form
+        return t
+
+    def test_empty_text_returns_zero(self) -> None:
+        score, evidence = segments.ko_noun_score("", MagicMock(), {})
+        self.assertEqual(score, 0.0)
+        self.assertEqual(evidence, "")
+
+    def test_all_noun_tokens_raise_score(self) -> None:
+        kiwi = MagicMock()
+        kiwi.tokenize.return_value = [self._tok("NNG", "기술"), self._tok("NNG", "공격")]
+        stanza = {"upos": ["NOUN", "NOUN"], "summary": "기술/NOUN 공격/NOUN"}
+        score, evidence = segments.ko_noun_score("기술공격", kiwi, stanza)
+        # 0.15 + 0.45*1.0 + 0.35*1.0 + 0.10 (noun_final) = 1.05 → clamped 1.0
+        self.assertEqual(score, 1.0)
+        self.assertIn("kiwi=", evidence)
+
+    def test_verb_final_reduces_score_to_zero(self) -> None:
+        kiwi = MagicMock()
+        kiwi.tokenize.return_value = [self._tok("VV", "한다")]
+        score, _ = segments.ko_noun_score("한다", kiwi, {})
+        # 0.15 + 0 + 0 − 0.25 (VV in verb_final_tags) = −0.10 → clamped 0.0
+        self.assertEqual(score, 0.0)
+
+    def test_score_in_unit_range(self) -> None:
+        kiwi = MagicMock()
+        kiwi.tokenize.return_value = [self._tok("NNG", "기술")]
+        score, _ = segments.ko_noun_score("기술", kiwi, {"upos": ["NOUN"]})
+        self.assertGreaterEqual(score, 0.0)
+        self.assertLessEqual(score, 1.0)
+
+
+class BuildStanzaCacheTest(unittest.TestCase):
+    """build_stanza_cache: pipeline mock → dict keyed by text."""
+
+    def test_empty_values_returns_empty_cache(self) -> None:
+        mock_pipeline = MagicMock()
+        result = segments.build_stanza_cache(mock_pipeline, [], batch_size=64, label="t")
+        self.assertEqual(result, {})
+        mock_pipeline.bulk_process.assert_not_called()
+
+    def test_cache_keyed_by_input_text(self) -> None:
+        mock_doc = MagicMock()
+        mock_doc.sentences = []
+        mock_pipeline = MagicMock()
+        mock_pipeline.bulk_process.return_value = [mock_doc]
+        result = segments.build_stanza_cache(mock_pipeline, ["技能"], batch_size=64, label="t")
+        self.assertIn("技能", result)
+        self.assertIn("upos", result["技能"])
+
+
+class EncodeSemanticScoresTest(unittest.TestCase):
+    """encode_semantic_scores: numpy dot-product logic with mocked model."""
+
+    def test_empty_items_returns_empty(self) -> None:
+        result = segments.encode_semantic_scores(
+            model=MagicMock(), items=[], glossary_terms=[], seed_terms=["s"]
+        )
+        self.assertEqual(result, ([], [], ""))
+
+    def test_returns_correct_length_and_method(self) -> None:
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("numpy not available")
+        n, dim = 2, 4
+        vec = (np.ones((n, dim), dtype="float32") / n)
+        seed_vec = (np.ones((1, dim), dtype="float32") / 1)
+        mock_model = MagicMock()
+        mock_model.encode.side_effect = [vec, seed_vec]  # zh, seed (no glossary)
+        items = [{"zh-CN": f"w{i}"} for i in range(n)]
+        gl, sl, method = segments.encode_semantic_scores(
+            model=mock_model, items=items, glossary_terms=[], seed_terms=["seed"]
+        )
+        self.assertEqual(len(gl), n)
+        self.assertEqual(len(sl), n)
+        self.assertEqual(method, "max_zh_embedding")
+
+    def test_exact_seed_in_zh_forces_similarity_to_one(self) -> None:
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("numpy not available")
+        dim = 4
+        vec = np.zeros((1, dim), dtype="float32")
+        seed_vec = np.ones((1, dim), dtype="float32")
+        mock_model = MagicMock()
+        mock_model.encode.side_effect = [vec, seed_vec]
+        items = [{"zh-CN": "seed_word"}]
+        _, sl, _ = segments.encode_semantic_scores(
+            model=mock_model, items=items, glossary_terms=[], seed_terms=["seed_word"]
+        )
+        self.assertEqual(sl[0], 1.0)
+
+
+class ScoreSemanticCandidatesTest(unittest.TestCase):
+    """score_semantic_candidates: decision logic with all NLP backends mocked."""
+
+    _THRESHOLDS: dict = {
+        "semantic_term_remove_threshold": 0.68,
+        "semantic_term_review_threshold": 0.56,
+        "noun_score_min": 0.55,
+        "sentence_like_keep_threshold": 0.55,
+        "glossary_similarity_threshold": 0.70,
+        "term_seed_similarity_threshold": 0.72,
+    }
+    _WEIGHTS: dict = {
+        "noun_score": 0.38,
+        "glossary_similarity": 0.30,
+        "term_seed_similarity": 0.27,
+        "sentence_like_penalty": 0.25,
+    }
+
+    @staticmethod
+    def _make_item(zh: str = "技能", ko: str = "기술", sls: str = "0.0000") -> dict:
+        return {
+            "original_segment_id": "1", "split_index": "0",
+            "action": "KEEP", "reason": "kept",
+            "semantic_action": "PENDING_SEMANTIC", "semantic_term_score": "",
+            "noun_score": "", "zh_noun_score": "", "ko_noun_score": "",
+            "glossary_similarity": "", "term_seed_similarity": "",
+            "sentence_like_score": sls, "embedding_model": "", "embedding_device": "",
+            "zh_pos": "", "ko_pos": "", "zh-CN": zh, "ko": ko,
+        }
+
+    def _run(
+        self,
+        items: list,
+        zh_noun_rv: tuple,
+        ko_noun_rv: tuple,
+        gl_scores: list,
+        seed_scores: list,
+    ) -> tuple:
+        mock_kiwi_mod = MagicMock()
+        mock_kiwi_mod.Kiwi = MagicMock(return_value=MagicMock())
+        with patch.object(sc_classify, "load_stanza_pipelines",
+                          return_value=(MagicMock(), MagicMock())), \
+             patch.object(sc_classify, "build_stanza_cache",
+                          side_effect=[{}, {}]), \
+             patch.object(sc_classify, "load_embedding_model",
+                          return_value=(MagicMock(), "test-model", "cpu")), \
+             patch.object(sc_classify, "encode_semantic_scores",
+                          return_value=(gl_scores, seed_scores, "test_method")), \
+             patch.object(sc_classify, "zh_noun_score",
+                          return_value=zh_noun_rv), \
+             patch.object(sc_classify, "ko_noun_score",
+                          return_value=ko_noun_rv), \
+             patch.dict(sys.modules, {"kiwipiepy": mock_kiwi_mod}):
+            return segments.score_semantic_candidates(
+                items,
+                glossary_terms=[], seed_terms=[],
+                patterns={},
+                thresholds=self._THRESHOLDS,
+                weights=self._WEIGHTS,
+                hf_home=Path("/tmp"),
+                stanza_dir=Path("/tmp"),
+                embedding_model="test",
+                embedding_fallback="fallback",
+            )
+
+    def test_empty_list_returns_empty_strings(self) -> None:
+        result = segments.score_semantic_candidates(
+            [], glossary_terms=[], seed_terms=[], patterns={},
+            thresholds=self._THRESHOLDS, weights=self._WEIGHTS,
+            hf_home=Path("/tmp"), stanza_dir=Path("/tmp"),
+            embedding_model="test", embedding_fallback="fallback",
+        )
+        self.assertEqual(result, ("", "", ""))
+
+    def test_high_score_item_becomes_remove_term_like(self) -> None:
+        # noun=0.8 (≥0.55), glossary=0.8 (≥0.70) → neighborhood met
+        # semantic = 0.38*0.8 + 0.30*0.8 + 0.27*0.8 = 0.76 ≥ 0.68 → REMOVE
+        item = self._make_item("技能", "기술")
+        actual_model, device, method = self._run(
+            [item],
+            zh_noun_rv=(0.8, ""), ko_noun_rv=(0.8, ""),
+            gl_scores=[0.8], seed_scores=[0.8],
+        )
+        self.assertEqual(item["action"], "REMOVE_TERM_LIKE")
+        self.assertEqual(item["semantic_action"], "AUTO_REMOVE_SEMANTIC_TERM_ENTITY")
+        self.assertEqual(actual_model, "test-model")
+
+    def test_low_score_item_becomes_keep_semantic_segment(self) -> None:
+        # noun=0.2 < noun_min=0.55 → cannot trigger remove/review → KEEP
+        item = self._make_item("走走", "가보자")
+        self._run(
+            [item],
+            zh_noun_rv=(0.2, ""), ko_noun_rv=(0.2, ""),
+            gl_scores=[0.1], seed_scores=[0.1],
+        )
+        self.assertNotEqual(item["action"], "REMOVE_TERM_LIKE")
+        self.assertEqual(item["semantic_action"], "KEEP_SEMANTIC_SEGMENT")
 
 
 if __name__ == "__main__":

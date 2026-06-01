@@ -96,9 +96,8 @@
 ├── src/
 │   └── longtu_translation_pipeline/
 ├── tests/
-├── logs/
 └── docs/
-    ├── data-cleaning.md
+    ├── architecture/data-cleaning-pipeline.md
     └── notebooks/inventory.md
 ```
 
@@ -113,8 +112,8 @@
 | `configs/segments/` | segments 清洗的结构化字符串拆分、term/entity seed 和语义阈值配置。 |
 | `configs/cross_cleaning/` | glossary 与 segments 交叉一致性清洗的阈值配置。 |
 | `configs/training/default.json` | smoke/dry-run 用基础训练配置，声明数据路径、语言码、模型名、输出目录和基础参数。 |
-| `configs/training/full_10k.json` | Full-data 10k step 训练 profile，显式声明步数、checkpoint、eval 和优化器参数。 |
-| `configs/training/full_earlystop.json` | Early-stopping 训练 profile，生成了当前最终模型（`checkpoint-48000`）。 |
+| `configs/training/step10k.json` | Full-data 10k step 训练 profile，显式声明步数、checkpoint、eval 和优化器参数。 |
+| `configs/training/earlystop.json` | Early-stopping 训练 profile，生成了当前最终模型（`checkpoint-48000`）。 |
 | `configs/inference/default.json` | 推理配置，声明模型路径、输入/输出路径、语言码和生成参数。 |
 | `configs/evaluation/default.json` | 评估配置，声明翻译结果 CSV、glossary、BLEU 口径和本地报告目录。 |
 | `scripts/cleanup_common.py` | segment/glossary 清洗 pipeline 共用的通用工具函数。 |
@@ -193,10 +192,10 @@ venv\Scripts\python.exe scripts\segments_llm_cleanup_pipeline.py --dry-run
 
 各类清洗的详细规则和示例见 [docs/architecture/data-cleaning-pipeline.md](docs/architecture/data-cleaning-pipeline.md)。
 
-**训练** —— 使用 `full_earlystop.json`（确定性 8:1:1 划分，seed 42，early-stopping）。
+**训练** —— 使用 `earlystop.json`（确定性 8:1:1 划分，seed 42，early-stopping）。
 
 ```powershell
-venv\Scripts\python.exe scripts\train_model.py --config configs\training\full_earlystop.json --train --run-name <run-name>
+venv\Scripts\python.exe scripts\train_model.py --config configs\training\earlystop.json --train --run-name <run-name>
 ```
 
 快速 smoke/dry-run 验证：

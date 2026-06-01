@@ -43,3 +43,4 @@
 | [ADR-0030](ADR-0030-llm-cleanup-defaults-to-batch-api-with-strict-json-schema.md) | LLM 清理默认使用批量 API 及严格 JSON Schema | 已接受 | 2026-05-27 | 默认 `--batch-mode batch`；所有补全请求使用严格 `json_schema`。 |
 | [ADR-0031](ADR-0031-formal-training-uses-early-stopping-on-composite-metric.md) | 正式训练在复合指标上执行早停 | 已接受 | 2026-05-27 | `Seq2SeqTrainer` + `EarlyStoppingCallback`；复合指标 = 0.5·BLEU + 0.5·preservation_nospace。 |
 | [ADR-0032](ADR-0032-retire-phase-1-refactor-scaffolding.md) | 退役第一阶段重构 scaffolding | 已接受 | 2026-05-30 | 第一阶段重构完成；`docs/refactor/` 退役至 git 历史（标签：`phase-1-refactor-archive`）。废弃 ADR-0002。 |
+| [ADR-0033](ADR-0033-extract-data-cleaning-core-into-src.md) | 数据清理 core 提取至 src/ | 已接受 | 2026-05-31 | cleanup/ 与 llm/ 领域逻辑迁入 src/；scripts/ 退化为薄入口；纯行为保持搬迁。 |
