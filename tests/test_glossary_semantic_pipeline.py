@@ -15,8 +15,11 @@ coupled to the precise weights in ``configs/glossary/rules.json``.
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
+from collections import OrderedDict
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -176,6 +179,256 @@ class EnforceStrictPairsTest(unittest.TestCase):
         classified = [self._item("技能", "스킬"), self._item("기술입력", "스킬")]
         gsp.enforce_strict_pairs(classified)
         self.assertEqual([it["action"] for it in classified], ["AUTO_REMOVE", "AUTO_REMOVE"])
+
+
+class ZhNounScoreGlossaryTest(unittest.TestCase):
+    """zh_noun_score: config-weighted jieba + stanza scoring (ADR-0033 step 9a)."""
+
+    def test_empty_text_returns_zero(self) -> None:
+        score, evidence = gsp.zh_noun_score("", {})
+        self.assertEqual(score, 0.0)
+        self.assertEqual(evidence, "")
+
+    def test_all_noun_tokens_raise_score(self) -> None:
+        mock_pseg = MagicMock()
+        mock_pseg.cut.return_value = [("BOSS", "n"), ("战", "n")]
+        stanza = {"upos": ["NOUN", "NOUN"], "root_upos": "NOUN", "summary": "BOSS/NOUN/root 战/NOUN/nmod", "deprels": ["root", "nmod"]}
+        with patch.dict(sys.modules, {"jieba": MagicMock(), "jieba.posseg": mock_pseg}):
+            score, evidence = gsp.zh_noun_score("BOSS战", stanza)
+        self.assertGreater(score, 0.5)
+        self.assertIn("jieba=", evidence)
+
+    def test_score_in_unit_range(self) -> None:
+        mock_pseg = MagicMock()
+        mock_pseg.cut.return_value = [("技能", "v")]  # verb tag → lower score
+        with patch.dict(sys.modules, {"jieba": MagicMock(), "jieba.posseg": mock_pseg}):
+            score, _ = gsp.zh_noun_score("技能", {"upos": ["VERB"]})
+        self.assertGreaterEqual(score, 0.0)
+        self.assertLessEqual(score, 1.0)
+
+    def test_empty_jieba_empty_stanza_returns_nonnegative(self) -> None:
+        mock_pseg = MagicMock()
+        mock_pseg.cut.return_value = []
+        with patch.dict(sys.modules, {"jieba": MagicMock(), "jieba.posseg": mock_pseg}):
+            score, _ = gsp.zh_noun_score("技能", {})
+        self.assertGreaterEqual(score, 0.0)
+
+
+class KoNounScoreGlossaryTest(unittest.TestCase):
+    """ko_noun_score: kiwi injected + stanza coefficient logic (ADR-0033 step 9a)."""
+
+    @staticmethod
+    def _tok(tag: str, form: str = "x") -> MagicMock:
+        t = MagicMock()
+        t.tag = tag
+        t.form = form
+        return t
+
+    def test_empty_text_returns_zero(self) -> None:
+        score, evidence = gsp.ko_noun_score("", MagicMock(), {})
+        self.assertEqual(score, 0.0)
+        self.assertEqual(evidence, "")
+
+    def test_all_noun_tokens_raise_score(self) -> None:
+        kiwi = MagicMock()
+        kiwi.tokenize.return_value = [self._tok("NNG", "기술"), self._tok("NNG", "공격")]
+        stanza = {"upos": ["NOUN", "NOUN"], "root_upos": "NOUN", "summary": "기술/NOUN/root 공격/NOUN/nmod"}
+        score, evidence = gsp.ko_noun_score("기술공격", kiwi, stanza)
+        self.assertGreater(score, 0.5)
+        self.assertIn("kiwi=", evidence)
+
+    def test_score_in_unit_range(self) -> None:
+        kiwi = MagicMock()
+        kiwi.tokenize.return_value = [self._tok("VV", "한다")]
+        score, _ = gsp.ko_noun_score("한다", kiwi, {})
+        self.assertGreaterEqual(score, 0.0)
+        self.assertLessEqual(score, 1.0)
+
+
+class BuildStanzaCacheGlossaryTest(unittest.TestCase):
+    """build_stanza_cache in glossary_semantic context (ADR-0033 step 9a)."""
+
+    def test_empty_values_returns_empty_cache(self) -> None:
+        mock_pipeline = MagicMock()
+        result = gsp.build_stanza_cache(mock_pipeline, [], batch_size=64, label="t")
+        self.assertEqual(result, {})
+        mock_pipeline.bulk_process.assert_not_called()
+
+    def test_cache_keyed_by_input_text(self) -> None:
+        mock_doc = MagicMock()
+        mock_doc.sentences = []
+        mock_pipeline = MagicMock()
+        mock_pipeline.bulk_process.return_value = [mock_doc]
+        result = gsp.build_stanza_cache(mock_pipeline, ["技能"], batch_size=64, label="t")
+        self.assertIn("技能", result)
+        self.assertIn("upos", result["技能"])
+
+
+class EncodeSimAndGameScoresTest(unittest.TestCase):
+    """encode_similarities_and_game_scores: numpy dot-product logic with mocked model."""
+
+    def test_returns_three_arrays_of_correct_length(self) -> None:
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("numpy not available")
+        n, dim = 2, 4
+        rows = [{"zh-CN": f"w{i}", "ko": f"k{i}"} for i in range(n)]
+        vec_n = np.ones((n, dim), dtype="float32") / n
+        vec_1 = np.ones((1, dim), dtype="float32")
+        mock_model = MagicMock()
+        mock_model.encode.side_effect = [vec_n, vec_n, vec_1, vec_1]  # zh, ko, game_seed, common_seed
+        sims, game_scores, generic_scores = gsp.encode_similarities_and_game_scores(
+            mock_model, rows,
+            game_seed_terms=["seed_a"],
+            common_noun_seed_terms=["seed_b"],
+        )
+        self.assertEqual(len(sims), n)
+        self.assertEqual(len(game_scores), n)
+        self.assertEqual(len(generic_scores), n)
+
+    def test_empty_ko_row_gives_zero_similarity(self) -> None:
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("numpy not available")
+        rows = [{"zh-CN": "技能", "ko": ""}]
+        dim = 4
+        z = np.zeros((1, dim), dtype="float32")
+        s = np.ones((1, dim), dtype="float32")
+        mock_model = MagicMock()
+        mock_model.encode.side_effect = [z, z, s, s]
+        sims, _, _ = gsp.encode_similarities_and_game_scores(
+            mock_model, rows, game_seed_terms=["a"], common_noun_seed_terms=["b"]
+        )
+        self.assertEqual(float(sims[0]), 0.0)
+
+
+class ClassifyRowsTest(unittest.TestCase):
+    """classify_rows: decision logic with injected NLP data; config pre-loaded by setUpModule."""
+
+    @staticmethod
+    def _make_rows(pairs: list) -> list[dict]:
+        return [
+            {"zh-CN": zh, "ko": ko, "original_term_id": str(i + 1),
+             **{lang: "" for lang in gsp.LANGS if lang not in ("zh-CN", "ko")}}
+            for i, (zh, ko) in enumerate(pairs)
+        ]
+
+    def test_result_length_matches_input(self) -> None:
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("numpy not available")
+        rows = self._make_rows([("BOSS", "보스"), ("技能", "스킬")])
+        kiwi = MagicMock()
+        kiwi.tokenize.return_value = []
+        n = len(rows)
+        result = gsp.classify_rows(
+            rows,
+            segment_text={"zh-CN": "BOSS", "ko": "보스", "zh-CN_upper": "BOSS", "ko_upper": "보스"},
+            families={},
+            zh_stanza={},
+            ko_stanza={},
+            kiwi=kiwi,
+            similarities=np.zeros(n),
+            game_embedding_scores=np.zeros(n),
+            generic_embedding_scores=np.zeros(n),
+            embedding_model="test",
+            embedding_device="cpu",
+        )
+        self.assertEqual(len(result), n)
+
+    def test_missing_ko_triggers_auto_remove(self) -> None:
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("numpy not available")
+        rows = self._make_rows([("技能", "")])
+        kiwi = MagicMock()
+        kiwi.tokenize.return_value = []
+        result = gsp.classify_rows(
+            rows,
+            segment_text={"zh-CN": "", "ko": "", "zh-CN_upper": "", "ko_upper": ""},
+            families={},
+            zh_stanza={},
+            ko_stanza={},
+            kiwi=kiwi,
+            similarities=np.zeros(1),
+            game_embedding_scores=np.zeros(1),
+            generic_embedding_scores=np.zeros(1),
+            embedding_model="test",
+            embedding_device="cpu",
+        )
+        self.assertEqual(result[0]["action"], "AUTO_REMOVE")
+        self.assertIn("missing_ko_for_zh_ko_glossary", result[0]["reasons"])
+
+
+class WriteOutputsTest(unittest.TestCase):
+    """write_outputs: CSV output structure; config pre-loaded by setUpModule."""
+
+    @staticmethod
+    def _make_item(action: str = "AUTO_KEEP") -> dict:
+        row = {"original_term_id": "1", "zh-CN": "技能", "ko": "스킬"}
+        row.update({lang: "" for lang in gsp.LANGS if lang not in row})
+        return {
+            "row": row, "action": action, "reasons": ["test"],
+            "term_score": 0.8, "noun_score": 0.7, "zh_noun_score": 0.7,
+            "ko_noun_score": 0.7, "product_evidence_score": 0.5,
+            "compound_score": 0.0, "bilingual_score": 0.85,
+            "general_word_score": 0.1, "game_term_score": 0.8,
+            "common_noun_score": 0.2, "domain_specificity_score": 0.6,
+            "game_embedding_score": 0.8, "generic_embedding_score": 0.2,
+            "zh_zipf_frequency": 3.0, "ko_zipf_frequency": 2.5,
+            "embedding_model": "test-model", "embedding_device": "cpu",
+            "zh_segment_count": 3, "ko_segment_count": 2,
+            "stem": "", "suffix": "", "family_size": 0,
+            "zh_pos": "NOUN/root", "ko_pos": "NNG",
+        }
+
+    def test_audit_and_glossary_files_are_created(self) -> None:
+        keep = self._make_item("AUTO_KEEP")
+        remove = self._make_item("AUTO_REMOVE")
+        classified = [keep, remove]
+        by_pair = gsp.enforce_strict_pairs(classified)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            review_dir = Path(tmpdir) / "review"
+            review_dir.mkdir()
+            glossary_path = Path(tmpdir) / "glossary.csv"
+            glossary_path.write_text("term_id,zh-CN,ko\n1,技能,스킬\n", encoding="utf-8-sig")
+            summary: OrderedDict = OrderedDict([("mode", "dry-run")])
+            gsp.write_outputs(
+                classified=classified,
+                by_pair=by_pair,
+                glossary_path=glossary_path,
+                review_dir=review_dir,
+                summary=summary,
+            )
+            self.assertTrue((review_dir / "glossary_semantic_audit.csv").exists())
+            self.assertTrue((review_dir / "removed_glossary_semantic_cleanup.csv").exists())
+            self.assertTrue(glossary_path.exists())
+
+    def test_summary_is_updated_with_counts(self) -> None:
+        keep = self._make_item("AUTO_KEEP")
+        remove = self._make_item("AUTO_REMOVE")
+        classified = [keep, remove]
+        by_pair = gsp.enforce_strict_pairs(classified)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            review_dir = Path(tmpdir) / "review"
+            review_dir.mkdir()
+            glossary_path = Path(tmpdir) / "glossary.csv"
+            glossary_path.write_text("term_id,zh-CN,ko\n1,技能,스킬\n", encoding="utf-8-sig")
+            summary: OrderedDict = OrderedDict([("mode", "dry-run")])
+            gsp.write_outputs(
+                classified=classified,
+                by_pair=by_pair,
+                glossary_path=glossary_path,
+                review_dir=review_dir,
+                summary=summary,
+            )
+            self.assertIn("auto_remove_rows", summary)
+            self.assertEqual(summary["auto_remove_rows"], 1)
+            self.assertIn("auto_keep_rows", summary)
 
 
 if __name__ == "__main__":
