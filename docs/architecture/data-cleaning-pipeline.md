@@ -7,6 +7,8 @@
 
 原始 Excel/CSV 输入及本地审校 CSV 不提交版本库。审校产物生成于 `data/review/` 目录下，被 Git 忽略。
 
+> **代码位置（ADR-0033）**：清理 pipeline 的领域逻辑位于 `src/longtu_translation_pipeline/cleanup/`（LLM 传输在 `src/longtu_translation_pipeline/llm/`）；`scripts/` 下各 `*_pipeline.py` 仅为薄入口。本文档描述的命令与 CLI 行为不变。
+
 ## 标记与样式标签
 
 表现层标签会向模型引入类英文的人工 token，模型可能学习复制或翻译这些内容。

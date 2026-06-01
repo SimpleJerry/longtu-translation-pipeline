@@ -66,6 +66,27 @@ ADR-0005 确立的增量提取(已提取 text_protection / training / inference 
 - 不触及任何不变量(本 ADR 不超越任何既有 ADR);ADR-0026 / ADR-0030 的行为契约由上述 gate 保护。
 - 本 ADR 接受后:更新 ADR 索引 README;实现各增量时在提交信息引用本 ADR。
 
+## 实现结果(2026-05-31 完成)
+
+提取按以下提交分步落地(分支 `refactor/adr-0033-cleanup-core`,均一步一提交、每步全套测试 green):
+
+| 步 | 内容 | 拆分粒度 | 验证 |
+|----|------|----------|------|
+| 1a | `llm_common.py` → `llm/client.py` + 包 re-export | git mv | 测试 import 改 src,patch 路径改 client 模块 |
+| 1b | `cleanup_common.py` → `cleanup/common.py` | git mv | 5 脚本 + 测试改 import |
+| 2 | `segments_llm` → 9 模块子包 | **细拆** | 测试全量迁 src import,patch 指向 `pipeline` |
+| 3a | 为 `glossary_semantic`(原零测试)补 20 个 characterization 测试 | — | 纯函数 + score 不变量 + `enforce_strict_pairs` |
+| 3b | `glossary_semantic` → `pipeline.py` | git mv 整搬 | 3a 测试改 src import |
+| 4 | `glossary_llm` → 7 模块子包 | **细拆** | AST 逐字校验 0 differs |
+| 5 | `segments_cleaning` → `pipeline.py` | git mv 整搬 | AST 0 differs + 现有测试 |
+| 6 | `segments_glossary_cross` → `pipeline.py` | git mv 整搬 | AST 0 differs + 现有测试 |
+
+**两类拆分粒度**:两个 Batch-API LLM pipeline(`segments_llm`、`glossary_llm`)细拆为 models/prompts/response/validation/batch_state/io/review/pipeline 等模块;三个文件(`glossary_semantic`、`segments_cleaning`、`segments_glossary_cross`)采用 git mv 整体搬入单一 `pipeline.py` + 薄入口。
+
+**细拆延后(后续事项)**:`glossary_semantic` 与 `segments_cleaning` 含重 NLP 编排区(Stanza / embedding / jieba / kiwi 评分、`main` 编排),在不下载大模型的前提下无法测,故整搬以保证逐字行为保持;`segments_glossary_cross` 无重 NLP 且 `run_pipeline` 有测试,本可细拆,为收尾一致性亦整搬。这三者的细粒度模块拆分留待将来——前提是先为其重路径补测试覆盖,与本 ADR"边界在各增量里敲定"一致。
+
+**实际偏差与纠正**:step 4(`glossary_llm`)初次实现一度凭印象重写而非逐字搬移,引入 4 处静默行为偏差(产物文件名、audit `keep` 大小写、`max_tokens` cap、prompt payload 缺键),既有测试未捕获。此后引入 **AST 逐字校验**(对比 HEAD 与拆分后全部顶层符号的 `ast.dump`,要求 0 missing / 0 differing)作为细拆与整搬的统一 gate,并据此纠正 step 4、把关 step 5/6。
+
 ## 参考
 
 - 相关:[ADR-0005](ADR-0005-gradual-engineering-refactor-approach.md)(渐进式重构原则)、[ADR-0006](ADR-0006-preserve-public-compatibility-by-default.md)(公开兼容性)、[ADR-0026](ADR-0026-cloud-llm-segment-cleanup-may-rewrite-korean-with-local-guards.md) / [ADR-0030](ADR-0030-llm-cleanup-defaults-to-batch-api-with-strict-json-schema.md)(被保护的清理行为)、[ADR-0032](ADR-0032-retire-phase-1-refactor-scaffolding.md)(phase-1 关闭,持久性结构决策走 ADR 系统)
