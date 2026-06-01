@@ -217,6 +217,13 @@ venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\defa
 venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --input <generated-csv>
 ```
 
+**服务（serving）** —— 将已发布检查点作为同步 HTTP/JSON 服务对外提供翻译，契约见 [ADR-0034](docs/decisions/adr/ADR-0034-serving-contract-synchronous-http-api.md)。端点：`POST /translate`、`GET /health`、`GET /info`。
+
+```powershell
+venv\Scripts\python.exe scripts\serve.py --dry-run   # 仅校验配置，不加载模型
+venv\Scripts\python.exe scripts\serve.py             # 加载检查点，serve 127.0.0.1:8000
+```
+
 ## 更大的模型 (1.3B / 3.3B)
 
 NLLB-200 还提供更大的基座（`nllb-200-1.3B`、`nllb-200-3.3B`）。更大的 dense MT 模型通常质量更好（边际收益递减），但**并不保证**，而且我们**没有**在本项目微调后的 zh-CN → ko 任务上基准测试过 1.3B/3.3B —— 因此这里不给出预期质量提升的数字。但成本是可预测的：

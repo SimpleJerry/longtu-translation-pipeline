@@ -36,6 +36,10 @@ longtu-translation-pipeline 项目当前已发布的模型。
 | `no_repeat_ngram_size` | 0 |
 | `max_length` | 400 |
 
+## 服务（serving）
+
+本检查点通过同步 HTTP/JSON 服务对外提供推理，契约见 [ADR-0034](../decisions/adr/ADR-0034-serving-contract-synchronous-http-api.md)。服务端在源端内部应用 `<start>...<end>` 术语标记、输出默认 strip，并固定使用上节「推理默认参数」的解码配置（`num_beams=4` 等），因此线上输出与本卡片报告口径一致；`/info` 端点暴露所服务检查点与解码参数以供审计。配置见 `configs/serving/default.json`，入口 `scripts/serve.py`（`--dry-run` 仅校验配置、不加载模型）。请求/响应为在线 JSON（无 reference），与离线评估的 RF-007 CSV schema 有意区分。
+
 ## 保留测试集结果
 
 在保留测试集（6,626 行，seed 42）上的单次评估，

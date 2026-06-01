@@ -217,6 +217,13 @@ venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\defa
 venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --input <generated-csv>
 ```
 
+**Serving** — serve a published checkpoint as a synchronous HTTP/JSON service; see [ADR-0034](docs/decisions/adr/ADR-0034-serving-contract-synchronous-http-api.md) for the contract. Endpoints: `POST /translate`, `GET /health`, `GET /info`.
+
+```powershell
+venv\Scripts\python.exe scripts\serve.py --dry-run   # validate config only, no model load
+venv\Scripts\python.exe scripts\serve.py             # load checkpoint, serve 127.0.0.1:8000
+```
+
 ## Larger Models (1.3B / 3.3B)
 
 NLLB-200 also ships larger bases — `nllb-200-1.3B` and `nllb-200-3.3B`. Larger dense MT models generally improve quality with diminishing returns, but this is **not guaranteed**, and we have **not** benchmarked 1.3B/3.3B on this project's fine-tuned zh-CN → ko task — so no expected quality-gain figure is given here. Cost, however, is predictable:

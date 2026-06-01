@@ -217,6 +217,13 @@ venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\defa
 venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --input <generated-csv>
 ```
 
+**서빙(serving)** — 발행된 체크포인트를 동기 HTTP/JSON 서비스로 제공합니다. 계약은 [ADR-0034](docs/decisions/adr/ADR-0034-serving-contract-synchronous-http-api.md) 참고. 엔드포인트: `POST /translate`, `GET /health`, `GET /info`.
+
+```powershell
+venv\Scripts\python.exe scripts\serve.py --dry-run   # 설정만 검증, 모델 미로딩
+venv\Scripts\python.exe scripts\serve.py             # 체크포인트 로딩, 127.0.0.1:8000 serve
+```
+
 ## 더 큰 모델 (1.3B / 3.3B)
 
 NLLB-200에는 더 큰 베이스(`nllb-200-1.3B`, `nllb-200-3.3B`)도 있습니다. 더 큰 dense MT 모델은 일반적으로 품질이 좋아지지만(체감 수익은 점차 감소) **보장되지는 않으며**, 본 프로젝트의 파인튜닝된 zh-CN → ko 작업에서 1.3B/3.3B를 **벤치마크하지 않았으므로** 예상 품질 향상 수치는 제시하지 않습니다. 다만 비용은 예측 가능합니다.

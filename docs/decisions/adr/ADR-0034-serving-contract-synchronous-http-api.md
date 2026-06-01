@@ -148,6 +148,23 @@ translate(texts: list[str]) -> list[str]   # mark source → tokenize → genera
 2. 认证 / 访问控制是否需要(内部工具可能不需要)。
 3. `/translate` 是否需提供调用方可见的逐请求 `strip_markers` 开关(默认建议:仅 config 控制,不暴露)。
 
+## 实现进度（2026-06-02）
+
+按「后果」分阶段落地，均在 main 上逐阶段提交（用户授权免开分支）：
+
+| 阶段 | 内容 | 提交 | 验证 |
+|------|------|------|------|
+| 1 | pure-core 重构：抽出 reference-free `load_translator` / `_decode_batches` / `translate_texts`，`run_generation_batches` / `generate_records` 在其上重建（behavior-preserving） | `40728b8` | inference 21/21；全套 baseline 对比零回归 |
+| 2 | FastAPI serving 层：`serving.py`（`/translate`、`/health`、`/info`）、`ServingConfig` / `load_serving_config`、薄入口 `scripts/serve.py`（`--dry-run` 不加载模型）、`configs/serving/default.json`；并入原阶段 4 的契约测试 | `7dc5f7e` | 8 个契约测试（注入 mock translator，无需模型）全绿 |
+
+接受时已同步 scope.md / invariants.md（`2e02d22`）；model-card 的 serving 段与三语 README「基本流程」章节下的简要 serving 段同期补入（留作以后扩充）。依赖 `fastapi` / `uvicorn` 写入 `requirements.txt`、`httpx` 写入 `requirements-dev.txt`。
+
+实现细节与偏差：
+
+- `LoadedTranslator.config` 须为 InferenceConfig（serving 复用其 `.glossary` / `.generation` / `.output`）；`load_serving_config` 据此 synthesize 离线专用的 `input` / `dry_run` 段，serving JSON 本身保持精简。
+- 输入上限按 token 数拒绝（`tokenizer.encode` 长度 vs `max_length`），不静默截断（本 ADR sec 6 / sec 7）。
+- `/info` 的 corpus SHA256 与 seed 由 run_manifest（`data.segments_sha256` / `data.split_seed`）best-effort 读取，缺失则为 null。
+
 ## 参考
 
 - 驱动原则:CLAUDE.md「Mission」「ADR Rules」「Architecture Principles / Thin interfaces, pure core / Reproducibility first」
