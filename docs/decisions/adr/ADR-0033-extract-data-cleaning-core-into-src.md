@@ -81,10 +81,12 @@ ADR-0005 确立的增量提取(已提取 text_protection / training / inference 
 | 5 | `segments_cleaning` → `pipeline.py` | git mv 整搬 | AST 0 differs + 现有测试 |
 | 6 | `segments_glossary_cross` → `pipeline.py` | git mv 整搬 | AST 0 differs + 现有测试 |
 | 7 | `segments_glossary_cross` 整搬版 → models/io/matching/scoring/classify/review + pipeline | **细拆** | AST 50/50 0 differs(基准=step6 整搬版 `62100cd`)+ 现有 8 测试 |
+| 8a | 为 `segments_cleaning` 重路径补 16 个 characterization 测试 | — | mock stanza/jieba/kiwipiepy/embedding；不下载模型；249 tests pass |
+| 8b | `segments_cleaning` 整搬版 → io/normalize/nlp/scoring/classify + 薄 pipeline | **细拆** | AST 40/40 0 differs(基准=step5 整搬版)；patch 目标改为 `classify` 模块；249 tests pass |
 
-**两类拆分粒度**:三个 pipeline 已细拆为聚焦模块——两个 Batch-API LLM pipeline(`segments_llm`、`glossary_llm`)拆为 models/prompts/response/validation/batch_state/io/review/pipeline 等;`segments_glossary_cross` 拆为 models/io/matching/scoring/classify/review + pipeline(step 7)。另两个文件(`glossary_semantic`、`segments_cleaning`)目前为 git mv 整体搬入单一 `pipeline.py` + 薄入口。
+**两类拆分粒度**:四个 pipeline 已细拆为聚焦模块——两个 Batch-API LLM pipeline(`segments_llm`、`glossary_llm`)拆为 models/prompts/response/validation/batch_state/io/review/pipeline 等;`segments_glossary_cross` 拆为 models/io/matching/scoring/classify/review + pipeline(step 7);`segments_cleaning` 拆为 io/normalize/nlp/scoring/classify + 薄 pipeline(step 8b)。仅 `glossary_semantic` 尚为整搬单文件。
 
-**细拆延后(后续事项)**:`glossary_semantic` 与 `segments_cleaning` 含重 NLP 编排区(Stanza / embedding / jieba / kiwi 评分、`main` 编排),在不下载大模型的前提下无法端到端测,故暂以整搬保证逐字行为保持;它们的细粒度模块拆分留待将来——**前提是先为其重路径补测试覆盖**(可能需 mock NLP 后端或造 fixture),与本 ADR"边界在各增量里敲定"一致。`segments_glossary_cross` 因无重 NLP 且 `run_pipeline` 有端到端测试,已于 step 7 完成细拆。
+**细拆延后(后续事项)**:`glossary_semantic` 含重 NLP 编排区(Stanza / embedding / jieba / kiwi 评分、`classify_rows`/`write_outputs`/`main` 编排),留待下一增量——需先补 NLP 路径 characterization 测试,再细拆为 config/io/nlp/scoring/classify/review + 薄 pipeline。
 
 **实际偏差与纠正**:step 4(`glossary_llm`)初次实现一度凭印象重写而非逐字搬移,引入 4 处静默行为偏差(产物文件名、audit `keep` 大小写、`max_tokens` cap、prompt payload 缺键),既有测试未捕获。此后引入 **AST 逐字校验**(对比基准版本与拆分后全部顶层符号的 `ast.dump`,要求 0 missing / 0 differing / 0 重复冲突)作为细拆与整搬的统一 gate,并据此纠正 step 4、把关 step 5/6/7。
 
