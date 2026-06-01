@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from longtu_translation_pipeline.cleanup.segments_cleaning import pipeline as segments  # noqa: E402
+from longtu_translation_pipeline.cleanup.segments_cleaning import classify as sc_classify  # noqa: E402
 
 
 def make_patterns() -> dict[str, re.Pattern[str]]:
@@ -507,17 +508,17 @@ class ScoreSemanticCandidatesTest(unittest.TestCase):
     ) -> tuple:
         mock_kiwi_mod = MagicMock()
         mock_kiwi_mod.Kiwi = MagicMock(return_value=MagicMock())
-        with patch.object(segments, "load_stanza_pipelines",
+        with patch.object(sc_classify, "load_stanza_pipelines",
                           return_value=(MagicMock(), MagicMock())), \
-             patch.object(segments, "build_stanza_cache",
+             patch.object(sc_classify, "build_stanza_cache",
                           side_effect=[{}, {}]), \
-             patch.object(segments, "load_embedding_model",
+             patch.object(sc_classify, "load_embedding_model",
                           return_value=(MagicMock(), "test-model", "cpu")), \
-             patch.object(segments, "encode_semantic_scores",
+             patch.object(sc_classify, "encode_semantic_scores",
                           return_value=(gl_scores, seed_scores, "test_method")), \
-             patch.object(segments, "zh_noun_score",
+             patch.object(sc_classify, "zh_noun_score",
                           return_value=zh_noun_rv), \
-             patch.object(segments, "ko_noun_score",
+             patch.object(sc_classify, "ko_noun_score",
                           return_value=ko_noun_rv), \
              patch.dict(sys.modules, {"kiwipiepy": mock_kiwi_mod}):
             return segments.score_semantic_candidates(
