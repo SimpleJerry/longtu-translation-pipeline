@@ -15,6 +15,7 @@ from longtu_translation_pipeline.config import load_inference_config  # noqa: E4
 from longtu_translation_pipeline.inference import (  # noqa: E402
     GeneratedTranslationRow,
     InferenceGenerationResult,
+    LoadedTranslator,
     TestGenerationResult,
     build_inference_dry_run,
     default_test_output_path,
@@ -32,10 +33,12 @@ from longtu_translation_pipeline.inference import (  # noqa: E402
     resolve_manifest_path,
     require_manifest_string,
     run_generation_batches,
+    translate_texts,
     ValidationGenerationResult,
     write_generation_csv,
     write_validation_generation_manifest,
 )
+from longtu_translation_pipeline.text_protection import GlossaryTerm  # noqa: E402
 
 
 class InferencePipelineTest(unittest.TestCase):
@@ -533,6 +536,152 @@ class InferencePipelineTest(unittest.TestCase):
         self.assertAlmostEqual(kwargs["length_penalty"], 1.1)
         self.assertEqual(kwargs["no_repeat_ngram_size"], 3)
         self.assertEqual(kwargs["forced_bos_token_id"], 256098)
+
+    def test_translate_texts_marks_source_and_returns_candidates(self) -> None:
+        from unittest.mock import MagicMock
+
+        mock_tensor = MagicMock()
+        mock_tensor.to.return_value = mock_tensor
+        mock_tokenizer = MagicMock()
+        mock_tokenizer.return_value = {"input_ids": mock_tensor, "attention_mask": mock_tensor}
+        mock_tokenizer.batch_decode.return_value = ["보스 도전"]
+
+        mock_param = MagicMock()
+        mock_param.device = "cpu"
+        mock_model = MagicMock()
+        mock_model.parameters.return_value = iter([mock_param])
+        mock_model.generate.return_value = MagicMock()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_path = tmp_path / "s.csv"
+            output_path = tmp_path / "out.csv"
+            glossary_path = tmp_path / "g.csv"
+            config_path = tmp_path / "inference.json"
+            write_csv(input_path, ["segment_id", "zh-CN", "ko"], [])
+            write_csv(glossary_path, ["term_id", "zh-CN", "ko"], [])
+            write_inference_config(config_path, input_path, output_path, glossary_path, True)
+            config = load_inference_config(config_path)
+
+        translator = LoadedTranslator(
+            config=config,
+            tokenizer=mock_tokenizer,
+            model=mock_model,
+            forced_bos_token_id=256098,
+            device="cpu",
+            special_tokens_added=2,
+            tokenizer_vocab_size=10,
+            embedding_size_before=10,
+            embedding_size_after=10,
+            cuda_device_name="",
+            cuda_memory_summary="",
+        )
+
+        candidates = translate_texts(
+            translator,
+            ["挑战BOSS"],
+            terms=[GlossaryTerm(zh_cn="BOSS", ko="보스")],
+        )
+
+        self.assertEqual(candidates, ["보스 도전"])
+        # source-side markers applied before tokenization (ADR-0028)
+        marked_texts = mock_tokenizer.call_args.args[0]
+        self.assertEqual(marked_texts, ["挑战<start>BOSS<end>"])
+        # decoding params + forced bos come from config (ADR-0006 / model-card)
+        _, kwargs = mock_model.generate.call_args
+        self.assertEqual(kwargs["forced_bos_token_id"], 256098)
+        self.assertEqual(kwargs["num_beams"], config.generation.num_beams)
+
+    def test_translate_texts_without_markers_passes_raw_source(self) -> None:
+        from unittest.mock import MagicMock
+
+        mock_tensor = MagicMock()
+        mock_tensor.to.return_value = mock_tensor
+        mock_tokenizer = MagicMock()
+        mock_tokenizer.return_value = {"input_ids": mock_tensor, "attention_mask": mock_tensor}
+        mock_tokenizer.batch_decode.return_value = ["보스 도전"]
+
+        mock_param = MagicMock()
+        mock_param.device = "cpu"
+        mock_model = MagicMock()
+        mock_model.parameters.return_value = iter([mock_param])
+        mock_model.generate.return_value = MagicMock()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_path = tmp_path / "s.csv"
+            output_path = tmp_path / "out.csv"
+            glossary_path = tmp_path / "g.csv"
+            config_path = tmp_path / "inference.json"
+            write_csv(input_path, ["segment_id", "zh-CN", "ko"], [])
+            write_csv(glossary_path, ["term_id", "zh-CN", "ko"], [])
+            write_inference_config(config_path, input_path, output_path, glossary_path, False)
+            config = load_inference_config(config_path)
+
+        translator = LoadedTranslator(
+            config=config,
+            tokenizer=mock_tokenizer,
+            model=mock_model,
+            forced_bos_token_id=256098,
+            device="cpu",
+            special_tokens_added=2,
+            tokenizer_vocab_size=10,
+            embedding_size_before=10,
+            embedding_size_after=10,
+            cuda_device_name="",
+            cuda_memory_summary="",
+        )
+
+        candidates = translate_texts(
+            translator,
+            ["挑战BOSS"],
+            terms=[GlossaryTerm(zh_cn="BOSS", ko="보스")],
+        )
+
+        self.assertEqual(candidates, ["보스 도전"])
+        marked_texts = mock_tokenizer.call_args.args[0]
+        self.assertEqual(marked_texts, ["挑战BOSS"])  # markers disabled -> raw source
+
+    def test_run_generation_batches_pairs_records_with_candidates(self) -> None:
+        from unittest.mock import MagicMock
+
+        mock_tensor = MagicMock()
+        mock_tensor.to.return_value = mock_tensor
+        mock_tokenizer = MagicMock()
+        mock_tokenizer.return_value = {"input_ids": mock_tensor, "attention_mask": mock_tensor}
+        mock_tokenizer.batch_decode.return_value = ["보스 도전"]
+
+        mock_param = MagicMock()
+        mock_param.device = "cpu"
+        mock_model = MagicMock()
+        mock_model.parameters.return_value = iter([mock_param])
+        mock_model.generate.return_value = MagicMock()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_path = tmp_path / "s.csv"
+            output_path = tmp_path / "out.csv"
+            glossary_path = tmp_path / "g.csv"
+            config_path = tmp_path / "inference.json"
+            write_csv(input_path, ["segment_id", "zh-CN", "ko"], [])
+            write_csv(glossary_path, ["term_id", "zh-CN", "ko"], [])
+            write_inference_config(config_path, input_path, output_path, glossary_path, False)
+            config = load_inference_config(config_path)
+
+        records = [
+            PreparedInferenceRecord(
+                record=InferenceRecord(record_id="1", text="挑战BOSS", reference="보스 도전"),
+                generation_text="挑战BOSS",
+                source_terms_marked=0,
+            )
+        ]
+        rows = run_generation_batches(config, mock_tokenizer, mock_model, records, 256098)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].record_id, "1")
+        self.assertEqual(rows[0].source, "挑战BOSS")
+        self.assertEqual(rows[0].reference, "보스 도전")
+        self.assertEqual(rows[0].candidate, "보스 도전")
 
 
 def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:

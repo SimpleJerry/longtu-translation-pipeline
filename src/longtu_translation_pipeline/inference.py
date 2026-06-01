@@ -10,7 +10,12 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from .config import InferenceConfig
-from .text_protection import load_glossary_terms, mark_source_glossary_terms, strip_glossary_markers
+from .text_protection import (
+    GlossaryTerm,
+    load_glossary_terms,
+    mark_source_glossary_terms,
+    strip_glossary_markers,
+)
 from .training import (
     add_marker_special_tokens,
     cuda_device_name,
@@ -32,6 +37,29 @@ class PreparedInferenceRecord:
     record: InferenceRecord
     generation_text: str
     source_terms_marked: int
+
+
+@dataclass(frozen=True)
+class LoadedTranslator:
+    """A loaded tokenizer + model ready for reference-free generation.
+
+    Built once (at serving startup, or per offline run) by ``load_translator``
+    and reused for many ``translate_texts`` calls (ADR-0034 sec 5 / sec 9).
+    Carries the loading provenance the offline result and the serving
+    ``/info`` endpoint both report.
+    """
+
+    config: InferenceConfig
+    tokenizer: Any
+    model: Any
+    forced_bos_token_id: int
+    device: str
+    special_tokens_added: int
+    tokenizer_vocab_size: int
+    embedding_size_before: int
+    embedding_size_after: int
+    cuda_device_name: str
+    cuda_memory_summary: str
 
 
 @dataclass(frozen=True)
@@ -317,6 +345,60 @@ def generate_records(
     device: str = "auto",
     input_path: Path | None = None,
 ) -> InferenceGenerationResult:
+    translator = load_translator(config, model_path, device=device)
+
+    prepared_records = prepare_inference_records(config, records)
+    marked_source_rows, source_terms_marked = source_marker_stats(prepared_records)
+    rows = run_generation_batches(
+        config,
+        translator.tokenizer,
+        translator.model,
+        prepared_records,
+        translator.forced_bos_token_id,
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    write_generation_csv(output_path, rows)
+
+    return InferenceGenerationResult(
+        config_path=config.path,
+        input_path=input_path if input_path is not None else config.input.path,
+        output_path=output_path,
+        model_path=model_path,
+        tokenizer_name=config.model.tokenizer_name,
+        source_code=config.language.source_code,
+        target_code=config.language.target_code,
+        forced_bos_token_id=translator.forced_bos_token_id,
+        special_tokens_added=translator.special_tokens_added,
+        tokenizer_vocab_size=translator.tokenizer_vocab_size,
+        embedding_size_before=translator.embedding_size_before,
+        embedding_size_after=translator.embedding_size_after,
+        device=translator.device,
+        cuda_device_name=translator.cuda_device_name,
+        cuda_memory_summary=translator.cuda_memory_summary,
+        batch_size=config.generation.batch_size,
+        max_length=config.generation.max_length,
+        source_terminology_markers=config.glossary.source_terminology_markers,
+        marked_source_rows=marked_source_rows,
+        source_terms_marked=source_terms_marked,
+        strip_glossary_markers=config.output.strip_glossary_markers,
+        input_rows=len(records),
+        generated_rows=len(rows),
+        output_columns=["segment_id", "source", "references", "candidates"],
+        preview_rows=rows[: config.dry_run.preview_rows],
+    )
+
+
+def load_translator(
+    config: InferenceConfig,
+    model_path: str | Path,
+    device: str = "auto",
+) -> LoadedTranslator:
+    """Load tokenizer + model once for generation (ADR-0034 sec 5 / sec 9).
+
+    Shared by the offline CSV path (``generate_records``) and the online
+    serving layer, which calls this once at startup and reuses the result
+    per request.
+    """
     from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(config.model.tokenizer_name)
@@ -337,38 +419,42 @@ def generate_records(
         model = model.to("cuda")
     model.eval()
 
-    prepared_records = prepare_inference_records(config, records)
-    marked_source_rows, source_terms_marked = source_marker_stats(prepared_records)
-    rows = run_generation_batches(config, tokenizer, model, prepared_records, int(forced_bos_token_id))
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    write_generation_csv(output_path, rows)
-
-    return InferenceGenerationResult(
-        config_path=config.path,
-        input_path=input_path if input_path is not None else config.input.path,
-        output_path=output_path,
-        model_path=model_path,
-        tokenizer_name=config.model.tokenizer_name,
-        source_code=config.language.source_code,
-        target_code=config.language.target_code,
+    return LoadedTranslator(
+        config=config,
+        tokenizer=tokenizer,
+        model=model,
         forced_bos_token_id=int(forced_bos_token_id),
+        device=inference_device,
         special_tokens_added=special_tokens_added,
         tokenizer_vocab_size=len(tokenizer),
         embedding_size_before=embedding_size_before,
         embedding_size_after=embedding_size_after,
-        device=inference_device,
         cuda_device_name=cuda_device_name(inference_device),
         cuda_memory_summary=cuda_memory_summary(inference_device),
-        batch_size=config.generation.batch_size,
-        max_length=config.generation.max_length,
-        source_terminology_markers=config.glossary.source_terminology_markers,
-        marked_source_rows=marked_source_rows,
-        source_terms_marked=source_terms_marked,
-        strip_glossary_markers=config.output.strip_glossary_markers,
-        input_rows=len(records),
-        generated_rows=len(rows),
-        output_columns=["segment_id", "source", "references", "candidates"],
-        preview_rows=rows[: config.dry_run.preview_rows],
+    )
+
+
+def translate_texts(
+    translator: LoadedTranslator,
+    texts: Sequence[str],
+    terms: Sequence[GlossaryTerm] | None = None,
+) -> list[str]:
+    """Reference-free zh-CN -> ko translation for serving (ADR-0034 sec 9).
+
+    Applies source-side terminology markers when enabled and terms are
+    provided (ADR-0028), then returns marker-stripped candidate strings.
+    Unlike the offline CSV path, no reference translation is required.
+    """
+    if translator.config.glossary.source_terminology_markers and terms:
+        prepared = [mark_source_glossary_terms(text, terms)[0] for text in texts]
+    else:
+        prepared = list(texts)
+    return _decode_batches(
+        translator.config,
+        translator.tokenizer,
+        translator.model,
+        prepared,
+        translator.forced_bos_token_id,
     )
 
 
@@ -556,12 +642,42 @@ def run_generation_batches(
     records: Sequence[PreparedInferenceRecord],
     forced_bos_token_id: int,
 ) -> list[GeneratedTranslationRow]:
-    rows: list[GeneratedTranslationRow] = []
-    for start in range(0, len(records), config.generation.batch_size):
-        batch_records = records[start : start + config.generation.batch_size]
-        texts = [record.generation_text for record in batch_records]
+    candidates = _decode_batches(
+        config,
+        tokenizer,
+        model,
+        [record.generation_text for record in records],
+        forced_bos_token_id,
+    )
+    return [
+        GeneratedTranslationRow(
+            record_id=prepared_record.record.record_id,
+            source=prepared_record.record.text,
+            reference=prepared_record.record.reference,
+            candidate=candidate,
+        )
+        for prepared_record, candidate in zip(records, candidates)
+    ]
+
+
+def _decode_batches(
+    config: InferenceConfig,
+    tokenizer: object,
+    model: object,
+    texts: Sequence[str],
+    forced_bos_token_id: int,
+) -> list[str]:
+    """Tokenize -> generate -> strip markers for marker-applied source texts.
+
+    Shared decode core of the offline CSV path and online serving
+    (ADR-0034 sec 9). Inputs are already source-marker-applied; outputs are
+    marker-stripped when ``output.strip_glossary_markers`` is set.
+    """
+    candidates: list[str] = []
+    for start in range(0, len(texts), config.generation.batch_size):
+        batch = list(texts[start : start + config.generation.batch_size])
         encoded = tokenizer(
-            texts,
+            batch,
             return_tensors="pt",
             padding=True,
             truncation=True,
@@ -578,20 +694,12 @@ def run_generation_batches(
             no_repeat_ngram_size=config.generation.no_repeat_ngram_size,
         )
         decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
-        for prepared_record, candidate in zip(batch_records, decoded):
-            record = prepared_record.record
+        for candidate in decoded:
             clean_candidate = candidate.strip()
             if config.output.strip_glossary_markers:
                 clean_candidate = strip_glossary_markers(clean_candidate).strip()
-            rows.append(
-                GeneratedTranslationRow(
-                    record_id=record.record_id,
-                    source=record.text,
-                    reference=record.reference,
-                    candidate=clean_candidate,
-                )
-            )
-    return rows
+            candidates.append(clean_candidate)
+    return candidates
 
 
 def write_generation_csv(path: Path, rows: Sequence[GeneratedTranslationRow]) -> None:
