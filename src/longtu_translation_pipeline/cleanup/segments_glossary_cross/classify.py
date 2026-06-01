@@ -4,15 +4,114 @@ Extracted verbatim from the former ``scripts/segments_glossary_cross_cleaning_pi
 under ADR-0033. Decides which glossary terms are noise/strong/needs-review and
 which segment rows conflict, including the strict pre-training gate (ADR-0019).
 Delete-only: never rewrites Korean (ADR-0018).
+
+matching and scoring helpers are inlined here (ADR-0033 follow-up): both were
+single-caller satellite modules under 60 lines; merging them eliminates two files
+with no behavior change (AST-verified, 0 differs).
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
-from .matching import find_term_matches
 from .models import CrossLexicons, GlossaryTerm, SegmentRow, TermMatch
-from .scoring import score_domain, score_weak
+
+
+# ---------------------------------------------------------------------------
+# matching helpers (inlined from matching.py)
+# ---------------------------------------------------------------------------
+
+
+def find_term_matches(
+    source: str, target: str, terms: list[GlossaryTerm]
+) -> list[TermMatch]:
+    matches: list[TermMatch] = []
+    occupied: list[tuple[int, int]] = []
+    for term in terms:
+        start = source.find(term.zh)
+        while start >= 0:
+            end = start + len(term.zh)
+            if not overlaps_any(start, end, occupied):
+                occupied.append((start, end))
+                matches.append(
+                    TermMatch(
+                        term=term,
+                        start=start,
+                        end=end,
+                        preserved=contains_exact_or_no_space(target, term.ko),
+                    )
+                )
+            start = source.find(term.zh, start + 1)
+    return sorted(matches, key=lambda match: (match.start, match.end))
+
+
+def contains_exact_or_no_space(text: str, expected: str) -> bool:
+    if expected in text:
+        return True
+    normalized_text = normalize_no_space(text)
+    normalized_expected = normalize_no_space(expected)
+    return bool(normalized_expected and normalized_expected in normalized_text)
+
+
+def normalize_no_space(text: str) -> str:
+    return re.sub(r"\s+", "", text)
+
+
+def overlaps_any(start: int, end: int, spans: list[tuple[int, int]]) -> bool:
+    return any(not (end <= span_start or start >= span_end) for span_start, span_end in spans)
+
+
+# ---------------------------------------------------------------------------
+# scoring helpers (inlined from scoring.py)
+# ---------------------------------------------------------------------------
+
+
+def score_domain(
+    zh: str,
+    lexicons: CrossLexicons,
+    rules: dict[str, Any],
+) -> float:
+    scores = rules["scores"]
+    upper = zh.upper()
+    candidates = [0.0]
+    if zh in lexicons.game_term_seeds:
+        candidates.append(scores["game_seed"])
+    if any(anchor and anchor in zh for anchor in lexicons.game_anchors):
+        candidates.append(scores["domain_anchor"])
+    if any(acronym and acronym.upper() in upper for acronym in lexicons.acronym_whitelist):
+        candidates.append(scores["acronym"])
+    if any(suffix and zh.endswith(suffix) for suffix in lexicons.compound_suffixes):
+        candidates.append(scores["compound_suffix"])
+    if any(suffix and zh.endswith(suffix) for suffix in lexicons.noun_suffixes):
+        candidates.append(scores["noun_suffix"])
+    length = cjk_len(zh)
+    if length >= 6:
+        candidates.append(scores["length_six_plus"])
+    elif length >= 4:
+        candidates.append(scores["length_four_plus"])
+    return min(max(candidates), 1.0)
+
+
+def score_weak(
+    zh: str,
+    domain_score: float,
+    lexicons: CrossLexicons,
+    rules: dict[str, Any],
+) -> float:
+    scores = rules["scores"]
+    candidates = [0.0]
+    if zh in lexicons.nonterm_exact:
+        candidates.append(scores["weak_exact"])
+    if zh in lexicons.general_words_zh or zh in lexicons.common_nouns_zh:
+        candidates.append(scores["common_word"])
+    if cjk_len(zh) <= 2 and domain_score < rules["thresholds"]["strong_domain_score_min"]:
+        candidates.append(scores["short_weak"])
+    return min(max(candidates), 1.0)
+
+
+def cjk_len(text: str) -> int:
+    return sum(1 for char in text if "一" <= char <= "鿿")
 
 
 def classify_corpus(

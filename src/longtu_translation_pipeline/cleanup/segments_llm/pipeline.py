@@ -29,7 +29,7 @@ from longtu_translation_pipeline.llm import (
     wait_for_batch,
 )
 
-from .batch_state import _load_state, _now_iso, _save_state_atomic
+from .._batch_state import _load_state, _now_iso, _save_state_atomic
 from .features import build_features
 from .io import make_batches, read_glossary, read_segments, write_raw_batch, write_segments
 from .models import (

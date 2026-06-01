@@ -1,9 +1,8 @@
-"""Resumable Batch API state persistence (ADR-0030).
+"""Resumable Batch API state persistence shared by LLM cleanup pipelines (ADR-0030).
 
-Extracted verbatim from the former ``scripts/segments_llm_cleanup_pipeline.py``
-under ADR-0033. The batch path persists its phase to ``batch_state.json`` so a
-run can resume after interruption; writes are atomic (temp file + os.replace)
-so the state file is never left partial.
+Writes batch_state.json atomically (temp file + os.replace) so the state file
+is never left partial across an interrupted run. Extracted to remove duplication
+between segments_llm and glossary_llm (ADR-0033 follow-up).
 """
 
 from __future__ import annotations

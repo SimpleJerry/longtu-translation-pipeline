@@ -96,6 +96,12 @@ ADR-0005 确立的增量提取(已提取 text_protection / training / inference 
 
 **实际偏差与纠正**:step 4(`glossary_llm`)初次实现一度凭印象重写而非逐字搬移,引入 4 处静默行为偏差(产物文件名、audit `keep` 大小写、`max_tokens` cap、prompt payload 缺键),既有测试未捕获。此后引入 **AST 逐字校验**(对比基准版本与拆分后全部顶层符号的 `ast.dump`,要求 0 missing / 0 differing / 0 重复冲突)作为细拆与整搬的统一 gate,并据此纠正 step 4、把关 step 5/6/7。
 
+## 后续调整(Follow-up，ADR-0033 完成后)
+
+**step 7 卫星合并**:`segments_glossary_cross/matching.py`(52 行)与 `scoring.py`(59 行)是各自 <60 行且唯一调用者均为 `classify.py` 的卫星模块,并入 `classify.py`(≈360 行)。AST-dump 逐字等价校验 0 differs(全部 16 个顶层函数一字不改,仅新增 `import re`、两段 section 注释),264 tests pass。
+
+**batch_state 去重**:`segments_llm/batch_state.py` 与 `glossary_llm/batch_state.py` AST 完全等价(去 docstring 后 0 differs),抽取为 `cleanup/_batch_state.py` 共享。两个 `pipeline.py` 的 import 改为 `from .._batch_state import ...`。这是去重而非合并——并入各自 pipeline 会让重复固化。264 tests pass(含导入级冒烟验证)。
+
 ## 参考
 
 - 相关:[ADR-0005](ADR-0005-gradual-engineering-refactor-approach.md)(渐进式重构原则)、[ADR-0006](ADR-0006-preserve-public-compatibility-by-default.md)(公开兼容性)、[ADR-0026](ADR-0026-cloud-llm-segment-cleanup-may-rewrite-korean-with-local-guards.md) / [ADR-0030](ADR-0030-llm-cleanup-defaults-to-batch-api-with-strict-json-schema.md)(被保护的清理行为)、[ADR-0032](ADR-0032-retire-phase-1-refactor-scaffolding.md)(phase-1 关闭,持久性结构决策走 ADR 系统)
