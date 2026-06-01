@@ -15,5 +15,6 @@
 | **LLM 清理政策** | 云端词汇表清理仅允许删除；语段清理仅在通过所有本地验证后才可改写韩语目标端。 | [ADR-0025](../decisions/adr/ADR-0025-cloud-llm-glossary-cleanup-is-delete-only.md)、[ADR-0026](../decisions/adr/ADR-0026-cloud-llm-segment-cleanup-may-rewrite-korean-with-local-guards.md) |
 | **检查点选择** | 正式训练在复合指标上执行早停；已发布检查点通过在完整验证集上重新排序选出，而非使用训练器循环内的自动最优检查点。 | [ADR-0031](../decisions/adr/ADR-0031-formal-training-uses-early-stopping-on-composite-metric.md) |
 | **公开兼容性** | 除非 ADR 明确授权破坏性变更，否则保留已记录的命令、配置格式和 CSV 模式。 | [ADR-0006](../decisions/adr/ADR-0006-preserve-public-compatibility-by-default.md) |
+| **serving 契约** | 同步 HTTP/JSON 翻译服务：源端内部打 `<start>...<end>`、输出默认 strip、固定解码默认值（`num_beams=4` 等）、provenance（checkpoint / corpus SHA256 / seed）经 `/info` 暴露；独立于 RF-007 评估 schema。 | [ADR-0034](../decisions/adr/ADR-0034-serving-contract-synchronous-http-api.md) |
 
 如需变更某项不变量，请提交一个超越它的新 ADR；不得直接编辑本表以提前放宽契约。

@@ -44,3 +44,4 @@
 | [ADR-0031](ADR-0031-formal-training-uses-early-stopping-on-composite-metric.md) | 正式训练在复合指标上执行早停 | 已接受 | 2026-05-27 | `Seq2SeqTrainer` + `EarlyStoppingCallback`；复合指标 = 0.5·BLEU + 0.5·preservation_nospace。 |
 | [ADR-0032](ADR-0032-retire-phase-1-refactor-scaffolding.md) | 退役第一阶段重构 scaffolding | 已接受 | 2026-05-30 | 第一阶段重构完成；`docs/refactor/` 退役至 git 历史（标签：`phase-1-refactor-archive`）。废弃 ADR-0002。 |
 | [ADR-0033](ADR-0033-extract-data-cleaning-core-into-src.md) | 数据清理 core 提取至 src/ | 已接受 | 2026-05-31 | cleanup/ 与 llm/ 领域逻辑迁入 src/；scripts/ 退化为薄入口；纯行为保持搬迁。 |
+| [ADR-0034](ADR-0034-serving-contract-synchronous-http-api.md) | 服务契约：同步 HTTP/JSON 翻译接口 | 已接受 | 2026-06-02 | 同步 FastAPI/JSON 翻译服务；源端打 marker、输出 strip、固定解码默认值、provenance 暴露；独立于 RF-007 评估 schema。serving 纳入 scope。 |
