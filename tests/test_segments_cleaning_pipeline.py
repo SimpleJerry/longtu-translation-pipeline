@@ -7,9 +7,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "src"))
 
-import segments_cleaning_pipeline as segments  # noqa: E402
+from longtu_translation_pipeline.cleanup.segments_cleaning import pipeline as segments  # noqa: E402
 
 
 def make_patterns() -> dict[str, re.Pattern[str]]:
