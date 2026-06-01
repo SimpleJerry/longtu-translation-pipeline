@@ -3,9 +3,11 @@
 from .config import (
     EvaluationConfig,
     InferenceConfig,
+    ServingConfig,
     TrainingConfig,
     load_evaluation_config,
     load_inference_config,
+    load_serving_config,
     load_training_config,
 )
 from .evaluation import (
@@ -63,6 +65,7 @@ __all__ = [
     "GeneratedTranslationRow",
     "LoadedTranslator",
     "ProtectionResult",
+    "ServingConfig",
     "TrainingConfig",
     "TrainingDryRunPlan",
     "TrainingExample",
@@ -84,6 +87,7 @@ __all__ = [
     "translate_texts",
     "load_evaluation_config",
     "load_inference_config",
+    "load_serving_config",
     "load_glossary_terms",
     "load_training_config",
     "prepare_training_examples",

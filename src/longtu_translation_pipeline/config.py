@@ -152,6 +152,21 @@ class InferenceConfig:
 
 
 @dataclass(frozen=True)
+class ServingRuntimeConfig:
+    host: str
+    port: int
+    max_items_per_request: int
+    max_concurrency: int
+
+
+@dataclass(frozen=True)
+class ServingConfig:
+    path: Path
+    inference: InferenceConfig
+    runtime: ServingRuntimeConfig
+
+
+@dataclass(frozen=True)
 class EvaluationInputConfig:
     path: Path
     source_column: str
@@ -313,6 +328,71 @@ def load_inference_config(path: str | Path, base_dir: str | Path | None = None) 
             preview_rows=require_non_negative_int(dry_run_section, "preview_rows", config_path),
         ),
     )
+
+
+def load_serving_config(path: str | Path, base_dir: str | Path | None = None) -> ServingConfig:
+    """Load a serving config (ADR-0034).
+
+    Reuses the inference model / language / glossary / output / generation
+    contract so serving shares the exact decoding and marker behavior, and adds
+    a ``serving`` runtime block (host / port / limits). The offline-only
+    ``input`` and ``dry_run`` sections are synthesized with placeholders here:
+    serving never reads them, but the shared generation core is typed on
+    InferenceConfig (ADR-0034 sec 9).
+    """
+    config_path = Path(path)
+    path_base = Path(base_dir) if base_dir is not None else config_path.parent
+    data = read_json_object(config_path)
+
+    model_section = require_mapping(data, "model", config_path)
+    language_section = require_mapping(data, "language", config_path)
+    glossary_section = require_mapping(data, "glossary", config_path)
+    output_section = require_mapping(data, "output", config_path)
+    generation_section = require_mapping(data, "generation", config_path)
+    serving_section = require_mapping(data, "serving", config_path)
+
+    placeholder = Path("<serving-runtime>")
+    inference = InferenceConfig(
+        path=config_path,
+        input=InferenceInputConfig(
+            path=placeholder,
+            text_column="zh-CN",
+            reference_column="ko",
+            id_column="segment_id",
+        ),
+        language=load_language_config(language_section, config_path),
+        model=InferenceModelConfig(
+            path=resolve_config_path(require_str(model_section, "path", config_path), path_base),
+            tokenizer_name=require_str(model_section, "tokenizer_name", config_path),
+        ),
+        glossary=InferenceGlossaryConfig(
+            path=resolve_config_path(require_str(glossary_section, "path", config_path), path_base),
+            source_terminology_markers=require_bool(
+                glossary_section, "source_terminology_markers", config_path
+            ),
+        ),
+        output=InferenceOutputConfig(
+            path=placeholder,
+            strip_glossary_markers=require_bool(output_section, "strip_glossary_markers", config_path),
+        ),
+        generation=GenerationConfig(
+            batch_size=require_positive_int(generation_section, "batch_size", config_path),
+            max_length=require_positive_int(generation_section, "max_length", config_path),
+            num_beams=optional_positive_int(generation_section, "num_beams", config_path, default=1) or 1,
+            length_penalty=optional_non_negative_float(generation_section, "length_penalty", config_path, default=1.0),
+            no_repeat_ngram_size=optional_non_negative_int(generation_section, "no_repeat_ngram_size", config_path, default=0),
+        ),
+        dry_run=DryRunConfig(preview_rows=0),
+    )
+
+    runtime = ServingRuntimeConfig(
+        host=require_str(serving_section, "host", config_path),
+        port=require_positive_int(serving_section, "port", config_path),
+        max_items_per_request=require_positive_int(serving_section, "max_items_per_request", config_path),
+        max_concurrency=require_positive_int(serving_section, "max_concurrency", config_path),
+    )
+
+    return ServingConfig(path=config_path, inference=inference, runtime=runtime)
 
 
 def load_evaluation_config(path: str | Path, base_dir: str | Path | None = None) -> EvaluationConfig:
