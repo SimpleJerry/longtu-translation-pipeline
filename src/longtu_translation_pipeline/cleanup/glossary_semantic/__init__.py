@@ -1,11 +1,9 @@
 """Local semantic glossary cleanup core (ADR-0008, ADR-0018).
 
 Extracted from the former ``scripts/glossary_semantic_pipeline.py`` under
-ADR-0033 as a whole-module move (``git mv``): the entry script keeps only thin
-wiring and this package holds the logic. Unlike the segments_llm extraction,
-the fine-grained module split is intentionally deferred to a later increment
-that first adds test coverage for the untested heavy paths (``classify_rows``,
-``write_outputs``), so the move stays provably behavior-preserving.
+ADR-0033 (step 9b: fine-grained module split).  Domain logic is split into
+focused modules: config / io / nlp / scoring / classify / review; pipeline.py
+is the thin entry-point re-exporting the public surface.
 """
 
 from __future__ import annotations
