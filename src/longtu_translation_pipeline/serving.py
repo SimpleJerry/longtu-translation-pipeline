@@ -9,7 +9,9 @@ from the RF-007 evaluation CSV — serving has no reference at request time
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
+import logging
 import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Sequence
@@ -23,6 +25,8 @@ from .text_protection import GlossaryTerm
 
 if TYPE_CHECKING:  # pragma: no cover
     pass
+
+logger = logging.getLogger(__name__)
 
 
 class TranslateItem(BaseModel):
@@ -74,6 +78,7 @@ def create_app(
     max_length = serving_config.inference.generation.max_length
     info = build_model_info(serving_config, provenance)
     semaphore = threading.Semaphore(runtime.max_concurrency)
+    _translation_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
     app = FastAPI(title="longtu zh-CN -> ko translation", version="adr-0034")
 
@@ -101,7 +106,11 @@ def create_app(
             text = item.text.strip()
             if not text:
                 raise HTTPException(status_code=422, detail=f"items[{index}].text must not be empty")
-            if _too_long(translator, text, max_length):
+            try:
+                too_long = _too_long(translator, text, max_length)
+            except Exception:
+                raise HTTPException(status_code=422, detail=f"items[{index}].text cannot be tokenized")
+            if too_long:
                 raise HTTPException(
                     status_code=422,
                     detail=f"items[{index}].text exceeds max_length={max_length} tokens",
@@ -111,7 +120,18 @@ def create_app(
         if not semaphore.acquire(blocking=False):
             raise HTTPException(status_code=429, detail="server at max_concurrency, retry later")
         try:
-            translations = translate_texts(translator, texts, terms)
+            future = _translation_executor.submit(
+                translate_texts, translator, texts, terms,
+                max_time=runtime.request_timeout_s,
+            )
+            translations = future.result(timeout=runtime.request_timeout_s)
+        except concurrent.futures.TimeoutError:
+            raise HTTPException(status_code=504, detail="translation timed out")
+        except HTTPException:
+            raise
+        except Exception:
+            logger.exception("translation failed")
+            raise HTTPException(status_code=500, detail="internal translation error")
         finally:
             semaphore.release()
 
@@ -145,10 +165,7 @@ def build_runtime_app(serving_config: ServingConfig, device: str = "auto") -> Fa
 
 
 def _too_long(translator: LoadedTranslator, text: str, max_length: int) -> bool:
-    try:
-        token_ids = translator.tokenizer.encode(text)
-    except Exception:
-        return False
+    token_ids = translator.tokenizer.encode(text)
     return len(token_ids) > max_length
 
 

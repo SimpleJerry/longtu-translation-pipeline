@@ -438,12 +438,15 @@ def translate_texts(
     translator: LoadedTranslator,
     texts: Sequence[str],
     terms: Sequence[GlossaryTerm] | None = None,
+    max_time: float | None = None,
 ) -> list[str]:
     """Reference-free zh-CN -> ko translation for serving (ADR-0034 sec 9).
 
     Applies source-side terminology markers when enabled and terms are
     provided (ADR-0028), then returns marker-stripped candidate strings.
     Unlike the offline CSV path, no reference translation is required.
+    ``max_time`` is forwarded to ``model.generate`` as a soft deadline (serving
+    only; offline path leaves it None so behaviour is unchanged).
     """
     if translator.config.glossary.source_terminology_markers and terms:
         prepared = [mark_source_glossary_terms(text, terms)[0] for text in texts]
@@ -455,6 +458,7 @@ def translate_texts(
         translator.model,
         prepared,
         translator.forced_bos_token_id,
+        max_time=max_time,
     )
 
 
@@ -666,12 +670,15 @@ def _decode_batches(
     model: object,
     texts: Sequence[str],
     forced_bos_token_id: int,
+    max_time: float | None = None,
 ) -> list[str]:
     """Tokenize -> generate -> strip markers for marker-applied source texts.
 
     Shared decode core of the offline CSV path and online serving
     (ADR-0034 sec 9). Inputs are already source-marker-applied; outputs are
     marker-stripped when ``output.strip_glossary_markers`` is set.
+    ``max_time`` is passed to ``model.generate`` only when set (serving path);
+    the offline CSV path does not pass it, preserving existing behaviour.
     """
     candidates: list[str] = []
     for start in range(0, len(texts), config.generation.batch_size):
@@ -685,14 +692,16 @@ def _decode_batches(
         )
         model_device = next(model.parameters()).device
         encoded = {key: value.to(model_device) for key, value in encoded.items()}
-        generated = model.generate(
-            **encoded,
-            forced_bos_token_id=forced_bos_token_id,
-            max_length=config.generation.max_length,
-            num_beams=config.generation.num_beams,
-            length_penalty=config.generation.length_penalty,
-            no_repeat_ngram_size=config.generation.no_repeat_ngram_size,
-        )
+        generate_kwargs: dict = {
+            "forced_bos_token_id": forced_bos_token_id,
+            "max_length": config.generation.max_length,
+            "num_beams": config.generation.num_beams,
+            "length_penalty": config.generation.length_penalty,
+            "no_repeat_ngram_size": config.generation.no_repeat_ngram_size,
+        }
+        if max_time is not None:
+            generate_kwargs["max_time"] = max_time
+        generated = model.generate(**encoded, **generate_kwargs)
         decoded = tokenizer.batch_decode(generated, skip_special_tokens=True)
         for candidate in decoded:
             clean_candidate = candidate.strip()

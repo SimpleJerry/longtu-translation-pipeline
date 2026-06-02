@@ -157,6 +157,7 @@ class ServingRuntimeConfig:
     port: int
     max_items_per_request: int
     max_concurrency: int
+    request_timeout_s: float = 60.0
 
 
 @dataclass(frozen=True)
@@ -390,6 +391,7 @@ def load_serving_config(path: str | Path, base_dir: str | Path | None = None) ->
         port=require_positive_int(serving_section, "port", config_path),
         max_items_per_request=require_positive_int(serving_section, "max_items_per_request", config_path),
         max_concurrency=require_positive_int(serving_section, "max_concurrency", config_path),
+        request_timeout_s=optional_positive_float(serving_section, "request_timeout_s", config_path, default=60.0) or 60.0,
     )
 
     return ServingConfig(path=config_path, inference=inference, runtime=runtime)
