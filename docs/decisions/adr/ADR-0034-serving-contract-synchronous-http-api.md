@@ -156,6 +156,7 @@ translate(texts: list[str]) -> list[str]   # mark source → tokenize → genera
 |------|------|------|------|
 | 1 | pure-core 重构：抽出 reference-free `load_translator` / `_decode_batches` / `translate_texts`，`run_generation_batches` / `generate_records` 在其上重建（behavior-preserving） | `40728b8` | inference 21/21；全套 baseline 对比零回归 |
 | 2 | FastAPI serving 层：`serving.py`（`/translate`、`/health`、`/info`）、`ServingConfig` / `load_serving_config`、薄入口 `scripts/serve.py`（`--dry-run` 不加载模型）、`configs/serving/default.json`；并入原阶段 4 的契约测试 | `7dc5f7e` | 8 个契约测试（注入 mock translator，无需模型）全绿 |
+| 3 | §6/§7 契约缝隙修复（fix/serving-b2）：A1 安全 500 错误体、A2 请求 timeout/504、A3 `_too_long` 不吞异常 | fix/serving-b2 | 13 个 serving 契约测试 + 21 个 inference 离线路径测试全绿；dry-run 通过 |
 
 接受时已同步 scope.md / invariants.md（`2e02d22`）；model-card 的 serving 段与三语 README「基本流程」章节下的简要 serving 段同期补入（留作以后扩充）。依赖 `fastapi` / `uvicorn` 写入 `requirements.txt`、`httpx` 写入 `requirements-dev.txt`。
 
@@ -164,6 +165,14 @@ translate(texts: list[str]) -> list[str]   # mark source → tokenize → genera
 - `LoadedTranslator.config` 须为 InferenceConfig（serving 复用其 `.glossary` / `.generation` / `.output`）；`load_serving_config` 据此 synthesize 离线专用的 `input` / `dry_run` 段，serving JSON 本身保持精简。
 - 输入上限按 token 数拒绝（`tokenizer.encode` 长度 vs `max_length`），不静默截断（本 ADR sec 6 / sec 7）。
 - `/info` 的 corpus SHA256 与 seed 由 run_manifest（`data.segments_sha256` / `data.split_seed`）best-effort 读取，缺失则为 null。
+
+**B2 gap 修复（阶段 3）细节：**
+
+| 项目 | 问题 | 修复方案 |
+|------|------|------|
+| B2-1：500 安全错误体 | `translate_texts` 抛异常走 FastAPI 默认 500，可能暴露堆栈 | `serving.py` 加 `logging`，用 `except Exception: logger.exception(...); raise HTTPException(500, "internal translation error")`；客户端只拿到安全文案 |
+| B2-2：请求 timeout（§6） | 无请求级超时，仅 `max_concurrency=1` 的 429 | 采用**严格 504 语义**：`concurrent.futures.ThreadPoolExecutor` + `future.result(timeout=request_timeout_s)`，超时返回 `504 translation timed out`；同时向 `model.generate` 传 `max_time=request_timeout_s`（让孤儿线程自终止）。`request_timeout_s` 经 `ServingRuntimeConfig` 字段 + `load_serving_config` optional 解析（缺省 60s），存入两个 serving JSON。 |
+| B2-3：`_too_long` 吞异常 | `except Exception: return False` 把编码失败放行下游 | `_too_long` 直接 `raise`；调用处 `except Exception → HTTPException(422, "cannot be tokenized")`，编码失败=拒绝（422）不放行 |
 
 ## 参考
 
