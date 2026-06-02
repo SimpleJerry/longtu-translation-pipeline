@@ -1,6 +1,6 @@
 {
   "model": {
-    "path": "fine-tuned-models/nllb-200-distilled-600M/zh2ko",
+    "path": "fine-tuned-models/nllb-200-distilled-600M/zh2ko/runs/earlystop-v1/checkpoint-48000",
     "tokenizer_name": "facebook/nllb-200-distilled-600M"
   },
   "language": {
