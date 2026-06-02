@@ -16,5 +16,6 @@
 | **检查点选择** | 正式训练在复合指标上执行早停；已发布检查点通过在完整验证集上重新排序选出，而非使用训练器循环内的自动最优检查点。 | [ADR-0031](../decisions/adr/ADR-0031-formal-training-uses-early-stopping-on-composite-metric.md) |
 | **公开兼容性** | 除非 ADR 明确授权破坏性变更，否则保留已记录的命令、配置格式和 CSV 模式。 | [ADR-0006](../decisions/adr/ADR-0006-preserve-public-compatibility-by-default.md) |
 | **serving 契约** | 同步 HTTP/JSON 翻译服务：源端内部打 `<start>...<end>`、输出默认 strip、固定解码默认值（`num_beams=4` 等）、provenance（checkpoint / corpus SHA256 / seed）经 `/info` 暴露；独立于 RF-007 评估 schema。 | [ADR-0034](../decisions/adr/ADR-0034-serving-contract-synchronous-http-api.md) |
+| **部署契约** | Docker 镜像以 `python:3.12-slim` 为基础（torch cu132 wheel 自带 CUDA runtime，不依赖 NVIDIA 基础镜像）；模型权重**绝不烘焙进镜像**，通过只读卷挂载（`-v <publish-dir>:/models:ro`）；provenance 挂载协议：`run_manifest.json` 位于 `/models/run_manifest.json`（即 `model_path.parent`）；Jenkins pipeline 五阶段（Checkout / Test / Build / Deploy / HealthCheck），HealthCheck 失败自动回滚。 | [ADR-0035](../decisions/adr/ADR-0035-docker-jenkins-deployment-contract.md) |
 
 如需变更某项不变量，请提交一个超越它的新 ADR；不得直接编辑本表以提前放宽契约。

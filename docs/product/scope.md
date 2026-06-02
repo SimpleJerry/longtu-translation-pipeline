@@ -37,11 +37,11 @@
 - 在保留测试集上进行 BLEU + chrF + 词汇表保留率评估。
 - 用于将新中文文本翻译为韩文的批量推理 CLI。
 - 同步 HTTP/JSON 翻译服务（zh-CN → ko 单向），契约见 [ADR-0034](../decisions/adr/ADR-0034-serving-contract-synchronous-http-api.md)。
+- Docker 容器化 + Jenkins CI/CD 部署自动化（含模型只读卷挂载协议与健康检查），见 [ADR-0035](../decisions/adr/ADR-0035-docker-jenkins-deployment-contract.md)。
 
 **不在范围内（当前主线）：**
 - T&N+R（`<middle>`）和 `<code_id=N>` 代码/标签保护——仅保留为历史实验记录。
 - 韩文 → 中文反向翻译。
-- 自动化部署 / CI-CD 上线流水线（翻译服务本身已纳入范围，见 [ADR-0034](../decisions/adr/ADR-0034-serving-contract-synchronous-http-api.md)；此处仅指部署自动化）。
 - zh-CN 与 ko 以外的其他语言。
 
 ## 参考
