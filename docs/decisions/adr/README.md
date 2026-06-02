@@ -46,3 +46,4 @@
 | [ADR-0033](ADR-0033-extract-data-cleaning-core-into-src.md) | 数据清理 core 提取至 src/ | 已接受 | 2026-05-31 | cleanup/ 与 llm/ 领域逻辑迁入 src/；scripts/ 退化为薄入口；纯行为保持搬迁。 |
 | [ADR-0034](ADR-0034-serving-contract-synchronous-http-api.md) | 服务契约：同步 HTTP/JSON 翻译接口 | 已接受 | 2026-06-02 | 同步 FastAPI/JSON 翻译服务；源端打 marker、输出 strip、固定解码默认值、provenance 暴露；独立于 RF-007 评估 schema。serving 纳入 scope。 |
 | [ADR-0035](ADR-0035-docker-jenkins-deployment-contract.md) | 部署契约：Docker 镜像 + Jenkins 流水线 + 模型挂载协议 | 已接受 | 2026-06-02 | python:3.12-slim 基础镜像（torch cu132 wheel 自带 CUDA runtime）；模型只读卷挂载；Jenkins 五阶段 pipeline；部署自动化纳入 scope。 |
+| [ADR-0036](ADR-0036-model-distribution-via-private-hf-hub.md) | 模型分发契约：私有 Hugging Face Hub | 已接受 | 2026-06-02 | 微调权重通过私有 HF repo（SimpleJerry/longtu-nllb-zh2ko）分发；仅推理必需文件 + run_manifest；git-style tag 版本化；HF_TOKEN 环境注入；收口 ADR-0034 Open Q2 与 ADR-0035 Open Q2。 |
