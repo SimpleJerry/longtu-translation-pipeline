@@ -22,17 +22,24 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
+      - name: Install CPU-only PyTorch
+        # GitHub runners have no GPU. The default torch wheel on Linux now pulls
+        # the full CUDA stack (cuda-toolkit, cudnn, nccl, ...); loading those
+        # native libraries on a GPU-less runner segfaults during `import torch`,
+        # which crashes the pytest-xdist worker and then hangs the whole run.
+        # The CPU build removes the CUDA libraries entirely. The PyTorch CPU
+        # index also serves torch's transitive deps, so it is self-contained.
+        run: pip install torch==2.12.0 --index-url https://download.pytorch.org/whl/cpu
+
       - name: Install dependencies
         # requirements-training.txt is excluded: it pins CUDA wheels unavailable on CI.
+        # torch is already satisfied by the CPU build above, so this step keeps it
+        # and does not pull the CUDA wheels.
         run: pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Run tests
         env:
-          # Force accelerate into single-process CPU mode.
-          # Without this, accelerate calls torch.distributed.init_process_group
-          # which waits indefinitely for a rendezvous that never arrives on CI.
-          ACCELERATE_USE_CPU: "1"
-          # Standard HuggingFace CI guards
+          # Standard HuggingFace CI guards.
           OMP_NUM_THREADS: "1"
           TOKENIZERS_PARALLELISM: "false"
         run: pytest --timeout=120
