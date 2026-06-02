@@ -64,7 +64,7 @@ translation model that **serves inference**」——可部署意味着服务必�
 - `transformers` / `tokenizers` / `safetensors` / `sentencepiece` / `huggingface-hub`
 - `accelerate`（模型加载路径）
 - `fastapi` / `uvicorn`（HTTP serving，ADR-0034）
-- `numpy` / `pandas`（inference core + glossary CSV 读取）
+- `numpy`；glossary 用标准库 csv 读取，无需 pandas
 
 不包含：`scikit-learn`、`sentence-transformers`、`stanza`、`jieba`、`kiwipiepy`、
 `wordfreq`（数据清洗依赖，与推理无关），以及 `requirements-training.txt` 中的训练专用包。
@@ -123,13 +123,20 @@ docker run -d \
 | 阶段 | 内容 |
 |------|------|
 | **Checkout** | `checkout scm` |
-| **Test** | CPU-only torch（与 `ci.yml` 相同）+ `requirements.txt` + `requirements-dev.txt`；`pytest --timeout=120`（`OMP_NUM_THREADS=1` / `TOKENIZERS_PARALLELISM=false`） |
+| **Test** | **per-stage docker agent**（`python:3.12-slim`，`reuseNode true`），隔离 pip 安装；CPU-only torch（与 `ci.yml` 相同）+ `requirements.txt` + `requirements-dev.txt`；`pytest --timeout=120`（`OMP_NUM_THREADS=1` / `TOKENIZERS_PARALLELISM=false`） |
 | **Build** | `docker build -t <image>:<BUILD_NUMBER> .` |
-| **Deploy** | 优雅停止旧容器 → `docker run --gpus all -v /models:ro -p 8000:8000 --restart unless-stopped` |
-| **HealthCheck** | 轮询 GET `/health` 最多 24×5 s = 120 s；通过后 POST `/translate` 单条含术语冒烟；失败则停新容器（回滚） |
+| **Deploy** | **不停旧容器**；以 `${CONTAINER}-new` + 端口 8001 启动新容器（旧容器保持在 8000 继续服务） |
+| **HealthCheck** | 轮询 GET `localhost:8001/health` 最多 24×5 s = 120 s；通过后 POST `localhost:8001/translate` 单条含术语冒烟；**成功**：stop+rm 旧容器，stop+rm `-new`，以正式名 + 端口 8000 重启同镜像（原子切换）；**失败**：`docker rm -f ${CONTAINER}-new`，旧容器原样继续服务，pipeline 标 FAILED |
 
-Test 阶段使用 CPU-only torch 是因为 Jenkins runner 可能不需要 GPU（与 CI 保持一致），且
-训练全量测试套件不需要 GPU。
+**回滚策略选择：单机蓝绿（validate-then-switch）**，而非 last-good tag 方案。
+理由：旧容器在整个健康检查期间保持运行，零流量中断；失败时真正回到已知可用状态（旧容器从未停止），
+而不是依赖 `:last-good` 镜像重新冷启动（~30 s 再次下线）。代价是短暂占用两个端口（8000/8001），
+单机部署可接受。切换时存在秒级停机窗口（stop 旧 + 启新），与无负载均衡的单机架构匹配。
+
+Test 阶段使用 per-stage docker agent 而非顶层 agent 上的 `pip install`，防止污染 Jenkins node
+全局环境（与并行 build 竞争 / 残留包干扰下次构建）。`reuseNode true` 保证容器挂载同一 workspace，
+Checkout 阶段拉取的代码对 Test 阶段可见。CPU-only torch 是因为 Jenkins runner 不需要 GPU，
+与 `ci.yml` 保持一致。
 
 ### 7. 不变量
 

@@ -14,4 +14,3 @@ accelerate==1.13.0
 fastapi==0.136.3
 uvicorn==0.48.0
 numpy==2.4.4
-pandas==3.0.3
