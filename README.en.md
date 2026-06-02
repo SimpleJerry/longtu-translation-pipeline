@@ -224,6 +224,22 @@ venv\Scripts\python.exe scripts\serve.py --dry-run   # validate config only, no 
 venv\Scripts\python.exe scripts\serve.py             # load checkpoint, serve 127.0.0.1:8000
 ```
 
+**Docker deployment** — containerize the service and deploy automatically via Jenkins CI/CD; see [ADR-0035](docs/decisions/adr/ADR-0035-docker-jenkins-deployment-contract.md) for the deployment contract. Model weights are mounted as a read-only volume and never baked into the image. Requires Docker Desktop + WSL2 + NVIDIA CUDA on WSL on the host.
+
+```bash
+# Build the image
+docker build -t longtu-translation-service:latest .
+
+# Run with GPU passthrough and model volume
+docker run -d \
+    --name longtu-translation \
+    --gpus all \
+    -v /opt/longtu/models:/models:ro \
+    -p 8000:8000 \
+    --restart unless-stopped \
+    longtu-translation-service:latest
+```
+
 ## Larger Models (1.3B / 3.3B)
 
 NLLB-200 also ships larger bases — `nllb-200-1.3B` and `nllb-200-3.3B`. Larger dense MT models generally improve quality with diminishing returns, but this is **not guaranteed**, and we have **not** benchmarked 1.3B/3.3B on this project's fine-tuned zh-CN → ko task — so no expected quality-gain figure is given here. Cost, however, is predictable:

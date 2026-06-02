@@ -1,0 +1,17 @@
+# Serving runtime dependencies (ADR-0035).
+# Decoupled from requirements-training.txt (training/cleaning stack not needed at inference time).
+#
+# torch cu132 wheel bundles the CUDA 13.2 runtime; no CUDA base image is required.
+# In Docker, torch is installed in a separate RUN layer for build caching (see Dockerfile).
+# Manual install: pip install torch==2.12.0+cu132 --extra-index-url https://download.pytorch.org/whl/cu132
+torch==2.12.0+cu132
+transformers==5.9.0
+tokenizers==0.22.2
+huggingface-hub==1.15.0
+safetensors==0.7.0
+sentencepiece==0.2.1
+accelerate==1.13.0
+fastapi==0.136.3
+uvicorn==0.48.0
+numpy==2.4.4
+pandas==3.0.3

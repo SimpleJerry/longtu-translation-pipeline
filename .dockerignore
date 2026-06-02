@@ -1,0 +1,63 @@
+# Model weights — never bake into image; mount as read-only volume at runtime (ADR-0035)
+fine-tuned-models/
+pretrained-models/
+
+# Python virtualenvs and caches
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Generated / local data artifacts (not needed in runtime image)
+data/review/
+data/output/
+runs/
+wandb/
+outputs/
+
+# Tests (not needed in the runtime image)
+tests/
+
+# Editor and IDE state
+.idea/
+.vscode/
+*.iml
+.claude/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Jupyter
+*.ipynb
+.ipynb_checkpoints/
+
+# Raw spreadsheet inputs
+*.xlsx
+*.xls
+*.xlsm
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Python packaging / build outputs
+build/
+dist/
+*.egg-info/
+
+# CI artifacts
+.github/

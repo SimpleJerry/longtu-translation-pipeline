@@ -224,6 +224,22 @@ venv\Scripts\python.exe scripts\serve.py --dry-run   # 설정만 검증, 모델 
 venv\Scripts\python.exe scripts\serve.py             # 체크포인트 로딩, 127.0.0.1:8000 serve
 ```
 
+**Docker 배포** — 서비스를 컨테이너화하고 Jenkins CI/CD로 자동 배포합니다. 계약은 [ADR-0035](docs/decisions/adr/ADR-0035-docker-jenkins-deployment-contract.md) 참고. 모델 가중치는 읽기 전용 볼륨으로 마운트되며, 이미지에 포함되지 않습니다. Docker Desktop + WSL2 + NVIDIA CUDA on WSL이 필요합니다.
+
+```bash
+# 이미지 빌드
+docker build -t longtu-translation-service:latest .
+
+# GPU 패스스루 + 모델 볼륨 마운트 실행
+docker run -d \
+    --name longtu-translation \
+    --gpus all \
+    -v /opt/longtu/models:/models:ro \
+    -p 8000:8000 \
+    --restart unless-stopped \
+    longtu-translation-service:latest
+```
+
 ## 더 큰 모델 (1.3B / 3.3B)
 
 NLLB-200에는 더 큰 베이스(`nllb-200-1.3B`, `nllb-200-3.3B`)도 있습니다. 더 큰 dense MT 모델은 일반적으로 품질이 좋아지지만(체감 수익은 점차 감소) **보장되지는 않으며**, 본 프로젝트의 파인튜닝된 zh-CN → ko 작업에서 1.3B/3.3B를 **벤치마크하지 않았으므로** 예상 품질 향상 수치는 제시하지 않습니다. 다만 비용은 예측 가능합니다.
