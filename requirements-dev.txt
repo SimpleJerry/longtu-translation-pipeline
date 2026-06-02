@@ -1,3 +1,4 @@
 # Test runner — install after requirements.txt: pip install -r requirements.txt -r requirements-dev.txt
 pytest>=8.0
+pytest-xdist>=3.0  # per-file process isolation; prevents GC/import crash on Windows with heavy native libs
 httpx>=0.28  # FastAPI TestClient (serving contract tests, ADR-0034)
