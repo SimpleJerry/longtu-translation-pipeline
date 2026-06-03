@@ -37,6 +37,12 @@ jobs:
         # and does not pull the CUDA wheels.
         run: pip install -r requirements.txt -r requirements-dev.txt
 
+      - name: Install package (editable, no-deps)
+        # --no-deps: do not re-resolve dependencies; preserves the CPU torch wheel
+        # installed above.  This registers the src/ package so scripts and tests
+        # can import longtu_translation_pipeline without sys.path injection (ADR-0039).
+        run: pip install -e . --no-deps
+
       - name: Run tests
         env:
           # Standard HuggingFace CI guards.

@@ -1,16 +1,14 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
 
-from longtu_translation_pipeline.config import (  # noqa: E402
+from longtu_translation_pipeline.config import (
     load_inference_config,
     load_serving_config,
     load_training_config,

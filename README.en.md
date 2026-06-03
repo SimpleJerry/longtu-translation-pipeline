@@ -147,6 +147,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt           # data cleaning and evaluation
 pip install -r requirements-training.txt  # add for training/inference (includes CUDA 13.2 PyTorch)
+pip install -e .                          # install project package (scripts/tests need no sys.path)
 ```
 
 Stanza language models, Hugging Face caches, fine-tuned outputs, and raw data are all excluded by `.gitignore`.

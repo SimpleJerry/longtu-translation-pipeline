@@ -23,8 +23,14 @@ COPY src/            /app/src/
 COPY scripts/        /app/scripts/
 COPY configs/        /app/configs/
 COPY data/glossary.csv /app/data/glossary.csv
+COPY pyproject.toml  /app/pyproject.toml
 
 WORKDIR /app
+
+# Install the project package so scripts can import it without sys.path injection (ADR-0039).
+# --no-deps: runtime deps are already installed via requirements-serving.txt above;
+# this only registers the src/ package in the Python environment.
+RUN pip install --no-cache-dir --no-deps .
 
 # Run as non-root user (uid 1000).
 # Pre-create the HF Hub cache directory with correct ownership so that a named

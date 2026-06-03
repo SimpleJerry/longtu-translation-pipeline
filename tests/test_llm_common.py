@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 import json
-import sys
 import tempfile
 import unittest
 import urllib.error
@@ -10,10 +9,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-
-from longtu_translation_pipeline.llm import client as llm_common  # noqa: E402
+from longtu_translation_pipeline.llm import client as llm_common
 
 
 CFG = llm_common.ClientConfig(api_key="test-key", base_url="https://api.test/v1", model="gpt-test")

@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=70"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "longtu-translation-pipeline"
+version = "0.1.0"
+requires-python = ">=3.12"
+# Runtime dependencies are NOT declared here.
+# Install them separately via requirements*.txt to preserve the cu132 torch wheel
+# already pinned there.  Editable installs always use --no-deps (ADR-0039).
+
+[tool.setuptools.packages.find]
+where = ["src"]

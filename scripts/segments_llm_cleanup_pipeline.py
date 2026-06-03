@@ -13,16 +13,12 @@ lives in ``longtu_translation_pipeline.cleanup.segments_llm``.
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-
-from longtu_translation_pipeline.cleanup.segments_llm.models import (  # noqa: E402
+from longtu_translation_pipeline.cleanup.segments_llm.models import (
     CleanupResult,
 )
-from longtu_translation_pipeline.cleanup.segments_llm.pipeline import (  # noqa: E402
+from longtu_translation_pipeline.cleanup.segments_llm.pipeline import (
     run_cleanup,
 )
 

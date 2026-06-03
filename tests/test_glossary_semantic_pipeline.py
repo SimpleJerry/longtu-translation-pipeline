@@ -21,11 +21,9 @@ from collections import OrderedDict
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from longtu_translation_pipeline.cleanup.glossary_semantic import pipeline as gsp
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-
-from longtu_translation_pipeline.cleanup.glossary_semantic import pipeline as gsp  # noqa: E402
 
 
 def setUpModule() -> None:
