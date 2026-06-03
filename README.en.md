@@ -6,9 +6,11 @@
 
 🔗 **[Live Demo — Hugging Face Space](https://huggingface.co/spaces/SimpleJerry/longtu-nllb-zh2ko-demo)**
 
-This repository reproduces the game localization translation pipeline developed by the author during his tenure as a Systems Engineer at LONGTU KOREA Inc. (㈜룽투코리아; since renamed to STACO LINK Co., Ltd. / ㈜스타코링크). The company faced translation outsourcing costs of tens of millions of KRW per year for their Korean-market games; the goal was to fine-tune an NLLB model on the company's proprietary game corpus and automate a significant share of that workload with lightweight human proofreading. The original form was a collection of Jupyter Notebook files, gradually reconstructed using Claude Code and Codex into the reproducible pipeline you see today.
+This repository is the author's reproduction of a game-localization translation pipeline built during his tenure as a Systems Engineer at LONGTU KOREA Inc. (㈜룽투코리아; since renamed to STACO LINK Co., Ltd. / ㈜스타코링크). It began as a collection of Jupyter notebooks, most of them intermediate files produced during experiments, and was gradually reconstructed with Claude Code and Codex into the reproducible pipeline presented here.
 
-A zh-CN → ko translation pipeline built by fine-tuning `facebook/nllb-200-distilled-600M` on a proprietary game localization corpus — data cleaning → training → evaluation → FastAPI serving → Docker → public HF Hub → pip package → online Gradio demo, connected end-to-end.
+The project's background is as follows. LONGTU KOREA ran its games in the Korean market and had to localize large volumes of Chinese text into Korean, incurring translation-outsourcing costs of tens of millions of KRW per year. The goal was to fine-tune an NLLB model on the company's own game corpus, supplemented by lightweight human proofreading, to automate the workflow and reduce that cost.
+
+Today it is a zh-CN → ko translation pipeline that fine-tunes `facebook/nllb-200-distilled-600M` on a game-localization corpus, with the entire chain connected end to end: data cleaning → training → evaluation → FastAPI serving → Docker → public HF Hub → pip package → online Gradio demo.
 
 ## Results
 
