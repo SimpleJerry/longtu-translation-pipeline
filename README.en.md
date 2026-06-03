@@ -2,6 +2,8 @@
 
 [한국어](README.md) | [English](README.en.md) | [中文](README.zh-CN.md)
 
+🔗 **[Live Demo — Hugging Face Space](https://huggingface.co/spaces/SimpleJerry/longtu-nllb-zh2ko-demo)**
+
 This repository reproduces the game localization translation pipeline developed by the author during his tenure as a Systems Engineer at LONGTU KOREA Inc. (㈜룽투코리아; since renamed to STACO LINK Co., Ltd. / ㈜스타코링크). The original form was a collection of Jupyter Notebook files — mostly intermediate experiment artifacts. These were gradually reconstructed using Claude Code and Codex into the reproducible pipeline you see today.
 
 The background: LONGTU KOREA Inc. (now STACO LINK Co., Ltd.) operated games in the Korean market and faced a continuous demand to localize large volumes of Chinese-language game text into Korean. Translation outsourcing costs ran into tens of millions of KRW per year. The goal of this project was to fine-tune an NLLB model on the company's proprietary game corpus and supplement the output with lightweight human proofreading, thereby automating a significant portion of the localization workflow.
