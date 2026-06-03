@@ -185,6 +185,53 @@ provenance 挂载协议：`run_manifest.json` 位于 `/models/run_manifest.json`
    加密层属部署基础设施范畴，不阻塞本 ADR。
 2. 镜像仓库（registry）策略尚未定义（可选：本地 `docker save`、私有 registry 或 Docker Hub 私有仓库）。
 
+## 实现结果 / 验证
+
+**验证日期：** 2026-06-02  
+**分支：** `verify/b4-deploy`  
+**镜像标签：** `longtu-translation-service:verify`  
+**完整报告：** [`data/review/deploy_smoke/REPORT.md`](../../../data/review/deploy_smoke/REPORT.md)（gitignored）
+
+### 镜像构建
+
+`docker build` 成功。镜像大小 **8.19 GB**，由 torch==2.12.0+cu132（4.88 GB）+ serving 运行时依赖（259 MB）+ Python 基础镜像构成。`docker history` 确认无模型权重层（`.dockerignore` 已排除 `fine-tuned-models/`）。
+
+### 容器运行
+
+```bash
+docker run -d --name longtu-verify --gpus all \
+  -v "D:/.../earlystop-v1:/models:ro" \
+  -p 8002:8000 \
+  longtu-translation-service:verify
+```
+
+冷启动约 35 s，日志出现 `Application startup complete`，无 fail-fast 触发。容器状态达到 `(healthy)`。
+
+### 验证 gate 结果
+
+| Gate | 结果 |
+|------|------|
+| `docker build` 成功 | ✓ PASS |
+| 镜像不含模型权重（8.19 GB = 纯依赖体积） | ✓ PASS |
+| 容器冷启动 < 90 s（实测 ~35 s） | ✓ PASS |
+| `torch.cuda.is_available() == True`（RTX 4070 Ti SUPER） | ✓ PASS |
+| `GET /health` → `{"status":"ok"}` 200 | ✓ PASS |
+| `/info` 解码默认值（num_beams=4 / length_penalty=1.0 / no_repeat_ngram_size=0 / max_length=400） | ✓ PASS |
+| `/info.corpus_sha256` 非 null（`30D5C299...1818EA97`） | ✓ PASS |
+| `/info.seed` 非 null（`42`）—— provenance 挂载协议生效 | ✓ PASS |
+| `POST /translate` 返回非空韩文（`공격력 50% 증가`） | ✓ PASS |
+| Glossary marker round-trip（source 无 marker，translation 含 BOSS- 术语） | ✓ PASS |
+| 422：空 items / 33 条（>32）/ 超 400 token 长文本 | ✓ PASS（3/3） |
+| 离线 tokenizer（docker logs 无 HuggingFace Hub 网络请求） | ✓ PASS |
+| Jenkins pipeline 全绿 | SKIPPED（本机未安装 Jenkins） |
+
+### 翻译示例
+
+| 输入 | 输出 | 延迟 |
+|------|------|------|
+| `攻击力增加50%` | `공격력 50% 증가` | 0.463 s |
+| `打败BOSS-乱界之主可以获得稀有装备，攻击力增加100%，防御力提升20%，移动速度加快15%` | `BOSS-란계의 주인 을 물리치고 유니크 장비를 획득하면  공격력 100% 증가,  방어 력이 20% 증가, 이동속도가 15% 증가합니다.` | 1.131 s |
+
 ## 参考
 
 - 上游契约：[ADR-0034](ADR-0034-serving-contract-synchronous-http-api.md)（HTTP/JSON 服务契约）
