@@ -110,19 +110,38 @@ local = hf_hub_download(repo_id=path, filename="run_manifest.json", revision=rev
 
 ## 实现结果 / 验证
 
-**验证日期：** 待填写（容器内 HF-pull 冒烟后更新）
+**验证日期：** 2026-06-03  
+**分支：** `feat/serving-hf-pull`  
+**镜像标签：** `longtu-translation-service:hf-pull`  
+**完整报告：** `data/review/deploy_smoke/REPORT_hfpull.md`（gitignored）
+
+### 验证 gate 结果
 
 | Gate | 结果 |
 |------|------|
-| `pytest`（280 tests）全绿 | 待验证 |
-| config 解析：`from_hub=true` + 无 `revision` → `ValueError` | 待验证 |
-| config 解析：`from_hub=true` + `revision` → `path` 为 repo ID 字符串 | 待验证 |
-| `_read_provenance` HF 分支：monkeypatch → 解析 `corpus_sha256` / `seed` | 待验证 |
-| `_read_provenance` HF 分支：下载抛错 → 返回 `None` | 待验证 |
-| `docker build` 成功 | 待验证 |
-| `docker run`（无 `-v` 模型卷）首次 HF 拉取 → `GET /health` 200 | 待验证 |
-| `/info` `corpus_sha256` / `seed` 非 null（来自 HF `run_manifest.json`） | 待验证 |
-| `POST /translate` 返回韩文 | 待验证 |
-| `torch.cuda.is_available() == True` | 待验证 |
+| `pytest`（28 config+serving tests）全绿 | ✓ PASS |
+| config 解析：`from_hub=true` + 无 `revision` → `ValueError` | ✓ PASS |
+| config 解析：`from_hub=true` + `revision` → `path` 为 repo ID 字符串 | ✓ PASS |
+| `_read_provenance` HF 分支：monkeypatch → 解析 `corpus_sha256` / `seed` | ✓ PASS |
+| `_read_provenance` HF 分支：下载抛错 → 返回 `None` | ✓ PASS |
+| `docker build` 成功（Dockerfile 预建缓存目录 + 正确 owner） | ✓ PASS |
+| `docker run`（无 `-v` 模型卷）首次 HF 拉取 → `GET /health` 200 | ✓ PASS |
+| `/info` `corpus_sha256` 非 null（`30D5C299…1818EA97`，来自 HF `run_manifest.json`） | ✓ PASS |
+| `/info` `seed` 非 null（`42`） | ✓ PASS |
+| `/info` 解码默认值（num_beams=4 / length_penalty=1.0 / no_repeat_ngram_size=0 / max_length=400） | ✓ PASS |
+| `POST /translate` 含术语返回韩文（`공격력 50% 증가`，延迟 ~0.48 s） | ✓ PASS |
+| BOSS 术语保留（`BOSS-난계의 주인` 出现在译文中） | ✓ PASS |
+| 422：空 items / 空白文本 / 33 条（>32） | ✓ PASS（3/3） |
+| `torch.cuda.is_available() == True`（RTX 4070 Ti SUPER） | ✓ PASS |
 
-完整报告：`data/review/deploy_smoke/REPORT_hfpull.md`（gitignored）
+### 翻译示例
+
+| 输入 | 输出 | 延迟 |
+|------|------|------|
+| `攻击力增加50%` | `공격력 50% 증가` | ~0.48 s |
+| `打败BOSS-乱界之主可以获得稀有装备` | `BOSS-난계의 주인 을 처치하면 유니크 장비를 획득할 수 있습니다.` | — |
+| `防御力提升20%，移动速度加快15%` | `방어 20% 증가, 이동속도 15% 가속` | — |
+
+### 附记
+
+首次 HF 拉取约 ~2.3 GB（`huggingface-hub` 缓存到 `longtu_hf_cache` 卷）。本次验证时缓存已命中，启动约 35 s，与 ADR-0035 本地挂载基准一致。Dockerfile 已修复 volume 权限问题（预建 `/home/appuser/.cache/huggingface` 并设 `appuser` owner，见 commit `fix(docker): pre-create HF cache dir`）。
