@@ -14,9 +14,9 @@ pipeline {
         IMAGE_NAME   = 'longtu-translation-service'
         IMAGE_TAG    = "${env.BUILD_NUMBER}"
         CONTAINER    = 'longtu-translation'
-        // Host directory containing run_manifest.json + checkpoint-48000/
-        // Matches the mount protocol: -v MODEL_DIR:/models:ro  (ADR-0035 sec 5)
-        MODEL_DIR    = '/opt/longtu/models'
+        // Named Docker volume for HF Hub model cache (ADR-0038).
+        // Persists across rebuilds so the ~2.3 GB model is not re-downloaded each deploy.
+        HF_CACHE_VOL = 'longtu_hf_cache'
         HOST_PORT    = '8000'
         STAGING_PORT = '8001'
     }
@@ -60,10 +60,11 @@ pipeline {
                     docker rm -f ${CONTAINER}-new || true
 
                     # Start new container on staging port — old container keeps serving on ${HOST_PORT}
+                    # HF cache volume persists the ~2.3 GB model download across deploys (ADR-0038)
                     docker run -d \\
                         --name ${CONTAINER}-new \\
                         --gpus all \\
-                        -v ${MODEL_DIR}:/models:ro \\
+                        -v ${HF_CACHE_VOL}:/home/appuser/.cache/huggingface \\
                         -p ${STAGING_PORT}:8000 \\
                         --restart unless-stopped \\
                         ${IMAGE_NAME}:${IMAGE_TAG}
@@ -74,19 +75,21 @@ pipeline {
         stage('HealthCheck') {
             steps {
                 sh """
-                    echo 'Waiting for staging container to become healthy (up to 120 s)...'
+                    # First run may pull ~2.3 GB from HF Hub; allow up to 600 s (ADR-0038).
+                    # Warm cache (model already downloaded) cold-starts in ~35 s.
+                    echo 'Waiting for staging container to become healthy (up to 600 s)...'
                     ok=0
-                    for i in \$(seq 1 24); do
+                    for i in \$(seq 1 120); do
                         if curl -sf http://localhost:${STAGING_PORT}/health > /dev/null 2>&1; then
                             echo "Health check passed on attempt \$i"
                             ok=1
                             break
                         fi
-                        echo "Attempt \$i/24: not ready, sleeping 5 s..."
+                        echo "Attempt \$i/120: not ready, sleeping 5 s..."
                         sleep 5
                     done
                     if [ \$ok -eq 0 ]; then
-                        echo 'Staging container did not become healthy within 120 s'
+                        echo 'Staging container did not become healthy within 600 s'
                         exit 1
                     fi
 
@@ -114,7 +117,7 @@ print('Smoke PASSED:', t)
                     docker run -d \\
                         --name ${CONTAINER} \\
                         --gpus all \\
-                        -v ${MODEL_DIR}:/models:ro \\
+                        -v ${HF_CACHE_VOL}:/home/appuser/.cache/huggingface \\
                         -p ${HOST_PORT}:8000 \\
                         --restart unless-stopped \\
                         ${IMAGE_NAME}:${IMAGE_TAG}

@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from longtu_translation_pipeline.config import (  # noqa: E402
     load_inference_config,
+    load_serving_config,
     load_training_config,
 )
 
@@ -142,6 +143,95 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(config.model.path, ROOT / "fine-tuned-models" / "test")
         self.assertEqual(config.glossary.path, ROOT / "data" / "glossary.csv")
         self.assertEqual(config.output.path, ROOT / "translation_result.csv")
+
+    def test_inference_config_default_from_hub_is_false(self) -> None:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as f:
+            json.dump(
+                {
+                    "input": {
+                        "path": "data/segments.csv",
+                        "text_column": "zh-CN",
+                        "reference_column": "ko",
+                        "id_column": "segment_id",
+                    },
+                    "language": {"source_code": "zho_Hans", "target_code": "kor_Hang"},
+                    "model": {
+                        "path": "fine-tuned-models/test",
+                        "tokenizer_name": "facebook/nllb-200-distilled-600M",
+                    },
+                    "glossary": {"path": "data/glossary.csv", "source_terminology_markers": True},
+                    "output": {"path": "out.csv", "strip_glossary_markers": True},
+                    "generation": {"batch_size": 4, "max_length": 64},
+                    "dry_run": {"preview_rows": 0},
+                },
+                f,
+            )
+            path = Path(f.name)
+
+        try:
+            config = load_inference_config(path, base_dir=ROOT)
+        finally:
+            path.unlink()
+
+        self.assertFalse(config.model.from_hub)
+        self.assertIsNone(config.model.revision)
+        self.assertIsInstance(config.model.path, Path)
+
+    def _write_serving_config(self, tmp_dir: str, *, model_extra: dict | None = None) -> Path:
+        model_block: dict = {
+            "path": "fine-tuned-models/test",
+            "tokenizer_name": "facebook/nllb-200-distilled-600M",
+        }
+        if model_extra:
+            model_block.update(model_extra)
+        config = {
+            "model": model_block,
+            "language": {"source_code": "zho_Hans", "target_code": "kor_Hang"},
+            "glossary": {"path": "data/glossary.csv", "source_terminology_markers": True},
+            "output": {"strip_glossary_markers": True},
+            "generation": {"batch_size": 8, "max_length": 400, "num_beams": 4,
+                           "length_penalty": 1.0, "no_repeat_ngram_size": 0},
+            "serving": {"host": "127.0.0.1", "port": 8000,
+                        "max_items_per_request": 32, "max_concurrency": 1},
+        }
+        p = Path(tmp_dir) / "serving.json"
+        p.write_text(json.dumps(config), encoding="utf-8")
+        return p
+
+    def test_serving_config_from_hub_without_revision_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = self._write_serving_config(
+                tmp, model_extra={"from_hub": True}
+            )
+            with self.assertRaises(ValueError):
+                load_serving_config(config_path)
+
+    def test_serving_config_from_hub_with_revision_keeps_repo_id(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = self._write_serving_config(
+                tmp,
+                model_extra={
+                    "path": "SimpleJerry/longtu-nllb-zh2ko",
+                    "tokenizer_name": "SimpleJerry/longtu-nllb-zh2ko",
+                    "from_hub": True,
+                    "revision": "earlystop-v1-ckpt48000",
+                },
+            )
+            config = load_serving_config(config_path)
+
+        self.assertTrue(config.inference.model.from_hub)
+        self.assertEqual(config.inference.model.revision, "earlystop-v1-ckpt48000")
+        self.assertEqual(config.inference.model.path, "SimpleJerry/longtu-nllb-zh2ko")
+
+    def test_serving_config_without_from_hub_resolves_local_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = self._write_serving_config(tmp)
+            config = load_serving_config(config_path, base_dir=ROOT)
+
+        self.assertFalse(config.inference.model.from_hub)
+        self.assertIsNone(config.inference.model.revision)
+        self.assertIsInstance(config.inference.model.path, Path)
+        self.assertEqual(config.inference.model.path, ROOT / "fine-tuned-models" / "test")
 
     def test_missing_required_training_section_is_reported(self) -> None:
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as f:

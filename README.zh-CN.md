@@ -238,21 +238,21 @@ venv\Scripts\python.exe scripts\serve.py --dry-run   # 仅校验配置，不加�
 venv\Scripts\python.exe scripts\serve.py             # 加载检查点，serve 127.0.0.1:8000
 ```
 
-**Docker 部署** —— 将服务容器化并通过 Jenkins CI/CD 自动部署，契约见 [ADR-0035](docs/decisions/adr/ADR-0035-docker-jenkins-deployment-contract.md)。模型权重通过只读卷挂载，不烘焙进镜像。宿主需配置 Docker Desktop + WSL2 + NVIDIA CUDA on WSL。
+**Docker 部署** —— 将服务容器化并通过 Jenkins CI/CD 自动部署，契约见 [ADR-0035](docs/decisions/adr/ADR-0035-docker-jenkins-deployment-contract.md)。模型权重不烘焙进镜像，启动时从公开 HF Hub 自动拉取（ADR-0038）。宿主需配置 Docker Desktop + WSL2 + NVIDIA CUDA on WSL。
 
 ```bash
 # 构建镜像
 docker build -t longtu-translation-service:latest .
 
-# 运行（挂载模型卷，GPU 直通）
+# 无需 token —— 首次启动自动从公开 HF Hub 拉取 ~2.3 GB 模型（几分钟），之后命中缓存
 docker run -d \
-    --name longtu-translation \
     --gpus all \
-    -v /opt/longtu/models:/models:ro \
     -p 8000:8000 \
-    --restart unless-stopped \
+    -v longtu_hf_cache:/home/appuser/.cache/huggingface \
     longtu-translation-service:latest
 ```
+
+本地挂载变体（开发/离线）见 `configs/serving/docker-localmount.json`。
 
 ## 更大的模型 (1.3B / 3.3B)
 

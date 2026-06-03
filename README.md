@@ -238,21 +238,21 @@ venv\Scripts\python.exe scripts\serve.py --dry-run   # 설정만 검증, 모델 
 venv\Scripts\python.exe scripts\serve.py             # 체크포인트 로딩, 127.0.0.1:8000 serve
 ```
 
-**Docker 배포** — 서비스를 컨테이너화하고 Jenkins CI/CD로 자동 배포합니다. 계약은 [ADR-0035](docs/decisions/adr/ADR-0035-docker-jenkins-deployment-contract.md) 참고. 모델 가중치는 읽기 전용 볼륨으로 마운트되며, 이미지에 포함되지 않습니다. Docker Desktop + WSL2 + NVIDIA CUDA on WSL이 필요합니다.
+**Docker 배포** — 서비스를 컨테이너화하고 Jenkins CI/CD로 자동 배포합니다. 계약은 [ADR-0035](docs/decisions/adr/ADR-0035-docker-jenkins-deployment-contract.md) 참고. 모델 가중치는 이미지에 포함되지 않으며, 시작 시 공개 HF Hub에서 자동 다운로드됩니다（ADR-0038）. Docker Desktop + WSL2 + NVIDIA CUDA on WSL이 필요합니다.
 
 ```bash
 # 이미지 빌드
 docker build -t longtu-translation-service:latest .
 
-# GPU 패스스루 + 모델 볼륨 마운트 실행
+# 토큰 불필요 — 시작 시 공개 HF Hub에서 ~2.3 GB 모델 자동 다운로드 (첫 실행 수 분 소요, 이후 캐시 사용)
 docker run -d \
-    --name longtu-translation \
     --gpus all \
-    -v /opt/longtu/models:/models:ro \
     -p 8000:8000 \
-    --restart unless-stopped \
+    -v longtu_hf_cache:/home/appuser/.cache/huggingface \
     longtu-translation-service:latest
 ```
+
+로컬 볼륨 마운트 변형（개발/오프라인）은 `configs/serving/docker-localmount.json` 참고.
 
 ## 더 큰 모델 (1.3B / 3.3B)
 

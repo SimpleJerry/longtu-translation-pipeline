@@ -160,7 +160,11 @@ def build_runtime_app(serving_config: ServingConfig, device: str = "auto") -> Fa
         if inference.glossary.source_terminology_markers
         else []
     )
-    provenance = _read_provenance(inference.model.path)
+    provenance = _read_provenance(
+        inference.model.path,
+        from_hub=inference.model.from_hub,
+        revision=inference.model.revision,
+    )
     return create_app(serving_config, translator, terms=terms, provenance=provenance)
 
 
@@ -169,13 +173,44 @@ def _too_long(translator: LoadedTranslator, text: str, max_length: int) -> bool:
     return len(token_ids) > max_length
 
 
-def _read_provenance(model_path: str | Path) -> dict[str, Any] | None:
+def _hf_download_manifest(repo_id: str, revision: str | None) -> str:
+    """Download run_manifest.json from a public HF Hub repo (token-free, ADR-0037 §5).
+
+    Separated from _read_provenance so tests can monkeypatch this function
+    without installing huggingface_hub in the test environment.
+    """
+    from huggingface_hub import hf_hub_download
+
+    return hf_hub_download(repo_id=repo_id, filename="run_manifest.json", revision=revision)
+
+
+def _read_provenance(
+    model_path: str | Path,
+    *,
+    from_hub: bool = False,
+    revision: str | None = None,
+) -> dict[str, Any] | None:
     """Best-effort read of corpus SHA256 + seed from the run manifest.
 
-    The training ``run_manifest.json`` sits in the run directory; a published
-    checkpoint is a ``checkpoint-N`` subdirectory of it (ADR-0020). Returns
-    ``None`` when no manifest is found or readable.
+    For HF-pull (from_hub=True): downloads run_manifest.json via hf_hub_download
+    (token-free, ADR-0037 §5). Network/file errors return None (/info tolerates null).
+    For local (from_hub=False): looks for run_manifest.json next to the checkpoint
+    directory (ADR-0035 provenance mount protocol, ADR-0020).
     """
+    if from_hub:
+        try:
+            local = _hf_download_manifest(str(model_path), revision)
+            data = json.loads(Path(local).read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        section = data.get("data", {}) if isinstance(data, dict) else {}
+        if not isinstance(section, dict):
+            return None
+        return {
+            "corpus_sha256": section.get("segments_sha256"),
+            "seed": section.get("split_seed"),
+        }
+
     path = Path(model_path)
     for candidate in (path / "run_manifest.json", path.parent / "run_manifest.json"):
         if not candidate.exists():

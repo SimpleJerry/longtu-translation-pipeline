@@ -26,14 +26,20 @@ COPY data/glossary.csv /app/data/glossary.csv
 
 WORKDIR /app
 
-# Run as non-root user (uid 1000)
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+# Run as non-root user (uid 1000).
+# Pre-create the HF Hub cache directory with correct ownership so that a named
+# Docker volume mounted here is initialized with appuser permissions on first run
+# (Docker copies image-dir contents into an empty named volume at mount time).
+RUN useradd -m -u 1000 appuser \
+    && chown -R appuser:appuser /app \
+    && mkdir -p /home/appuser/.cache/huggingface \
+    && chown -R appuser:appuser /home/appuser/.cache
 USER appuser
 
 EXPOSE 8000
 
-# start-period=90s covers the ~30 s cold start (torch + transformers import at first request)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+# start-period=600s covers the first-run ~2.3 GB HF model pull; warm cache cold start is ~35 s
+HEALTHCHECK --interval=30s --timeout=10s --start-period=600s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 CMD ["python", "scripts/serve.py", "--config", "configs/serving/docker.json"]

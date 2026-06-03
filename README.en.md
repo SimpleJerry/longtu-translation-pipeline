@@ -238,21 +238,21 @@ venv\Scripts\python.exe scripts\serve.py --dry-run   # validate config only, no 
 venv\Scripts\python.exe scripts\serve.py             # load checkpoint, serve 127.0.0.1:8000
 ```
 
-**Docker deployment** — containerize the service and deploy automatically via Jenkins CI/CD; see [ADR-0035](docs/decisions/adr/ADR-0035-docker-jenkins-deployment-contract.md) for the deployment contract. Model weights are mounted as a read-only volume and never baked into the image. Requires Docker Desktop + WSL2 + NVIDIA CUDA on WSL on the host.
+**Docker deployment** — containerize the service and deploy automatically via Jenkins CI/CD; see [ADR-0035](docs/decisions/adr/ADR-0035-docker-jenkins-deployment-contract.md) for the deployment contract. Model weights are never baked into the image and are pulled automatically from the public HF Hub at startup (ADR-0038). Requires Docker Desktop + WSL2 + NVIDIA CUDA on WSL on the host.
 
 ```bash
 # Build the image
 docker build -t longtu-translation-service:latest .
 
-# Run with GPU passthrough and model volume
+# No token required — pulls ~2.3 GB model from public HF Hub on first start (takes a few minutes; cached afterwards)
 docker run -d \
-    --name longtu-translation \
     --gpus all \
-    -v /opt/longtu/models:/models:ro \
     -p 8000:8000 \
-    --restart unless-stopped \
+    -v longtu_hf_cache:/home/appuser/.cache/huggingface \
     longtu-translation-service:latest
 ```
+
+For the local-volume variant (dev / offline), see `configs/serving/docker-localmount.json`.
 
 ## Larger Models (1.3B / 3.3B)
 

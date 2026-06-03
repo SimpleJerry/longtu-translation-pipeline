@@ -114,8 +114,10 @@ class InferenceInputConfig:
 
 @dataclass(frozen=True)
 class InferenceModelConfig:
-    path: Path
+    path: str | Path  # str when from_hub=True (HF repo ID), Path when local
     tokenizer_name: str
+    from_hub: bool = False
+    revision: str | None = None
 
 
 @dataclass(frozen=True)
@@ -280,6 +282,27 @@ def load_training_config(path: str | Path, base_dir: str | Path | None = None) -
     )
 
 
+def _load_inference_model_config(
+    model_section: JsonObject, path_base: Path, config_path: Path
+) -> InferenceModelConfig:
+    from_hub = bool(optional_bool(model_section, "from_hub", config_path, default=False))
+    revision = optional_str(model_section, "revision", config_path, default=None)
+    if from_hub:
+        if not revision:
+            raise ValueError(
+                f"model.revision is required when model.from_hub is true: {config_path}"
+            )
+        model_path: str | Path = require_str(model_section, "path", config_path)
+    else:
+        model_path = resolve_config_path(require_str(model_section, "path", config_path), path_base)
+    return InferenceModelConfig(
+        path=model_path,
+        tokenizer_name=require_str(model_section, "tokenizer_name", config_path),
+        from_hub=from_hub,
+        revision=revision,
+    )
+
+
 def load_inference_config(path: str | Path, base_dir: str | Path | None = None) -> InferenceConfig:
     config_path = Path(path)
     path_base = Path(base_dir) if base_dir is not None else config_path.parent
@@ -302,10 +325,7 @@ def load_inference_config(path: str | Path, base_dir: str | Path | None = None) 
             id_column=require_str(input_section, "id_column", config_path),
         ),
         language=load_language_config(language_section, config_path),
-        model=InferenceModelConfig(
-            path=resolve_config_path(require_str(model_section, "path", config_path), path_base),
-            tokenizer_name=require_str(model_section, "tokenizer_name", config_path),
-        ),
+        model=_load_inference_model_config(model_section, path_base, config_path),
         glossary=InferenceGlossaryConfig(
             path=resolve_config_path(require_str(glossary_section, "path", config_path), path_base),
             source_terminology_markers=require_bool(
@@ -362,10 +382,7 @@ def load_serving_config(path: str | Path, base_dir: str | Path | None = None) ->
             id_column="segment_id",
         ),
         language=load_language_config(language_section, config_path),
-        model=InferenceModelConfig(
-            path=resolve_config_path(require_str(model_section, "path", config_path), path_base),
-            tokenizer_name=require_str(model_section, "tokenizer_name", config_path),
-        ),
+        model=_load_inference_model_config(model_section, path_base, config_path),
         glossary=InferenceGlossaryConfig(
             path=resolve_config_path(require_str(glossary_section, "path", config_path), path_base),
             source_terminology_markers=require_bool(

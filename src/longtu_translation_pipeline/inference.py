@@ -401,7 +401,9 @@ def load_translator(
     """
     from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
-    tokenizer = AutoTokenizer.from_pretrained(config.model.tokenizer_name)
+    tokenizer = AutoTokenizer.from_pretrained(
+        config.model.tokenizer_name, revision=config.model.revision
+    )
     configure_tokenizer_language_codes(tokenizer, config)
     special_tokens_added = add_marker_special_tokens(tokenizer)
     forced_bos_token_id = tokenizer.convert_tokens_to_ids(config.language.target_code)
@@ -409,7 +411,7 @@ def load_translator(
         raise ValueError(f"Tokenizer does not know target language code: {config.language.target_code}")
 
     inference_device = resolve_training_device(device)
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_path, revision=config.model.revision)
     embedding_size_before = model.get_input_embeddings().num_embeddings
     if embedding_size_before != len(tokenizer):
         model.resize_token_embeddings(len(tokenizer))

@@ -1,9 +1,7 @@
 {
   "model": {
-    "path": "SimpleJerry/longtu-nllb-zh2ko",
-    "tokenizer_name": "SimpleJerry/longtu-nllb-zh2ko",
-    "from_hub": true,
-    "revision": "earlystop-v1-ckpt48000"
+    "path": "/models/checkpoint-48000",
+    "tokenizer_name": "/models/checkpoint-48000"
   },
   "language": {
     "source_code": "zho_Hans",
