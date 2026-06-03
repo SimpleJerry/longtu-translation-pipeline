@@ -147,6 +147,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt           # 데이터 정제·평가
 pip install -r requirements-training.txt  # 학습·추론 시 추가 설치 (CUDA 13.2 PyTorch 포함)
+pip install -e .                          # 프로젝트 패키지 설치 (scripts/tests에서 sys.path 불필요)
 ```
 
 Stanza 언어 모델, Hugging Face 캐시, 학습 결과물, raw 데이터는 `.gitignore`에 의해 Git에서 제외됩니다.

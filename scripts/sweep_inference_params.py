@@ -16,12 +16,10 @@ import csv
 import dataclasses
 import itertools
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
 
 from longtu_translation_pipeline.config import GenerationConfig, load_inference_config
 from longtu_translation_pipeline.evaluation import (

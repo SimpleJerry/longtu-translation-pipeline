@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 import csv
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-
-from longtu_translation_pipeline.text_protection import (  # noqa: E402
+from longtu_translation_pipeline.text_protection import (
     GlossaryTerm,
     load_glossary_terms,
     mark_source_glossary_terms,

@@ -43,6 +43,8 @@ pipeline {
                 // GPU is not required for the contract test suite.
                 sh 'pip install torch==2.12.0 --index-url https://download.pytorch.org/whl/cpu'
                 sh 'pip install -r requirements.txt -r requirements-dev.txt'
+                // --no-deps: preserves cu132/CPU torch already installed above (ADR-0039)
+                sh 'pip install -e . --no-deps'
                 sh 'OMP_NUM_THREADS=1 TOKENIZERS_PARALLELISM=false pytest --timeout=120'
             }
         }

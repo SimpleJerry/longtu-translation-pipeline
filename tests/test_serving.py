@@ -1,24 +1,19 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-
-from longtu_translation_pipeline.config import load_serving_config  # noqa: E402
-from longtu_translation_pipeline.inference import LoadedTranslator  # noqa: E402
-from longtu_translation_pipeline.serving import (  # noqa: E402
+from longtu_translation_pipeline.config import load_serving_config
+from longtu_translation_pipeline.inference import LoadedTranslator
+from longtu_translation_pipeline.serving import (
     _read_provenance,
     create_app,
 )
-from longtu_translation_pipeline.text_protection import GlossaryTerm  # noqa: E402
+from longtu_translation_pipeline.text_protection import GlossaryTerm
 
 
 def write_serving_config(

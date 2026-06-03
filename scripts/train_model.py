@@ -6,10 +6,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
 
-from longtu_translation_pipeline.config import load_training_config  # noqa: E402
-from longtu_translation_pipeline.training import (  # noqa: E402
+from longtu_translation_pipeline.config import load_training_config
+from longtu_translation_pipeline.training import (
     build_training_dry_run,
     build_training_smoke_test,
     format_formal_training_run,

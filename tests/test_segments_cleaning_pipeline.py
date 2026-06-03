@@ -6,12 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-
-from longtu_translation_pipeline.cleanup.segments_cleaning import pipeline as segments  # noqa: E402
-from longtu_translation_pipeline.cleanup.segments_cleaning import classify as sc_classify  # noqa: E402
+from longtu_translation_pipeline.cleanup.segments_cleaning import pipeline as segments
+from longtu_translation_pipeline.cleanup.segments_cleaning import classify as sc_classify
 
 
 def make_patterns() -> dict[str, re.Pattern[str]]:

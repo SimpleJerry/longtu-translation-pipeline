@@ -4,15 +4,11 @@ import csv
 import hashlib
 import io
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-
-from longtu_translation_pipeline.cleanup.common import (  # noqa: E402
+from longtu_translation_pipeline.cleanup.common import (
     compile_regexes,
     ensure_csv_columns,
     read_json_config,

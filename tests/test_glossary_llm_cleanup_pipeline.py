@@ -2,23 +2,18 @@ from __future__ import annotations
 
 import csv
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-
-from longtu_translation_pipeline.cleanup.glossary_llm import (  # noqa: E402
+from longtu_translation_pipeline.cleanup.glossary_llm import (
     models,
     pipeline,
     prompts,
 )
-from longtu_translation_pipeline.cleanup.glossary_llm import response as resp  # noqa: E402
+from longtu_translation_pipeline.cleanup.glossary_llm import response as resp
 
 
 class GlossaryLlmCleanupTest(unittest.TestCase):

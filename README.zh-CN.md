@@ -147,6 +147,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt           # 数据清洗与评估
 pip install -r requirements-training.txt  # 训练/推理时额外安装（含 CUDA 13.2 PyTorch）
+pip install -e .                          # 安装本项目包（scripts/tests 无需 sys.path 注入）
 ```
 
 Stanza 语言模型、Hugging Face 缓存、微调产物和 raw 数据均通过 `.gitignore` 排除在 Git 之外。

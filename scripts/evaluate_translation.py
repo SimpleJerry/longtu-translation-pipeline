@@ -6,10 +6,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
 
-from longtu_translation_pipeline.config import load_evaluation_config  # noqa: E402
-from longtu_translation_pipeline.evaluation import (  # noqa: E402
+from longtu_translation_pipeline.config import load_evaluation_config
+from longtu_translation_pipeline.evaluation import (
     evaluate_translation,
     format_evaluation_summary,
     write_evaluation_reports,
