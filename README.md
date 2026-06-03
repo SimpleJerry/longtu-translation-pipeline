@@ -217,6 +217,20 @@ venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\defa
 venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --input <generated-csv>
 ```
 
+**모델 가져오기 및 배포** — 학습된 모델은 공개 Hugging Face Hub 저장소로 배포됩니다(ADR-0037). 토큰 없이 다운로드 가능합니다.
+
+```python
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+
+repo = "SimpleJerry/longtu-nllb-zh2ko"
+tag  = "earlystop-v1-ckpt48000"  # revision을 고정하여 가져오기
+
+tokenizer = AutoTokenizer.from_pretrained(repo, revision=tag)
+model     = AutoModelForSeq2SeqLM.from_pretrained(repo, revision=tag)
+```
+
+라이선스: cc-by-nc-4.0 (비상업적 사용만 허용). Docker 배포 방법은 [ADR-0035](docs/decisions/adr/ADR-0035-docker-jenkins-deployment-contract.md) 참고.
+
 **서빙(serving)** — 발행된 체크포인트를 동기 HTTP/JSON 서비스로 제공합니다. 계약은 [ADR-0034](docs/decisions/adr/ADR-0034-serving-contract-synchronous-http-api.md) 참고. 엔드포인트: `POST /translate`, `GET /health`, `GET /info`.
 
 ```powershell

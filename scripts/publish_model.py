@@ -1,7 +1,9 @@
-"""Publish a fine-tuned checkpoint to a private Hugging Face Hub repository.
+"""Publish a fine-tuned checkpoint to a public Hugging Face Hub repository.
 
-Contract: ADR-0036 — only inference-required files + run_manifest.json + a minimal
-README are uploaded; optimizer / training-state files are never published.
+Contract: ADR-0037 — only inference-required files + run_manifest.json + a model
+card are uploaded; optimizer / training-state files are never published.
+HF_TOKEN (write scope) is required only for publishing; pulling the public repo
+requires no token.
 """
 from __future__ import annotations
 
@@ -38,8 +40,9 @@ DEFAULT_TAG = "earlystop-v1-ckpt48000"
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Publish a fine-tuned NLLB checkpoint to a private HF Hub repo (ADR-0036). "
-            "HF_TOKEN must be set in the environment."
+            "Publish a fine-tuned NLLB checkpoint to a public HF Hub repo (ADR-0037). "
+            "HF_TOKEN (write scope) must be set in the environment for publishing. "
+            "The published repo is public; pulling requires no token."
         )
     )
     parser.add_argument(
@@ -68,8 +71,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--private",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Create the repo as private (default: True).",
+        default=False,
+        help="Create the repo as private (default: False — public).",
     )
     parser.add_argument(
         "--dry-run",
@@ -100,7 +103,7 @@ def _build_model_card(manifest: dict, repo: str, tag: str) -> str:
 language:
 - zh
 - ko
-license: other
+license: cc-by-nc-4.0
 tags:
 - translation
 - nllb
@@ -112,7 +115,9 @@ tags:
 
 Fine-tuned `{model_name}` for zh-CN → ko game localization translation.
 
-**This is a private repository. Contents include a model trained on proprietary game corpus.**
+**Public model. License: cc-by-nc-4.0 (inherited from NLLB-200; non-commercial use only).**
+Trained on a proprietary game localization corpus; game-domain terminology is encoded in the
+weights. The original corpus text is not distributed with this model.
 
 ## Task
 
@@ -128,6 +133,27 @@ Sequence-to-sequence translation: Simplified Chinese (`zho_Hans`) → Korean (`k
 - Target: `ko` (NLLB code: `kor_Hang`)
 - Direction: zh-CN → ko (unidirectional fine-tune)
 
+## Usage
+
+```python
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+
+repo = "{repo}"
+tag  = "{tag}"   # pin to a specific published checkpoint
+
+tokenizer = AutoTokenizer.from_pretrained(repo, revision=tag)
+model     = AutoModelForSeq2SeqLM.from_pretrained(repo, revision=tag)
+
+inputs = tokenizer("攻击力提升50%", return_tensors="pt",
+                   src_lang="zho_Hans")
+output_ids = model.generate(**inputs, forced_bos_token_id=tokenizer.lang_code_to_id["kor_Hang"],
+                             num_beams=4, max_length=400)
+print(tokenizer.decode(output_ids[0], skip_special_tokens=True))
+```
+
+Always pass `revision=<tag>` to pin to a specific published checkpoint (see §Published tag below).
+No token is required to pull this public repository.
+
 ## Decoding defaults
 
 See `generation_config.json`. Key parameters: `num_beams=4`, `max_length=400`.
@@ -139,7 +165,7 @@ See `generation_config.json`. Key parameters: `num_beams=4`, `max_length=400`.
 - `best_composite_metric` (0.5·BLEU + 0.5·preservation_nospace): `{best_metric_str}`
 - Full training metadata: `run_manifest.json` (included in this repo)
 
-Training governed by ADR-0020, ADR-0031. Distribution governed by ADR-0036.
+Training governed by ADR-0020, ADR-0031. Distribution governed by ADR-0037.
 
 ## Published tag
 
@@ -147,7 +173,7 @@ Training governed by ADR-0020, ADR-0031. Distribution governed by ADR-0036.
 
 ---
 
-*Private; proprietary game corpus. Not for redistribution.*
+*Non-commercial use only (CC-BY-NC-4.0). Attribution required.*
 """
 
 
@@ -186,7 +212,7 @@ def main() -> int:
     model_card_content = _build_model_card(manifest, args.repo, args.tag)
 
     print("=" * 60)
-    print("publish_model.py — ADR-0036")
+    print("publish_model.py — ADR-0037")
     print("=" * 60)
     print(f"  checkpoint  : {checkpoint_dir}")
     print(f"  manifest    : {manifest_path}")
@@ -228,7 +254,7 @@ def main() -> int:
         repo_id=args.repo,
         repo_type="model",
         allow_patterns=INFERENCE_PATTERNS,
-        commit_message=f"publish checkpoint {args.tag} — inference files (ADR-0036)",
+        commit_message=f"publish checkpoint {args.tag} — inference files (ADR-0037)",
     )
     print(f"      commit sha: {commit_info.oid}")
 
@@ -238,7 +264,7 @@ def main() -> int:
         path_in_repo="run_manifest.json",
         repo_id=args.repo,
         repo_type="model",
-        commit_message=f"publish run_manifest.json for {args.tag} (ADR-0036 provenance)",
+        commit_message=f"publish run_manifest.json for {args.tag} (ADR-0037 provenance)",
     )
     print("      OK")
 
@@ -254,7 +280,7 @@ def main() -> int:
             path_in_repo="README.md",
             repo_id=args.repo,
             repo_type="model",
-            commit_message=f"publish model card for {args.tag} (ADR-0036)",
+            commit_message=f"publish model card for {args.tag} (ADR-0037)",
         )
     finally:
         Path(tmp_path).unlink(missing_ok=True)
@@ -266,7 +292,7 @@ def main() -> int:
             repo_id=args.repo,
             repo_type="model",
             tag=args.tag,
-            tag_message=f"Release {args.tag} (ADR-0036)",
+            tag_message=f"Release {args.tag} (ADR-0037)",
             exist_ok=True,
         )
         print("      OK")

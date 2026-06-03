@@ -38,7 +38,7 @@
 - 用于将新中文文本翻译为韩文的批量推理 CLI。
 - 同步 HTTP/JSON 翻译服务（zh-CN → ko 单向），契约见 [ADR-0034](../decisions/adr/ADR-0034-serving-contract-synchronous-http-api.md)。
 - Docker 容器化 + Jenkins CI/CD 部署自动化（含模型只读卷挂载协议与健康检查），见 [ADR-0035](../decisions/adr/ADR-0035-docker-jenkins-deployment-contract.md)。
-- 微调权重通过私有 Hugging Face Hub 仓库（`SimpleJerry/longtu-nllb-zh2ko`）版本化分发；仅推理必需文件 + `run_manifest.json` + 最小 model card 上传；git-style tag 固定 revision，见 [ADR-0036](../decisions/adr/ADR-0036-model-distribution-via-private-hf-hub.md)。
+- 微调权重通过**公开** Hugging Face Hub 仓库（`SimpleJerry/longtu-nllb-zh2ko`）版本化分发；仅推理必需文件 + `run_manifest.json` + model card 上传；git-style tag 固定 revision；拉取无需 token；license=cc-by-nc-4.0，见 [ADR-0037](../decisions/adr/ADR-0037-model-distribution-via-public-hf-hub.md)。
 
 **不在范围内（当前主线）：**
 - T&N+R（`<middle>`）和 `<code_id=N>` 代码/标签保护——仅保留为历史实验记录。

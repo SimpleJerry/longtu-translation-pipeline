@@ -4,7 +4,8 @@ Usage:
     python scripts/verify_hf_publish.py --repo SimpleJerry/longtu-nllb-zh2ko \\
         --tag earlystop-v1-ckpt48000 [--skip-model-load]
 
-HF_TOKEN must be set in the environment.
+The target repo is public (ADR-0037); HF_TOKEN is optional for verification.
+Set HF_TOKEN only if you need to verify a private repo or avoid rate limits.
 """
 from __future__ import annotations
 
@@ -24,7 +25,7 @@ REQUIRED_FILES = [
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Verify HF Hub publish (ADR-0036).")
+    parser = argparse.ArgumentParser(description="Verify HF Hub publish (ADR-0037).")
     parser.add_argument("--repo", default="SimpleJerry/longtu-nllb-zh2ko")
     parser.add_argument("--tag", default="earlystop-v1-ckpt48000")
     parser.add_argument(
@@ -40,10 +41,9 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8")
 
     args = parse_args()
-    token = os.environ.get("HF_TOKEN")
-    if not token:
-        print("[ERROR] HF_TOKEN not set.", file=sys.stderr)
-        return 1
+    # Public repo (ADR-0037): token is optional for verification.
+    # Set HF_TOKEN only to avoid rate limits or to verify a private repo.
+    token = os.environ.get("HF_TOKEN") or None
 
     from huggingface_hub import HfApi
 
@@ -67,7 +67,7 @@ def main() -> int:
     tokenizer = AutoTokenizer.from_pretrained(
         args.repo,
         revision=args.tag,
-        token=token,
+        token=token,  # None for public repos; set HF_TOKEN to avoid rate limits
     )
     print(f"      Tokenizer loaded. Vocab size: {tokenizer.vocab_size}")
 
@@ -78,7 +78,7 @@ def main() -> int:
         model = AutoModelForSeq2SeqLM.from_pretrained(
             args.repo,
             revision=args.tag,
-            token=token,
+            token=token,  # None for public repos; set HF_TOKEN to avoid rate limits
         )
         num_params = sum(p.numel() for p in model.parameters())
         print(f"      Model loaded. Parameters: {num_params:,}")
