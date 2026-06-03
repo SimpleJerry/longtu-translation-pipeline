@@ -2,6 +2,8 @@
 
 [한국어](README.md) | [English](README.en.md) | [中文](README.zh-CN.md)
 
+🔗 **[在线演示 — Hugging Face Space](https://huggingface.co/spaces/SimpleJerry/longtu-nllb-zh2ko-demo)**
+
 本仓库是作者在㈜룽투코리아（LONGTU KOREA Inc.，龙图韩国，现更名为 STACO LINK Co., Ltd. / ㈜스타코링크）担任系统工程师期间所从事的游戏本地化翻译管道工作的复现。原始形态是一批 Jupyter Notebook 文件，大多数是实验过程中产生的中间文件。此后通过 Claude Code 与 Codex 逐步对旧有工程进行重构，整理成现在这个可复现的管道。
 
 项目背景如下：龙图韩国（LONGTU KOREA Inc.，现 STACO LINK Co., Ltd.）在韩国市场运营游戏时，面临大量将中文文本本地化为韩文的需求，每年的翻译外包费用高达数千万韩元。本项目的目标是基于公司掌握的游戏语料对 NLLB 模型进行微调，辅以少量人工校对，从而实现翻译自动化，节省翻译成本。

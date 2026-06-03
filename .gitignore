@@ -55,3 +55,6 @@ outputs/
 build/
 dist/
 *.egg-info/
+
+# Demo Space glossary copy (copied at deploy time, not committed)
+demo/glossary.csv

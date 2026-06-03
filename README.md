@@ -2,6 +2,8 @@
 
 [한국어](README.md) | [English](README.en.md) | [中文](README.zh-CN.md)
 
+🔗 **[Live Demo — Hugging Face Space](https://huggingface.co/spaces/SimpleJerry/longtu-nllb-zh2ko-demo)**
+
 이 저장소는 저자가 ㈜룽투코리아(LONGTU KOREA Inc., 현 ㈜스타코링크 / STACO LINK Co., Ltd.) 시스템 엔지니어로 재직할 당시 수행한 게임 현지화 번역 파이프라인의 재현물입니다. 원래 형태는 일련의 Jupyter Notebook 파일이었으며, 대부분 실험의 중간 과정 파일이었습니다. 이후 Claude Code와 Codex를 활용해 점진적으로 재구성하여 현재와 같은 재현 가능한 파이프라인으로 정리했습니다.
 
 프로젝트의 배경은 다음과 같습니다. ㈜룽투코리아(현 ㈜스타코링크)는 자사 게임을 한국 시장에 서비스하면서 대량의 중국어 텍스트를 한국어로 현지화해야 하는 수요가 있었으며, 매년 수천만 원에 달하는 번역 외주 비용이 발생하고 있었습니다. 이에 회사가 보유한 게임 말뭉치를 기반으로 NLLB 모델을 파인튜닝하고, 소량의 인간 검수를 보조로 삼아 번역 자동화를 구축하는 것을 목표로 했습니다.

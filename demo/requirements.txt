@@ -1,0 +1,8 @@
+torch
+transformers==5.9.0
+tokenizers==0.22.2
+huggingface-hub==1.15.0
+safetensors==0.7.0
+sentencepiece==0.2.1
+gradio==6.15.2
+git+https://github.com/SimpleJerry/longtu-translation-pipeline.git@main

@@ -1,0 +1,33 @@
+{
+  "model": {
+    "path": "SimpleJerry/longtu-nllb-zh2ko",
+    "tokenizer_name": "SimpleJerry/longtu-nllb-zh2ko",
+    "from_hub": true,
+    "revision": "earlystop-v1-ckpt48000"
+  },
+  "language": {
+    "source_code": "zho_Hans",
+    "target_code": "kor_Hang"
+  },
+  "glossary": {
+    "path": "glossary.csv",
+    "source_terminology_markers": true
+  },
+  "output": {
+    "strip_glossary_markers": true
+  },
+  "generation": {
+    "batch_size": 8,
+    "max_length": 400,
+    "num_beams": 4,
+    "length_penalty": 1.0,
+    "no_repeat_ngram_size": 0
+  },
+  "serving": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "max_items_per_request": 32,
+    "max_concurrency": 1,
+    "request_timeout_s": 60
+  }
+}
