@@ -217,6 +217,20 @@ venv\Scripts\python.exe scripts\run_inference.py --config configs\inference\defa
 venv\Scripts\python.exe scripts\evaluate_translation.py --config configs\evaluation\generation_report.json --input <generated-csv>
 ```
 
+**模型获取与部署** —— 训练好的模型通过公开 Hugging Face Hub 仓库分发（ADR-0037），无需 token 即可下载。
+
+```python
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+
+repo = "SimpleJerry/longtu-nllb-zh2ko"
+tag  = "earlystop-v1-ckpt48000"  # 始终通过 revision=<tag> 固定拉取
+
+tokenizer = AutoTokenizer.from_pretrained(repo, revision=tag)
+model     = AutoModelForSeq2SeqLM.from_pretrained(repo, revision=tag)
+```
+
+License: cc-by-nc-4.0（非商业使用）。Docker 容器化部署方案见 [ADR-0035](docs/decisions/adr/ADR-0035-docker-jenkins-deployment-contract.md)。
+
 **服务（serving）** —— 将已发布检查点作为同步 HTTP/JSON 服务对外提供翻译，契约见 [ADR-0034](docs/decisions/adr/ADR-0034-serving-contract-synchronous-http-api.md)。端点：`POST /translate`、`GET /health`、`GET /info`。
 
 ```powershell

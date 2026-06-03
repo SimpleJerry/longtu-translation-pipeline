@@ -2,8 +2,9 @@
 
 | 字段 | 值 |
 |------|----|
-| 状态 | 已接受 |
+| 状态 | **已被 [ADR-0037](ADR-0037-model-distribution-via-public-hf-hub.md) 取代** |
 | 日期 | 2026-06-02 |
+| 取代者 | [ADR-0037](ADR-0037-model-distribution-via-public-hf-hub.md)（模型分发契约——公开 HF Hub，2026-06-03） |
 | 关联 ADR | [ADR-0020](ADR-0020-formal-training-runs-require-split-artifacts-and-manifests.md)（run manifest）、[ADR-0034](ADR-0034-serving-contract-synchronous-http-api.md)（serving 契约，收口 Open Q1）、[ADR-0035](ADR-0035-docker-jenkins-deployment-contract.md)（部署契约，收口 Open Q2） |
 
 ---
