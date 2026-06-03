@@ -32,8 +32,8 @@ USER appuser
 
 EXPOSE 8000
 
-# start-period=90s covers the ~30 s cold start (torch + transformers import at first request)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+# start-period=600s covers the first-run ~2.3 GB HF model pull; warm cache cold start is ~35 s
+HEALTHCHECK --interval=30s --timeout=10s --start-period=600s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 CMD ["python", "scripts/serve.py", "--config", "configs/serving/docker.json"]
