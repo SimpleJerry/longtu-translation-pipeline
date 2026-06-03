@@ -26,8 +26,14 @@ COPY data/glossary.csv /app/data/glossary.csv
 
 WORKDIR /app
 
-# Run as non-root user (uid 1000)
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+# Run as non-root user (uid 1000).
+# Pre-create the HF Hub cache directory with correct ownership so that a named
+# Docker volume mounted here is initialized with appuser permissions on first run
+# (Docker copies image-dir contents into an empty named volume at mount time).
+RUN useradd -m -u 1000 appuser \
+    && chown -R appuser:appuser /app \
+    && mkdir -p /home/appuser/.cache/huggingface \
+    && chown -R appuser:appuser /home/appuser/.cache
 USER appuser
 
 EXPOSE 8000
