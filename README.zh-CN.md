@@ -54,7 +54,7 @@ flowchart LR
 
 **术语 marker（`<start>...<end>`）方法论。** 为在翻译中保留游戏专有术语，管道采用源端术语注入（source-side terminology injection）方案。该方案基于 Dinu et al.（ACL 2019）*"Training Neural Machine Translation to Apply Terminology Constraints"*：在源中文文本中，将与 glossary 匹配的部分用 `<start>...<end>` 特殊 token 对包裹，并以此形式进行训练。模型通过上下文学习到软约束，能在目标韩文中自然复现对应术语，不损伤翻译流畅度。采用单一 marker 形式是为了将 tokenizer 词表扩展控制在最小范围。
 
-**评估指标。** BLEU（Papineni et al., 2002）是基于 n-gram 精确率的标准 MT 指标。根据 Google Cloud Translate 的 [BLEU 分数解读指南](https://cloud.google.com/translate/docs/advanced/bleu-scores)，0.30~0.40 区间对应"可理解到良好的翻译"，本模型的 0.325 属于该区间。对于形态丰富的韩语，空格级分词会低估实际翻译质量，因此同时报告 chrF（字符级 n-gram F-score，Popović 2015）作为补充指标。Glossary preservation 直接检测译文中是否出现术语表条目，同时报告精确匹配（exact）和去空格匹配（no-space），以区分真正的术语遗漏与无害的空格差异。
+**评估指标。** BLEU（Papineni et al., 2002）是基于 n-gram 精确率的标准 MT 指标。根据 Google Cloud Translate 的 [BLEU 分数解读指南](https://docs.cloud.google.com/translate/docs/bleu-scores?hl=zh-cn)，0.30~0.40 区间对应"可理解到良好的翻译"，本模型的 0.325 属于该区间。对于形态丰富的韩语，空格级分词会低估实际翻译质量，因此同时报告 chrF（字符级 n-gram F-score，Popović 2015）作为补充指标。Glossary preservation 直接检测译文中是否出现术语表条目，同时报告精确匹配（exact）和去空格匹配（no-space），以区分真正的术语遗漏与无害的空格差异。
 
 **过拟合防控。**
 

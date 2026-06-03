@@ -54,7 +54,7 @@ flowchart LR
 
 **용어 marker (`<start>...<end>`) 방법론.** 번역 시 게임 용어를 보존하기 위해 source 측 용어 주입(source-side terminology injection) 방식을 사용합니다. Dinu et al. (ACL 2019) *"Training Neural Machine Translation to Apply Terminology Constraints"*에 기반하며, source 중국어 텍스트에서 glossary와 매칭되는 부분을 `<start>...<end>` 특수 토큰 쌍으로 감싼 뒤 해당 형태로 학습시킵니다. 이를 통해 모델은 target 한국어에 해당 용어를 자연스럽게 재현하는 soft constraint를 학습합니다. decode 시점에 토큰을 강제 삽입하는 hard constrained decoding과 달리 번역 유창성을 유지하며, 단일 marker 형태를 채택해 tokenizer 확장을 최소화합니다.
 
-**평가 지표.** BLEU(Papineni et al., 2002)는 n-gram 정밀도 기반 표준 MT 지표입니다. Google Cloud Translate의 [BLEU 해석 기준](https://cloud.google.com/translate/docs/advanced/bleu-scores)에 따르면 0.30~0.40 범위는 "이해 가능~양호한 번역(Understandable to good translations)"에 해당하며, 본 모델의 0.325는 이 구간에 속합니다. 단, 형태소가 풍부한 한국어에서는 공백 단위 토큰화가 번역 품질을 과소평가할 수 있으므로 chrF(character n-gram F-score, Popović 2015)를 함께 보고합니다. Glossary preservation은 용어집 항목의 출현 여부를 직접 측정하며, exact match와 no-space match를 함께 보고해 띄어쓰기 불일치를 실제 용어 누락으로 오판하는 것을 방지합니다.
+**평가 지표.** BLEU(Papineni et al., 2002)는 n-gram 정밀도 기반 표준 MT 지표입니다. Google Cloud Translate의 [BLEU 해석 기준](https://docs.cloud.google.com/translate/docs/bleu-scores?hl=ko)에 따르면 0.30~0.40 범위는 "이해 가능~양호한 번역(Understandable to good translations)"에 해당하며, 본 모델의 0.325는 이 구간에 속합니다. 단, 형태소가 풍부한 한국어에서는 공백 단위 토큰화가 번역 품질을 과소평가할 수 있으므로 chrF(character n-gram F-score, Popović 2015)를 함께 보고합니다. Glossary preservation은 용어집 항목의 출현 여부를 직접 측정하며, exact match와 no-space match를 함께 보고해 띄어쓰기 불일치를 실제 용어 누락으로 오판하는 것을 방지합니다.
 
 **과적합 방지.**
 

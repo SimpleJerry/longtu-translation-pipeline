@@ -66,7 +66,7 @@ expansion.
 
 **Evaluation metrics.** BLEU (Papineni et al., 2002) measures n-gram precision
 and is the standard MT metric. Per Google Cloud Translate's
-[BLEU score interpretation guide](https://cloud.google.com/translate/docs/advanced/bleu-scores),
+[BLEU score interpretation guide](https://docs.cloud.google.com/translate/docs/bleu-scores),
 0.30–0.40 corresponds to "Understandable to good translations" — the current
 model's 0.325 sits in this range. Korean's whitespace tokenisation can
 underrepresent morpheme-level quality, so chrF (character n-gram F-score,
