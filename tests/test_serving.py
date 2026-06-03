@@ -6,7 +6,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,7 +14,10 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from longtu_translation_pipeline.config import load_serving_config  # noqa: E402
 from longtu_translation_pipeline.inference import LoadedTranslator  # noqa: E402
-from longtu_translation_pipeline.serving import create_app  # noqa: E402
+from longtu_translation_pipeline.serving import (  # noqa: E402
+    _read_provenance,
+    create_app,
+)
 from longtu_translation_pipeline.text_protection import GlossaryTerm  # noqa: E402
 
 
@@ -250,6 +253,89 @@ class ServingContractTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 504)
         self.assertEqual(response.json(), {"detail": "translation timed out"})
+
+
+class ProvenanceLocalTest(unittest.TestCase):
+    def test_local_manifest_next_to_checkpoint_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ckpt_dir = Path(tmp) / "checkpoint-48000"
+            ckpt_dir.mkdir()
+            manifest = Path(tmp) / "run_manifest.json"
+            manifest.write_text(
+                json.dumps({"data": {"segments_sha256": "ABCD1234", "split_seed": 42}}),
+                encoding="utf-8",
+            )
+            result = _read_provenance(ckpt_dir)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["corpus_sha256"], "ABCD1234")
+        self.assertEqual(result["seed"], 42)
+
+    def test_local_missing_manifest_returns_none(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = _read_provenance(Path(tmp) / "checkpoint-48000")
+
+        self.assertIsNone(result)
+
+
+class ProvenanceHFTest(unittest.TestCase):
+    def _make_manifest(self, tmp_dir: str) -> str:
+        p = Path(tmp_dir) / "run_manifest.json"
+        p.write_text(
+            json.dumps({"data": {"segments_sha256": "HF_SHA256", "split_seed": 99}}),
+            encoding="utf-8",
+        )
+        return str(p)
+
+    def test_hf_branch_parses_manifest_from_hub(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            local_path = self._make_manifest(tmp)
+            with patch(
+                "longtu_translation_pipeline.serving._hf_download_manifest",
+                return_value=local_path,
+            ) as mock_dl:
+                result = _read_provenance(
+                    "SimpleJerry/longtu-nllb-zh2ko",
+                    from_hub=True,
+                    revision="earlystop-v1-ckpt48000",
+                )
+                mock_dl.assert_called_once_with(
+                    "SimpleJerry/longtu-nllb-zh2ko",
+                    "earlystop-v1-ckpt48000",
+                )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["corpus_sha256"], "HF_SHA256")
+        self.assertEqual(result["seed"], 99)
+
+    def test_hf_branch_download_error_returns_none(self) -> None:
+        with patch(
+            "longtu_translation_pipeline.serving._hf_download_manifest",
+            side_effect=OSError("network error"),
+        ):
+            result = _read_provenance(
+                "SimpleJerry/longtu-nllb-zh2ko",
+                from_hub=True,
+                revision="earlystop-v1-ckpt48000",
+            )
+
+        self.assertIsNone(result)
+
+    def test_hf_branch_malformed_manifest_returns_none(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "run_manifest.json"
+            p.write_text("not json", encoding="utf-8")
+            with patch(
+                "longtu_translation_pipeline.serving._hf_download_manifest",
+                return_value=str(p),
+            ):
+                result = _read_provenance(
+                    "SimpleJerry/longtu-nllb-zh2ko",
+                    from_hub=True,
+                    revision="earlystop-v1-ckpt48000",
+                )
+
+        self.assertIsNone(result)
 
 
 if __name__ == "__main__":
