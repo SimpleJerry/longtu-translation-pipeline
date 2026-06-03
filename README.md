@@ -6,8 +6,9 @@
 
 🔗 **[Live Demo — Hugging Face Space](https://huggingface.co/spaces/SimpleJerry/longtu-nllb-zh2ko-demo)**
 
-`facebook/nllb-200-distilled-600M`을 게임 현지화 코퍼스로 파인튜닝한 zh-CN → ko 번역 파이프라인.
-데이터 정제 → 학습 → 평가 → FastAPI serving → Docker → 공개 HF Hub → pip 패키지 → 온라인 Gradio 데모까지 전 과정이 연결되어 있습니다.
+이 저장소는 저자가 ㈜룽투코리아(LONGTU KOREA Inc., 현 ㈜스타코링크 / STACO LINK Co., Ltd.) 시스템 엔지니어로 재직할 당시 수행한 게임 현지화 번역 파이프라인의 재현물입니다. ㈜룽투코리아는 자사 게임의 한국 서비스에서 매년 수천만 원에 달하는 번역 외주 비용이 발생하고 있었으며, 보유한 게임 코퍼스로 NLLB 모델을 파인튜닝하고 소량의 인간 검수를 보조로 삼아 번역을 자동화하는 것이 목표였습니다. 원래 형태는 일련의 Jupyter Notebook 파일이었으며, 이후 Claude Code와 Codex를 활용해 재현 가능한 파이프라인으로 재구성했습니다.
+
+`facebook/nllb-200-distilled-600M`을 게임 현지화 코퍼스로 파인튜닝한 zh-CN → ko 번역 파이프라인으로, 데이터 정제 → 학습 → 평가 → FastAPI serving → Docker → 공개 HF Hub → pip 패키지 → 온라인 Gradio 데모까지 전 과정이 연결되어 있습니다.
 
 ## 결과
 
@@ -146,12 +147,6 @@ venv\Scripts\python.exe scripts\evaluate_translation.py \
 | 코드 (이 저장소) | [MIT](LICENSE) |
 | 학습된 모델 가중치 | [CC-BY-NC-4.0](https://creativecommons.org/licenses/by-nc/4.0/) (NLLB 기반, ADR-0037) |
 | 학습 코퍼스 | 회사 전용 — 미배포 |
-
-## 배경
-
-이 저장소는 저자가 ㈜룽투코리아(LONGTU KOREA Inc., 현 ㈜스타코링크 / STACO LINK Co., Ltd.) 시스템 엔지니어로 재직할 당시 수행한 게임 현지화 번역 파이프라인의 재현물입니다. 원래 형태는 일련의 Jupyter Notebook 파일이었으며, 이후 Claude Code와 Codex를 활용해 재현 가능한 파이프라인으로 재구성했습니다.
-
-㈜룽투코리아(현 ㈜스타코링크)는 자사 게임을 한국 시장에 서비스하면서 매년 수천만 원에 달하는 번역 외주 비용이 발생하고 있었습니다. 이에 회사가 보유한 게임 코퍼스를 기반으로 NLLB 모델을 파인튜닝하고, 소량의 인간 검수를 보조로 삼아 번역 자동화를 구축하는 것을 목표로 했습니다.
 
 ## 더 큰 모델 (1.3B / 3.3B)
 

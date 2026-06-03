@@ -6,11 +6,9 @@
 
 🔗 **[Live Demo — Hugging Face Space](https://huggingface.co/spaces/SimpleJerry/longtu-nllb-zh2ko-demo)**
 
-A zh-CN → ko translation pipeline built by fine-tuning
-`facebook/nllb-200-distilled-600M` on a proprietary game localization corpus.
-The full chain — data cleaning → training → evaluation → FastAPI serving →
-Docker → public HF Hub → pip package → online Gradio demo — is connected
-end-to-end.
+This repository reproduces the game localization translation pipeline developed by the author during his tenure as a Systems Engineer at LONGTU KOREA Inc. (㈜룽투코리아; since renamed to STACO LINK Co., Ltd. / ㈜스타코링크). The company faced translation outsourcing costs of tens of millions of KRW per year for their Korean-market games; the goal was to fine-tune an NLLB model on the company's proprietary game corpus and automate a significant share of that workload with lightweight human proofreading. The original form was a collection of Jupyter Notebook files, gradually reconstructed using Claude Code and Codex into the reproducible pipeline you see today.
+
+A zh-CN → ko translation pipeline built by fine-tuning `facebook/nllb-200-distilled-600M` on a proprietary game localization corpus — data cleaning → training → evaluation → FastAPI serving → Docker → public HF Hub → pip package → online Gradio demo, connected end-to-end.
 
 ## Results
 
@@ -172,20 +170,6 @@ Checkpoint republish workflow: [docs/maintenance/republish-checklist.md](docs/ma
 | Code (this repository) | [MIT](LICENSE) |
 | Trained model weights | [CC-BY-NC-4.0](https://creativecommons.org/licenses/by-nc/4.0/) (inherited from NLLB, ADR-0037) |
 | Training corpus | Proprietary — not distributed |
-
-## Background
-
-This repository reproduces the game localization translation pipeline developed
-by the author during his tenure as a Systems Engineer at LONGTU KOREA Inc.
-(㈜룽투코리아; since renamed to STACO LINK Co., Ltd. / ㈜스타코링크). The
-original form was a collection of Jupyter Notebook files; these were gradually
-reconstructed using Claude Code and Codex into the reproducible pipeline you see
-today.
-
-LONGTU KOREA Inc. operated games in the Korean market and faced translation
-outsourcing costs of tens of millions of KRW per year. The goal was to
-fine-tune an NLLB model on the company's proprietary game corpus and supplement
-the output with lightweight human proofreading.
 
 ## Larger Models (1.3B / 3.3B)
 

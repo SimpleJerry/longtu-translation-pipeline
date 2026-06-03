@@ -6,8 +6,9 @@
 
 🔗 **[在线演示 — Hugging Face Space](https://huggingface.co/spaces/SimpleJerry/longtu-nllb-zh2ko-demo)**
 
-基于 `facebook/nllb-200-distilled-600M` 在游戏本地化语料上微调的 zh-CN → ko 翻译管道。
-全链路打通：数据清洗 → 训练 → 评估 → FastAPI serving → Docker → 公开 HF Hub → pip 包 → 在线 Gradio demo。
+本仓库是作者在㈜룽투코리아（LONGTU KOREA Inc.，龙图韩国，现更名为 STACO LINK Co., Ltd. / ㈜스타코링크）担任系统工程师期间所从事的游戏本地化翻译管道工作的复现。龙图韩国每年的翻译外包费用高达数千万韩元，本项目的目标是基于公司掌握的游戏语料对 NLLB 模型进行微调，辅以少量人工校对，从而实现翻译自动化，节省翻译成本。原始形态是一批 Jupyter Notebook 文件，此后通过 Claude Code 与 Codex 逐步重构为现在这个可复现的管道。
+
+基于 `facebook/nllb-200-distilled-600M` 在游戏本地化语料上微调的 zh-CN → ko 翻译管道，全链路打通：数据清洗 → 训练 → 评估 → FastAPI serving → Docker → 公开 HF Hub → pip 包 → 在线 Gradio demo。
 
 ## 成果
 
@@ -146,12 +147,6 @@ Checkpoint 重新发布工作流：[docs/maintenance/republish-checklist.md](doc
 | 代码（本仓库） | [MIT](LICENSE) |
 | 训练模型权重 | [CC-BY-NC-4.0](https://creativecommons.org/licenses/by-nc/4.0/)（继承 NLLB，ADR-0037） |
 | 训练语料 | 公司专有 —— 不分发 |
-
-## 背景
-
-本仓库是作者在㈜룽투코리아（LONGTU KOREA Inc.，龙图韩国，现更名为 STACO LINK Co., Ltd. / ㈜스타코링크）担任系统工程师期间所从事的游戏本地化翻译管道工作的复现。原始形态是一批 Jupyter Notebook 文件，此后通过 Claude Code 与 Codex 逐步重构，整理成现在这个可复现的管道。
-
-龙图韩国每年的翻译外包费用高达数千万韩元。本项目的目标是基于公司掌握的游戏语料对 NLLB 模型进行微调，辅以少量人工校对，从而实现翻译自动化，节省翻译成本。
 
 ## 更大的模型 (1.3B / 3.3B)
 
