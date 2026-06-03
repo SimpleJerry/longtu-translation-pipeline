@@ -271,8 +271,26 @@ NLLB-200에는 더 큰 베이스(`nllb-200-1.3B`, `nllb-200-3.3B`)도 있습니�
 
 출처: 파라미터 수와 ~17.6 GB 디스크 3.3B checkpoint 크기는 Hugging Face 모델 카드([600M](https://huggingface.co/facebook/nllb-200-distilled-600M), [1.3B](https://huggingface.co/facebook/nllb-200-distilled-1.3B), [3.3B](https://huggingface.co/facebook/nllb-200-3.3B))에서 가져왔고, VRAM 수치는 본 프로젝트의 600M 실측(`run_manifest.json`)과 표준 AdamW 메모리 산정(가중치 + 그래디언트 + optimizer state 기준 ~16 bytes/파라미터)에 근거합니다.
 
+## 아키텍처
+
+전체 파이프라인 개요 (좌→우 흐름):
+
+```mermaid
+flowchart LR
+    A[raw data\n원시 데이터] --> B[cleanup\n데이터 정제\nlocal semantic\n+ cloud LLM]
+    B --> C[fine-tune NLLB\n모델 학습\n8:1:1 seed 42\nearly-stopping\nADR-0031]
+    C --> D[eval\n평가\nBLEU / chrF\n/ glossary\npreservation]
+    D --> E[FastAPI serving\nHTTP/JSON\nADR-0034]
+    E --> F[Docker\n컨테이너화\nADR-0035]
+    F --> G[public HF Hub\n공개 배포\nrevision 고정\nADR-0037]
+    G --> H[pip package\n패키지\nADR-0039]
+    H --> I[Gradio Demo\nSpace\nADR-0040]
+```
+
 ## 참고 문서
 
 - [아키텍처 결정 기록 (ADR)](docs/decisions/adr/README.md)
+- [모델 카드](docs/product/model-card.md)
 - [Notebook inventory](docs/notebooks/inventory.md)
 - [에이전트 헌법 (CLAUDE.md)](CLAUDE.md)
+- [재배포 체크리스트 (유지보수)](docs/maintenance/republish-checklist.md)

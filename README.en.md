@@ -271,8 +271,26 @@ On the 16 GB GPU used here, **1.3B full fine-tuning does not fit** without memor
 
 Sources: parameter counts and the ~17.6 GB on-disk 3.3B checkpoint are from the Hugging Face model cards ([600M](https://huggingface.co/facebook/nllb-200-distilled-600M), [1.3B](https://huggingface.co/facebook/nllb-200-distilled-1.3B), [3.3B](https://huggingface.co/facebook/nllb-200-3.3B)); VRAM figures are this project's measured 600M run (`run_manifest.json`) plus standard AdamW memory accounting (~16 bytes/parameter for weights + gradients + optimizer state).
 
+## Architecture
+
+Full pipeline overview (left-to-right flow):
+
+```mermaid
+flowchart LR
+    A[raw data] --> B[cleanup\nlocal semantic\n+ cloud LLM]
+    B --> C[fine-tune NLLB\n8:1:1 seed 42\nearly-stopping\nADR-0031]
+    C --> D[eval\nBLEU / chrF\n/ glossary\npreservation]
+    D --> E[FastAPI serving\nHTTP/JSON\nADR-0034]
+    E --> F[Docker\ncontainerize\nADR-0035]
+    F --> G[public HF Hub\nrevision-pinned\nADR-0037]
+    G --> H[pip package\nADR-0039]
+    H --> I[Gradio Demo\nSpace\nADR-0040]
+```
+
 ## Reference Documents
 
 - [Architecture decisions (ADR)](docs/decisions/adr/README.md)
+- [Model card](docs/product/model-card.md)
 - [Notebook inventory](docs/notebooks/inventory.md)
 - [Agent constitution (CLAUDE.md)](CLAUDE.md)
+- [Republish checklist (maintenance)](docs/maintenance/republish-checklist.md)

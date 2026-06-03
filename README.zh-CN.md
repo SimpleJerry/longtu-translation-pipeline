@@ -271,8 +271,26 @@ NLLB-200 还提供更大的基座（`nllb-200-1.3B`、`nllb-200-3.3B`）。更�
 
 来源：参数量与 ~17.6 GB 的 3.3B 磁盘 checkpoint 大小来自 Hugging Face 模型卡（[600M](https://huggingface.co/facebook/nllb-200-distilled-600M)、[1.3B](https://huggingface.co/facebook/nllb-200-distilled-1.3B)、[3.3B](https://huggingface.co/facebook/nllb-200-3.3B)）；显存数字基于本项目 600M 实测（`run_manifest.json`）加标准 AdamW 显存估算（权重 + 梯度 + optimizer state 约 16 bytes/参数）。
 
+## 架构
+
+完整 pipeline 概览（从左到右）：
+
+```mermaid
+flowchart LR
+    A[raw data\n原始数据] --> B[cleanup\n数据清洗\nlocal semantic\n+ cloud LLM]
+    B --> C[fine-tune NLLB\n模型训练\n8:1:1 seed 42\nearly-stopping\nADR-0031]
+    C --> D[eval\n评估\nBLEU / chrF\n/ glossary\npreservation]
+    D --> E[FastAPI serving\nHTTP/JSON\nADR-0034]
+    E --> F[Docker\n容器化\nADR-0035]
+    F --> G[public HF Hub\n公开分发\nrevision 固定\nADR-0037]
+    G --> H[pip package\n可安装包\nADR-0039]
+    H --> I[Gradio Demo\nSpace\nADR-0040]
+```
+
 ## 参考文档
 
 - [架构决策记录 (ADR)](docs/decisions/adr/README.md)
+- [模型卡片](docs/product/model-card.md)
 - [Notebook inventory](docs/notebooks/inventory.md)
 - [Agent 宪法 (CLAUDE.md)](CLAUDE.md)
+- [重新发布检查清单（维护）](docs/maintenance/republish-checklist.md)
