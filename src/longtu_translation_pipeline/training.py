@@ -14,6 +14,15 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from .config import TrainingConfig
+from .model_runtime import (
+    add_marker_special_tokens,
+    configure_tokenizer_language_codes,
+    cuda_device_name,
+    cuda_memory_summary,
+    find_latest_checkpoint,
+    list_checkpoint_paths,
+    resolve_training_device,
+)
 from .text_protection import load_glossary_terms, protect_training_pair
 
 
@@ -250,7 +259,7 @@ def build_training_smoke_test(
 ) -> TrainingSmokeTestPlan:
     row_limit = sample_rows if sample_rows is not None else config.dry_run.preview_rows
     prepared_examples = prepare_training_examples(config, limit=row_limit)
-    language_assignments = configure_tokenizer_language_codes(tokenizer, config)
+    language_assignments = configure_tokenizer_language_codes(tokenizer, config.language.source_code, config.language.target_code)
     tokenized_examples = tokenize_training_examples(config, tokenizer, prepared_examples)
 
     return TrainingSmokeTestPlan(
@@ -907,40 +916,12 @@ def apply_optional_terminology_markers(
     return marked_examples
 
 
-def configure_tokenizer_language_codes(tokenizer: Any, config: TrainingConfig) -> list[str]:
-    assignments: list[str] = []
-    for attribute, value in (
-        ("src_lang", config.language.source_code),
-        ("tgt_lang", config.language.target_code),
-    ):
-        try:
-            setattr(tokenizer, attribute, value)
-        except Exception:
-            continue
-        assignments.append(f"{attribute}={value}")
-    return assignments
-
-
 def load_nllb_tokenizer(config: TrainingConfig) -> Any:
     from transformers import AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(config.model.base_model)
-    configure_tokenizer_language_codes(tokenizer, config)
+    configure_tokenizer_language_codes(tokenizer, config.language.source_code, config.language.target_code)
     return tokenizer
-
-
-def add_marker_special_tokens(tokenizer: Any) -> int:
-    marker_tokens = {"additional_special_tokens": ["<start>", "<end>"]}
-    try:
-        return tokenizer.add_special_tokens(
-            marker_tokens,
-            replace_additional_special_tokens=False,
-        )
-    except TypeError:
-        return tokenizer.add_special_tokens(
-            marker_tokens,
-            replace_extra_special_tokens=False,
-        )
 
 
 def tokenize_training_examples(
@@ -1385,45 +1366,6 @@ def hash_file(path: str | Path) -> str:
     return digest.hexdigest().upper()
 
 
-def list_checkpoint_paths(output_dir: str | Path) -> list[Path]:
-    path = Path(output_dir)
-    if not path.exists():
-        return []
-
-    checkpoints: list[tuple[int, Path]] = []
-    for child in path.iterdir():
-        if not child.is_dir() or not child.name.startswith("checkpoint-"):
-            continue
-        step_text = child.name[len("checkpoint-") :]
-        try:
-            step = int(step_text)
-        except ValueError:
-            continue
-        checkpoints.append((step, child))
-    return [checkpoint for _, checkpoint in sorted(checkpoints)]
-
-
-def find_latest_checkpoint(output_dir: str | Path) -> Path | None:
-    checkpoints = list_checkpoint_paths(output_dir)
-    if not checkpoints:
-        return None
-    return checkpoints[-1]
-
-
-def resolve_training_device(device: str) -> str:
-    if device not in {"auto", "cuda", "cpu"}:
-        raise ValueError("device must be one of: auto, cuda, cpu")
-
-    import torch
-
-    cuda_available = torch.cuda.is_available()
-    if device == "auto":
-        return "cuda" if cuda_available else "cpu"
-    if device == "cuda" and not cuda_available:
-        raise RuntimeError("CUDA was requested but torch.cuda.is_available() is False")
-    return device
-
-
 def resolve_trainer_precision(device: str) -> str:
     if device != "cuda":
         return "fp32"
@@ -1433,26 +1375,6 @@ def resolve_trainer_precision(device: str) -> str:
     if hasattr(torch.cuda, "is_bf16_supported") and torch.cuda.is_bf16_supported():
         return "bf16"
     return "fp16"
-
-
-def cuda_device_name(device: str) -> str:
-    if device != "cuda":
-        return "none"
-
-    import torch
-
-    return torch.cuda.get_device_name(0)
-
-
-def cuda_memory_summary(device: str) -> str:
-    if device != "cuda":
-        return "none"
-
-    import torch
-
-    allocated = torch.cuda.memory_allocated(0) / (1024**3)
-    reserved = torch.cuda.memory_reserved(0) / (1024**3)
-    return f"allocated_gb={allocated:.2f};reserved_gb={reserved:.2f}"
 
 
 class TorchTrainingDataset:

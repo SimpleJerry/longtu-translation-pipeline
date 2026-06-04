@@ -31,7 +31,6 @@ from longtu_translation_pipeline.evaluation import (
     read_glossary_terms,
 )
 from longtu_translation_pipeline.inference import (
-    configure_tokenizer_language_codes,
     prepare_inference_records,
     read_run_manifest,
     read_split_records,
@@ -40,8 +39,9 @@ from longtu_translation_pipeline.inference import (
     resolve_manifest_path,
     run_generation_batches,
 )
-from longtu_translation_pipeline.training import (
+from longtu_translation_pipeline.model_runtime import (
     add_marker_special_tokens,
+    configure_tokenizer_language_codes,
     resolve_training_device,
 )
 
@@ -115,7 +115,7 @@ def main() -> None:
     from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(config.model.tokenizer_name)
-    configure_tokenizer_language_codes(tokenizer, config)
+    configure_tokenizer_language_codes(tokenizer, config.language.source_code, config.language.target_code)
     add_marker_special_tokens(tokenizer)
     forced_bos_token_id = int(tokenizer.convert_tokens_to_ids(config.language.target_code))
     if forced_bos_token_id < 0:

@@ -58,7 +58,7 @@ def _composite_metric(bleu: float, preservation_nospace: float) -> float:
 
 
 def _find_checkpoints(run_dir: Path) -> list[Path]:
-    from longtu_translation_pipeline.training import list_checkpoint_paths
+    from longtu_translation_pipeline.model_runtime import list_checkpoint_paths
     return list_checkpoint_paths(run_dir)
 
 
