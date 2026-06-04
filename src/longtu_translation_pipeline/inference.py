@@ -16,8 +16,9 @@ from .text_protection import (
     mark_source_glossary_terms,
     strip_glossary_markers,
 )
-from .training import (
+from .model_runtime import (
     add_marker_special_tokens,
+    configure_tokenizer_language_codes,
     cuda_device_name,
     cuda_memory_summary,
     find_latest_checkpoint,
@@ -404,7 +405,7 @@ def load_translator(
     tokenizer = AutoTokenizer.from_pretrained(
         config.model.tokenizer_name, revision=config.model.revision
     )
-    configure_tokenizer_language_codes(tokenizer, config)
+    configure_tokenizer_language_codes(tokenizer, config.language.source_code, config.language.target_code)
     special_tokens_added = add_marker_special_tokens(tokenizer)
     forced_bos_token_id = tokenizer.convert_tokens_to_ids(config.language.target_code)
     if forced_bos_token_id is None or forced_bos_token_id < 0:
@@ -598,17 +599,6 @@ def write_split_generation_manifest(
         "strip_glossary_markers": generation.strip_glossary_markers,
     }
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-
-def configure_tokenizer_language_codes(tokenizer: object, config: InferenceConfig) -> None:
-    for attribute, value in (
-        ("src_lang", config.language.source_code),
-        ("tgt_lang", config.language.target_code),
-    ):
-        try:
-            setattr(tokenizer, attribute, value)
-        except Exception:
-            continue
 
 
 def prepare_inference_records(
