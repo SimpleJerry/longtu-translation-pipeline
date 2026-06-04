@@ -44,7 +44,7 @@ print(hashlib.sha256(data).hexdigest().upper())
 ### 步骤 1：词汇表一致性检查
 
 ```bash
-python scripts/run_cleanup.py --strict-check
+python scripts/segments_glossary_cross_cleaning_pipeline.py --strict-check
 ```
 
 通过后（`strict_current_mismatch_rows=0`）方可继续（ADR-0019）。
@@ -52,7 +52,7 @@ python scripts/run_cleanup.py --strict-check
 ### 步骤 2：训练
 
 ```bash
-python scripts/run_training.py --config configs/training/earlystop.json --train
+python scripts/train_model.py --config configs/training/earlystop.json --train
 ```
 
 产物写入 `fine-tuned-models/.../runs/earlystop-v{N}/`，其中：
@@ -82,10 +82,10 @@ python scripts/run_inference.py \
     --config configs/inference/default.json \
     --generate-test \
     --run-dir fine-tuned-models/.../runs/earlystop-v{N} \
-    --checkpoint fine-tuned-models/.../runs/earlystop-v{N}/checkpoint-{winner}
+    --model-path fine-tuned-models/.../runs/earlystop-v{N}/checkpoint-{winner}
 
-python scripts/run_evaluation.py \
-    --config configs/evaluation/default.json \
+python scripts/evaluate_translation.py \
+    --config configs/evaluation/generation_report.json \
     --input <test generation CSV>
 ```
 
