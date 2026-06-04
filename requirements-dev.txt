@@ -3,3 +3,4 @@ pytest>=8.0
 pytest-timeout>=2.0  # prevents indefinite hangs in CI (e.g. accelerate distributed init without CUDA)
 pytest-xdist>=3.0    # per-file process isolation; prevents GC/import crash on Windows with heavy native libs
 httpx>=0.28          # FastAPI TestClient (serving contract tests, ADR-0034)
+matplotlib>=3.7      # plotting scripts: plot_capability_comparison.py, plot_training_loss.py
