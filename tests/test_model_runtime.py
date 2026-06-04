@@ -11,13 +11,31 @@ from types import SimpleNamespace
 
 class LazyImportGuardTest(unittest.TestCase):
     def test_import_model_runtime_does_not_load_torch(self) -> None:
-        """Importing model_runtime must not pull torch into sys.modules (ADR-0042 §2)."""
-        import longtu_translation_pipeline.model_runtime  # noqa: F401
+        """Importing model_runtime must not pull torch into sys.modules (ADR-0042 §2).
 
-        self.assertNotIn(
-            "torch",
-            sys.modules,
-            "model_runtime top-level import must not trigger torch loading",
+        Run in a subprocess so the check is isolated from whatever else pytest
+        workers have already imported in the shared process.
+        """
+        import subprocess
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import longtu_translation_pipeline.model_runtime; "
+                    "import sys; "
+                    "assert 'torch' not in sys.modules, "
+                    "'model_runtime top-level import must not trigger torch loading'"
+                ),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            f"subprocess check failed:\n{result.stderr}",
         )
 
 
