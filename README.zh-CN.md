@@ -83,8 +83,8 @@ License: CC-BY-NC-4.0（非商业使用）。
 **服务（serving）** —— 端点：`POST /translate`、`GET /health`、`GET /info`。
 
 ```powershell
-venv\Scripts\python.exe scripts\serve.py --dry-run   # 仅校验配置，不加载模型
-venv\Scripts\python.exe scripts\serve.py             # 加载检查点，serve 127.0.0.1:8000
+python scripts/serve.py --dry-run   # 仅校验配置，不加载模型
+python scripts/serve.py             # 加载检查点，serve 127.0.0.1:8000
 ```
 
 契约：[ADR-0034](docs/decisions/adr/ADR-0034-serving-contract-synchronous-http-api.md)。
@@ -115,26 +115,25 @@ from longtu_translation_pipeline.inference import load_translator, translate_tex
 ## 复现
 
 ```powershell
-# 1. 安装
-python -m venv .venv && .\.venv\Scripts\Activate.ps1
+# 1. 安装（虚拟环境可选）
 pip install -r requirements.txt
 pip install -r requirements-training.txt
-pip install -e .
+pip install -e . --no-deps
 
 # 2. 数据清洗
-venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
-venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --apply
-venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --strict-check
+python scripts/segments_cleaning_pipeline.py --dry-run
+python scripts/segments_cleaning_pipeline.py --apply
+python scripts/segments_glossary_cross_cleaning_pipeline.py --strict-check
 
 # 3. 训练（earlystop.json：8:1:1 划分，seed 42，early-stopping）
-venv\Scripts\python.exe scripts\train_model.py \
-    --config configs\training\earlystop.json --train --run-name <run-name>
+python scripts/train_model.py `
+    --config configs/training/earlystop.json --train --run-name <run-name>
 
 # 4. 评估
-venv\Scripts\python.exe scripts\run_inference.py \
-    --config configs\inference\default.json --generate-test --run-dir <run-dir>
-venv\Scripts\python.exe scripts\evaluate_translation.py \
-    --config configs\evaluation\generation_report.json --input <generated-csv>
+python scripts/run_inference.py `
+    --config configs/inference/default.json --generate-test --run-dir <run-dir>
+python scripts/evaluate_translation.py `
+    --config configs/evaluation/generation_report.json --input <generated-csv>
 
 # 5. 发布（完整发布流程见维护文档）
 ```

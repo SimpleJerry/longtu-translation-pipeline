@@ -104,8 +104,8 @@ License: CC-BY-NC-4.0 (non-commercial use only).
 **Serving** — endpoints: `POST /translate`, `GET /health`, `GET /info`.
 
 ```powershell
-venv\Scripts\python.exe scripts\serve.py --dry-run   # validate config, no model load
-venv\Scripts\python.exe scripts\serve.py             # load checkpoint, serve 127.0.0.1:8000
+python scripts/serve.py --dry-run   # validate config, no model load
+python scripts/serve.py             # load checkpoint, serve 127.0.0.1:8000
 ```
 
 Contract: [ADR-0034](docs/decisions/adr/ADR-0034-serving-contract-synchronous-http-api.md).
@@ -138,26 +138,25 @@ from longtu_translation_pipeline.inference import load_translator, translate_tex
 ## Reproduction
 
 ```powershell
-# 1. Install
-python -m venv .venv && .\.venv\Scripts\Activate.ps1
+# 1. Install (virtual environment is optional)
 pip install -r requirements.txt
 pip install -r requirements-training.txt
-pip install -e .
+pip install -e . --no-deps
 
 # 2. Data cleaning
-venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --dry-run
-venv\Scripts\python.exe scripts\segments_cleaning_pipeline.py --apply
-venv\Scripts\python.exe scripts\segments_glossary_cross_cleaning_pipeline.py --strict-check
+python scripts/segments_cleaning_pipeline.py --dry-run
+python scripts/segments_cleaning_pipeline.py --apply
+python scripts/segments_glossary_cross_cleaning_pipeline.py --strict-check
 
 # 3. Training (earlystop.json: 8:1:1 split, seed 42, early-stopping)
-venv\Scripts\python.exe scripts\train_model.py \
-    --config configs\training\earlystop.json --train --run-name <run-name>
+python scripts/train_model.py `
+    --config configs/training/earlystop.json --train --run-name <run-name>
 
 # 4. Evaluation
-venv\Scripts\python.exe scripts\run_inference.py \
-    --config configs\inference\default.json --generate-test --run-dir <run-dir>
-venv\Scripts\python.exe scripts\evaluate_translation.py \
-    --config configs\evaluation\generation_report.json --input <generated-csv>
+python scripts/run_inference.py `
+    --config configs/inference/default.json --generate-test --run-dir <run-dir>
+python scripts/evaluate_translation.py `
+    --config configs/evaluation/generation_report.json --input <generated-csv>
 
 # 5. Publish (see maintenance docs for full checklist)
 ```
