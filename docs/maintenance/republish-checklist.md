@@ -7,7 +7,7 @@
 ## 1. 训练
 
 ```powershell
-python scripts/run_training.py `
+python scripts/train_model.py `
   --config configs/training/earlystop.json `
   --train `
   --run-name <new-run>
@@ -39,7 +39,7 @@ python scripts/run_inference.py `
   --config configs/inference/default.json `
   --generate-test `
   --run-dir <run-dir> `
-  --checkpoint <checkpoint-dir-from-step-2>
+  --model-path <checkpoint-dir-from-step-2>
 
 python scripts/evaluate_translation.py `
   --config configs/evaluation/generation_report.json `
