@@ -1,9 +1,20 @@
 """Regression tests for publish_model.py (ADR-0037 contract)."""
 from __future__ import annotations
 
+import importlib.util
 import unittest
+from pathlib import Path
 
-from scripts.publish_model import INFERENCE_PATTERNS, _build_model_card
+_SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
+_spec = importlib.util.spec_from_file_location(
+    "publish_model", _SCRIPTS_DIR / "publish_model.py"
+)
+assert _spec is not None and _spec.loader is not None
+_publish_model = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_publish_model)  # type: ignore[arg-type]
+
+INFERENCE_PATTERNS = _publish_model.INFERENCE_PATTERNS
+_build_model_card = _publish_model._build_model_card
 
 _REQUIRED_FILES = {
     "config.json",
