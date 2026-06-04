@@ -4,10 +4,9 @@ import argparse
 import sys
 from pathlib import Path
 
+from longtu_translation_pipeline.config import load_serving_config
 
 ROOT = Path(__file__).resolve().parents[1]
-
-from longtu_translation_pipeline.config import load_serving_config
 
 
 def parse_args() -> argparse.Namespace:

@@ -4,9 +4,6 @@ import argparse
 import sys
 from pathlib import Path
 
-
-ROOT = Path(__file__).resolve().parents[1]
-
 from longtu_translation_pipeline.config import load_training_config
 from longtu_translation_pipeline.training import (
     build_training_dry_run,
@@ -22,6 +19,8 @@ from longtu_translation_pipeline.training import (
     run_real_nllb_model_smoke_test,
     run_nllb_trainer_smoke_test,
 )
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def parse_args() -> argparse.Namespace:
