@@ -27,7 +27,7 @@ REQUIRED_FILES = [
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Verify HF Hub publish (ADR-0037).")
     parser.add_argument("--repo", default="SimpleJerry/longtu-nllb-zh2ko")
-    parser.add_argument("--tag", default="earlystop-v1-ckpt48000")
+    parser.add_argument("--tag", required=True)
     parser.add_argument(
         "--skip-model-load",
         action="store_true",

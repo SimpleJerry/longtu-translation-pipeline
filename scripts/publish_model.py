@@ -34,7 +34,6 @@ DEFAULT_CHECKPOINT = str(
     / "checkpoint-48000"
 )
 DEFAULT_REPO = "SimpleJerry/longtu-nllb-zh2ko"
-DEFAULT_TAG = "earlystop-v1-ckpt48000"
 
 
 def parse_args() -> argparse.Namespace:
@@ -65,7 +64,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--tag",
-        default=DEFAULT_TAG,
+        required=True,
         help="Git-style tag to create on the repo after uploading (e.g. 'earlystop-v1-ckpt48000').",
     )
     parser.add_argument(

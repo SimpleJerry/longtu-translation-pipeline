@@ -243,5 +243,50 @@ class ConfigTest(unittest.TestCase):
             path.unlink()
 
 
+class PublishScriptTagRequiredTest(unittest.TestCase):
+    """T2: publish_model.py and verify_hf_publish.py must require --tag."""
+
+    def test_publish_model_tag_is_required(self) -> None:
+        import subprocess
+        result = subprocess.run(
+            ["python", str(ROOT / "scripts" / "publish_model.py"), "--dry-run"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(result.returncode, 0, "publish_model.py should fail without --tag")
+        self.assertIn("--tag", result.stderr)
+
+    def test_verify_hf_publish_tag_is_required(self) -> None:
+        import subprocess
+        result = subprocess.run(
+            ["python", str(ROOT / "scripts" / "verify_hf_publish.py")],
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(result.returncode, 0, "verify_hf_publish.py should fail without --tag")
+        self.assertIn("--tag", result.stderr)
+
+
+class RevisionDriftGuardTest(unittest.TestCase):
+    """T3: docker.json and space.json must pin the same model revision (ADR-0038/D3)."""
+
+    def test_docker_and_space_revision_match(self) -> None:
+        docker_cfg = json.loads(
+            (ROOT / "configs" / "serving" / "docker.json").read_text(encoding="utf-8")
+        )
+        space_cfg = json.loads(
+            (ROOT / "demo" / "space.json").read_text(encoding="utf-8")
+        )
+        docker_rev = docker_cfg["model"]["revision"]
+        space_rev = space_cfg["model"]["revision"]
+        self.assertEqual(
+            docker_rev,
+            space_rev,
+            f"Revision mismatch: configs/serving/docker.json={docker_rev!r} "
+            f"vs demo/space.json={space_rev!r}. "
+            "Update both files to the same tag before publishing.",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
