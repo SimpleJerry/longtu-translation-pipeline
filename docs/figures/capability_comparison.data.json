@@ -1,0 +1,22 @@
+{
+  "_comment": "Single source of truth for capability_comparison.png. All values from docs/product/model-card.md (test-set evaluation, earlystop-v1-ckpt48000). Regenerate the PNG with: python scripts/plot_capability_comparison.py",
+  "_corpus_sha256": "30D5C299828C10235AEE357E9333740913E55C291C5B07A45C0739E41818EA97",
+  "_checkpoint": "earlystop-v1-ckpt48000",
+  "metrics": {
+    "bleu": {
+      "label": "BLEU",
+      "base": 0.009,
+      "finetuned": 0.325
+    },
+    "chrf": {
+      "label": "chrF",
+      "base": 0.226,
+      "finetuned": 0.590
+    },
+    "preservation": {
+      "label": "Glossary\nPreservation",
+      "base": 0.323,
+      "finetuned": 0.954
+    }
+  }
+}
