@@ -259,7 +259,7 @@ def build_training_smoke_test(
 ) -> TrainingSmokeTestPlan:
     row_limit = sample_rows if sample_rows is not None else config.dry_run.preview_rows
     prepared_examples = prepare_training_examples(config, limit=row_limit)
-    language_assignments = configure_tokenizer_language_codes(tokenizer, config)
+    language_assignments = configure_tokenizer_language_codes(tokenizer, config.language.source_code, config.language.target_code)
     tokenized_examples = tokenize_training_examples(config, tokenizer, prepared_examples)
 
     return TrainingSmokeTestPlan(
