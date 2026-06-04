@@ -51,3 +51,4 @@
 | [ADR-0038](ADR-0038-serving-pull-model-from-public-hf.md) | Serving 支持从公开 HF Hub 拉取模型 | 已接受 | 2026-06-03 | serving 配置新增 `from_hub` / `revision` 字段；`docker.json` 改为 HF-pull 默认；本地挂载保留为 `docker-localmount.json`；落实 ADR-0037 §3 revision 固定要求。 |
 | [ADR-0039](ADR-0039-packaging-pyproject-remove-syspath.md) | 打包为可安装包（pyproject + src-layout）并移除 sys.path 注入 | 已接受 | 2026-06-03 | 新增 `pyproject.toml`（setuptools src-layout，不声明依赖）；23 处 sys.path.insert 全部删除；安装统一走 `pip install -e . --no-deps`；CLI 不变（ADR-0006）。 |
 | [ADR-0040](ADR-0040-public-gradio-demo-space.md) | 发布公开 Gradio Demo Space（复用公开模型 + 可安装包） | 已接受 | 2026-06-03 | 在 HF Spaces 创建公开 Gradio Space（`SimpleJerry/longtu-nllb-zh2ko-demo`）；纯下游消费者，复用 ADR-0037 公开模型 + ADR-0039 可安装包 + ADR-0028 marker 逻辑；免费 CPU tier；不触及任何现有契约。 |
+| [ADR-0041](ADR-0041-reproducibility-boundary-and-checkpoint-selection.md) | 可复现性边界与检查点选择脚本化 | 已接受 | 2026-06-04 | 可复现性边界 = 已提交语料 → 发布模型；LLM 语义清洗在边界外（一次性审计步骤）；未来正式运行的检查点选择必须通过脚本执行并写入 selection manifest。 |
