@@ -22,7 +22,7 @@ longtu-translation-pipeline 项目当前已发布的模型。
 ## 训练方法
 
 - 在验证子集上以复合指标（`0.5 · BLEU + 0.5 · glossary-preservation-nospace`）做早停；训练在第 49000 步（约 3.7 epoch）停止。参见 [ADR-0031](../decisions/adr/ADR-0031-formal-training-uses-early-stopping-on-composite-metric.md)。
-- 已发布的检查点通过在**完整**验证集上对保留检查点重新排序选出，而非使用训练器循环内的自动最优检查点；最终选定 `checkpoint-48000`。
+- 已发布的检查点通过在**完整**验证集上对保留检查点重新排序选出（脚本化，见 [ADR-0041](../decisions/adr/ADR-0041-reproducibility-boundary-and-checkpoint-selection.md) 及 `scripts/select_checkpoint.py`），而非使用训练器循环内的自动最优检查点；当前运行最终选定 `checkpoint-48000`。
 
 ## 推理默认参数
 

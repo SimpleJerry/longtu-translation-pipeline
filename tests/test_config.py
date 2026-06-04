@@ -252,6 +252,7 @@ class PublishScriptTagRequiredTest(unittest.TestCase):
             ["python", str(ROOT / "scripts" / "publish_model.py"), "--dry-run"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
         self.assertNotEqual(result.returncode, 0, "publish_model.py should fail without --tag")
         self.assertIn("--tag", result.stderr)
@@ -262,6 +263,7 @@ class PublishScriptTagRequiredTest(unittest.TestCase):
             ["python", str(ROOT / "scripts" / "verify_hf_publish.py")],
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
         self.assertNotEqual(result.returncode, 0, "verify_hf_publish.py should fail without --tag")
         self.assertIn("--tag", result.stderr)
