@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -288,6 +289,51 @@ class RevisionDriftGuardTest(unittest.TestCase):
             f"vs demo/space.json={space_rev!r}. "
             "Update both files to the same tag before publishing.",
         )
+
+
+class MetricDriftGuardTest(unittest.TestCase):
+    """S1: finetuned metrics in data.json must stay in sync with model-card.md."""
+
+    _DATA_JSON = ROOT / "docs" / "figures" / "capability_comparison.data.json"
+    _MODEL_CARD = ROOT / "docs" / "product" / "model-card.md"
+
+    _PATTERNS: dict[str, str] = {
+        "bleu":         r"\|\s*BLEU[^|]+\|\s*([\d.]+)\s*\|",
+        "chrf":         r"\|\s*chrF[^|]+\|\s*([\d.]+)\s*\|",
+        "preservation": r"\|\s*词汇表保留率（无空格）[^|]*\|\s*([\d.]+)\s*\|",
+    }
+
+    def _parse_model_card_metrics(self) -> dict[str, float]:
+        text = self._MODEL_CARD.read_text(encoding="utf-8")
+        result: dict[str, float] = {}
+        for key, pattern in self._PATTERNS.items():
+            m = re.search(pattern, text)
+            self.assertIsNotNone(
+                m,
+                f"Cannot locate {key} row in {self._MODEL_CARD} with pattern {pattern!r}",
+            )
+            assert m is not None  # for type-narrowing
+            result[key] = float(m.group(1))
+        return result
+
+    def test_data_json_finetuned_matches_model_card(self) -> None:
+        data = json.loads(self._DATA_JSON.read_text(encoding="utf-8"))
+        finetuned = {
+            "bleu":         data["metrics"]["bleu"]["finetuned"],
+            "chrf":         data["metrics"]["chrf"]["finetuned"],
+            "preservation": data["metrics"]["preservation"]["finetuned"],
+        }
+        mc = self._parse_model_card_metrics()
+        for key in ("bleu", "chrf", "preservation"):
+            self.assertEqual(
+                finetuned[key],
+                mc[key],
+                f"Metric drift detected: "
+                f"docs/figures/capability_comparison.data.json "
+                f"metrics.{key}.finetuned={finetuned[key]} "
+                f"!= docs/product/model-card.md {key}={mc[key]}. "
+                "Update both files to the same authoritative value.",
+            )
 
 
 if __name__ == "__main__":
